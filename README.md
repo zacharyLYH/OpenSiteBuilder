@@ -33,41 +33,37 @@ Source Generation & Download:
 
 User clicks "Export / Download".
 
-App exports a production-ready zip archive containing index.html, clean CSS/asset links, and an embedded or standalone configuration state file (project-state.json).
+Process: Built-in React component generation. Export bundles React source files with styling configurations.
 
 Journey B: "Load In" & Re-Editing Existing Sites
 Return Visit: User visits the web app with an existing site built using the platform.
 
-Load Project:
+Import from GitHub: User pastes their GitHub Pages URL (e.g., https://username.github.io/my-site).
 
-User clicks "Load Site" and drags/drops their exported index.html or project-state.json file.
+Automatic Discovery: App fetches React component files from their repo, extracts component types from filenames and props from component code, and reconstructs the visual canvas.
 
-Alternative: User pastes the public URL of their hosted site (if configuration metadata is embedded in the live HTML).
-
-Hydration & Restoration: The app parses the schema and hydrates the visual editor canvas back to the exact layout state.
+No DSL/State Files Required: Component structure is inferred directly from React file naming convention and structure.
 
 Iterative Changes: User updates content, layouts, or styling.
 
-Re-Export / Save: User exports the updated site artifacts to overwrite their existing repository or local files.
+One-Click Sync: User clicks "Deploy" and changes are pushed to their repo via GitHub API.
 
-Journey C: One-Click Publishing via GitHub Pages / Automated Workflows
+Journey C: One-Click Publishing via GitHub Actions
 Initial Repository Setup (One-Time):
 
-User clicks "Publish to Hosting".
+User clicks "Deploy to GitHub".
 
-App presents options for GitHub Pages, Vercel, or Netlify via client-side authorization (e.g., GitHub Device Flow or OAuth token stored locally).
+App guides user through OAuth, creates repo from template (which contains the GitHub Actions workflow).
 
-User forks a provided boilerplate repo template or authorizes direct repo commit access.
+Enable GitHub Pages: User clicks "Enable Pages" once in their repo Settings.
 
-Automated Deployment & Iteration:
+Deploy: User clicks "Sync & Deploy".
 
-User edits their page visually on the canvas.
+GitHub Actions runs `npm run build` on their code.
 
-User clicks "Sync & Deploy".
+Site is live at https://username.github.io/repo-name within 60 seconds.
 
-The app sends a direct commit containing the updated index.html and assets to the user's repository via GitHub REST API.
-
-A GitHub Action automatically triggers and updates the live site in under a minute.
+Subsequent Edits: User makes changes in editor, clicks "Sync & Deploy" → Action rebuilds and redeploys.
 
 4. Key Functional Requirements
 4.1 Client-Side Canvas & Visual Editor
