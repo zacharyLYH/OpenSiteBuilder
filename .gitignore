@@ -1,2 +1,5 @@
 .env
 secrets
+frontend/node_modules
+template/node_modules
+.DS_Store
