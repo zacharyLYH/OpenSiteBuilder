@@ -1,0 +1,5 @@
+# Backend image contains the Go binary only.
+# scripts/, .env, secrets/ live at repo root and never enter this context,
+# but this file documents the guarantee.
+**/node_modules
+.git

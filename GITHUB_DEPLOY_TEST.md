@@ -12,7 +12,7 @@ The frontend never holds GitHub tokens. The frontend holds only `OSB_SESSION`.
 - `installation_id` identifies the install slot. Example: OSB on maya is install 123. OSB on zac is install 456. The value is a plain number. The value is not secret.
 - `CLIENT_SECRET` is the backend password. The backend uses the password to trade `GH_CODE` for `GH_USER`.
 - `PRIVATE_KEY` is the backend signing key. The backend uses the key to create `GH_APP_JWT`.
-- `GH_USER` acts as the user. The backend creates `GH_USER` once. The backend uses `GH_USER` to check or create the repo.
+- `GH_USER` acts as the user. The backend creates `GH_USER` once. The backend reads login from `GET /user` (owner comes from the token, never typed), then checks or creates the repo.
 - `GH_APP_JWT` proves the app identity. The backend creates `GH_APP_JWT`. GitHub accepts `GH_APP_JWT` for 10 minutes.
 - `GH_INSTALL` acts on one install. GitHub issues `GH_INSTALL` after the backend presents `GH_APP_JWT`. `GH_INSTALL` lasts 1 hour. The backend uses `GH_INSTALL` to push code and enable Pages.
 - `OSB_SESSION` is the app session cookie. The cookie connects the frontend to the backend.
@@ -55,7 +55,7 @@ Backend env vars are `APP_ID`, `PRIVATE_KEY_PEM`, `CLIENT_ID`, `CLIENT_SECRET`, 
 - `APP_ID` is `5226393`.
 - `CLIENT_ID` is `Iv23liBOHhapv9XPFgLw`.
 - `TEST_OWNER` is `zacharyLYH`.
-- `TEST_INSTALLATION_ID` is `168937642`.
+- Test install lives on `TEST_OWNER` with All repositories. Reinstalls mint a fresh installation ID; nothing pins it — the backend and the probe both discover the install by owner login at runtime.
 - `TEMPLATE_FULL_NAME` is `zacharyLYH/osb-template`.
 - Callback URL is `https://opensitebuilder.bytesbylyh.dev/callback`. Setup URL is the same URL.
 - `CLIENT_SECRET` stays local in `.env`. `dev.pem` stays local in `./secrets/dev.pem`. The backend reads the key through `PRIVATE_KEY_PATH`. The file never stores secrets.
@@ -71,7 +71,7 @@ Backend env vars are `APP_ID`, `PRIVATE_KEY_PEM`, `CLIENT_ID`, `CLIENT_SECRET`, 
 
 The template lives in the dev account. Example: `opensitebuilder/osb-template`. The template contains Vite, React, and `deploy.yml`. The workflow runs `npm ci`, runs `npm run build`, uploads `dist/`, and deploys the upload.
 
-The GitHub App requests three permissions: Contents read/write, Pages read/write, Metadata read-only. The backend stores `APP_ID`, `PRIVATE_KEY`, `CLIENT_ID`, and `CLIENT_SECRET`. The backend exposes `/api/exchange` and `/api/publish`.
+The GitHub App requests four permissions: Contents read/write, Pages read/write, Administration read/write, Metadata read-only. Administration covers repo creation from the template (`generate` returns `Resource not accessible by integration` without it). The backend stores `APP_ID`, `PRIVATE_KEY`, `CLIENT_ID`, and `CLIENT_SECRET`. The backend exposes `/api/exchange` and `/api/publish`.
 
 ### First publish
 

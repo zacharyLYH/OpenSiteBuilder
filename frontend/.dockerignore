@@ -1,0 +1,3 @@
+# Frontend image contains the static build only.
+node_modules
+.git
