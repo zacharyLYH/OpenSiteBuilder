@@ -3,7 +3,7 @@ WORKDIR /app
 COPY go.mod ./
 RUN go mod download 2>/dev/null || true
 COPY . .
-RUN CGO_ENABLED=0 go build -o /app/server .
+RUN CGO_ENABLED=0 go build -o /app/server ./cmd/server
 
 FROM alpine:3.20
 COPY --from=build /app/server /app/server

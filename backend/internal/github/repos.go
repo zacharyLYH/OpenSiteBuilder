@@ -1,13 +1,13 @@
-package main
+package github
 
 import (
 	"fmt"
 	"net/http"
 )
 
-// repoExists reports 200/404 for a repo. Other statuses are errors.
-func (g *ghClient) repoExists(token, owner, repo string) (bool, error) {
-	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/repos/%s/%s", g.apiBase, owner, repo), token, nil, nil)
+// RepoExists reports 200/404 for a repo. Other statuses are errors.
+func (g *Client) RepoExists(token, owner, repo string) (bool, error) {
+	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/repos/%s/%s", g.APIBase, owner, repo), token, nil, nil)
 	if err != nil {
 		return false, err
 	}
@@ -21,11 +21,11 @@ func (g *ghClient) repoExists(token, owner, repo string) (bool, error) {
 	}
 }
 
-// generateRepo copies the template into the user account.
-func (g *ghClient) generateRepo(userToken, templateOwner, templateRepo, owner, name string) error {
+// GenerateRepo copies the template into the user account.
+func (g *Client) GenerateRepo(userToken, templateOwner, templateRepo, owner, name string) error {
 	var ge ghErr
 	st, err := g.do(http.MethodPost,
-		fmt.Sprintf("%s/repos/%s/%s/generate", g.apiBase, templateOwner, templateRepo),
+		fmt.Sprintf("%s/repos/%s/%s/generate", g.APIBase, templateOwner, templateRepo),
 		userToken,
 		map[string]any{"owner": owner, "name": name, "private": false, "include_all_branches": false}, &ge)
 	if err != nil {
@@ -37,9 +37,9 @@ func (g *ghClient) generateRepo(userToken, templateOwner, templateRepo, owner, n
 	return nil
 }
 
-// ensurePages enables Pages with Actions source. 409 means already enabled.
-func (g *ghClient) ensurePages(token, owner, repo string) error {
-	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/pages", g.apiBase, owner, repo),
+// EnsurePages enables Pages with Actions source. 409 means already enabled.
+func (g *Client) EnsurePages(token, owner, repo string) error {
+	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/pages", g.APIBase, owner, repo),
 		token, map[string]string{"build_type": "workflow"}, nil)
 	if err != nil {
 		return err

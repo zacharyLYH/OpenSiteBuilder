@@ -1,4 +1,4 @@
-package main
+package github
 
 import (
 	"bytes"
@@ -9,18 +9,27 @@ import (
 	"time"
 )
 
-// ghClient talks to GitHub with stdlib only. Tokens stay in memory.
-type ghClient struct {
+// Client talks to GitHub with stdlib only. Tokens stay in memory.
+type Client struct {
 	http      *http.Client
-	apiBase   string
-	oauthBase string
+	APIBase   string
+	OAuthBase string
 }
 
-func newGHClient() *ghClient {
-	return &ghClient{
+func NewClient() *Client {
+	return &Client{
 		http:      &http.Client{Timeout: 30 * time.Second},
-		apiBase:   "https://api.github.com",
-		oauthBase: "https://github.com",
+		APIBase:   "https://api.github.com",
+		OAuthBase: "https://github.com",
+	}
+}
+
+// NewClientWithBases is the test seam: same client, mock endpoints.
+func NewClientWithBases(apiBase, oauthBase string) *Client {
+	return &Client{
+		http:      &http.Client{Timeout: 30 * time.Second},
+		APIBase:   apiBase,
+		OAuthBase: oauthBase,
 	}
 }
 
@@ -32,7 +41,7 @@ type ghErr struct {
 
 // do sends JSON and decodes JSON into out when out is non-nil.
 // It returns the HTTP status code.
-func (g *ghClient) do(method, url, token string, body, out any) (int, error) {
+func (g *Client) do(method, url, token string, body, out any) (int, error) {
 	var rdr io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -7,6 +7,9 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"opensitebuilder-backend/internal/github"
+	"opensitebuilder-backend/internal/validate"
 )
 
 // publishFile is one validated file in a P1 request.
@@ -16,7 +19,7 @@ type publishFile struct {
 }
 
 // POST /api/publish {files:[{path,content}], message?} runs P1.
-func (s *server) handlePublish(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -46,17 +49,17 @@ func (s *server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "message too long"})
 		return
 	}
-	appJWT, err := mintAppJWT(s.cfg)
+	appJWT, err := github.MintAppJWT(s.Cfg)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "app auth failed"})
 		return
 	}
-	token, err := s.gh.createInstallToken(appJWT, sess.Inst)
+	token, err := s.Gh.CreateInstallToken(appJWT, sess.Inst)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "install token failed"})
 		return
 	}
-	commit, err := s.gh.commitFiles(token, sess.Owner, sess.Slug, msg, fileOps(in.Files))
+	commit, err := s.Gh.CommitFiles(token, sess.Owner, sess.Slug, msg, fileOps(in.Files))
 	if err != nil {
 		if strings.Contains(err.Error(), "push conflict") {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "push conflict, retry"})
@@ -74,10 +77,10 @@ func (s *server) handlePublish(w http.ResponseWriter, r *http.Request) {
 }
 
 // fileOps converts request files to commit operations.
-func fileOps(files []publishFile) []fileOp {
-	ops := make([]fileOp, 0, len(files))
+func fileOps(files []publishFile) []github.FileOp {
+	ops := make([]github.FileOp, 0, len(files))
 	for _, f := range files {
-		ops = append(ops, fileOp{Path: f.Path, Content: f.Content})
+		ops = append(ops, github.FileOp{Path: f.Path, Content: f.Content})
 	}
 	return ops
 }
@@ -89,7 +92,7 @@ func checkFiles(files []publishFile) error {
 	}
 	seen := map[string]bool{}
 	for _, f := range files {
-		if !publishablePath(f.Path) {
+		if !validate.PublishablePath(f.Path) {
 			return errors.New("blocked path: " + f.Path)
 		}
 		if seen[f.Path] {

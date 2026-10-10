@@ -1,14 +1,20 @@
-package main
+package validate
 
 import (
 	"regexp"
 	"strings"
 )
 
-var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
+// SlugRe constrains site names to lowercase letters, numbers, hyphens.
+var SlugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
 
-// publishablePath reports whether path may be written through P1.
-func publishablePath(p string) bool {
+// ValidSlug reports whether slug may be used for a site/repo name.
+func ValidSlug(slug string) bool {
+	return SlugRe.MatchString(slug)
+}
+
+// PublishablePath reports whether path may be written through P1.
+func PublishablePath(p string) bool {
 	if p == "" || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "./") {
 		return false
 	}

@@ -6,8 +6,16 @@ export interface ApiResult {
   body: any
 }
 
+// Base defaults to same-origin. Integration tests point it at the real
+// backend under test; browsers never call this.
+let apiBase = ''
+
+export function setApiBase(url: string): void {
+  apiBase = url
+}
+
 async function call(path: string, opts?: RequestInit): Promise<ApiResult> {
-  const r = await fetch(path, opts)
+  const r = await fetch(apiBase + path, opts)
   return { status: r.status, body: await r.json() }
 }
 

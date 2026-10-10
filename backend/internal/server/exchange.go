@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -7,12 +7,15 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"opensitebuilder-backend/internal/auth"
+	"opensitebuilder-backend/internal/github"
 )
 
 // POST /api/exchange {code, installation_id?, state?} runs E1+G1.
 // Owner comes from the token, never from user input. State falls back
 // to the pending cookie when the install leg drops it from the URL.
-func (s *server) handleExchange(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleExchange(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -40,25 +43,25 @@ func (s *server) handleExchange(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state required (publish again to restart)"})
 		return
 	}
-	var st statePayload
-	if err := verifyToken(s.cfg.SessionKey, state, &st); err != nil {
+	var st auth.StatePayload
+	if err := auth.VerifyToken(s.Cfg.SessionKey, state, &st); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad state: " + err.Error()})
 		return
 	}
 	// Mint first: installation lookup costs nothing single-use.
-	appJWT, err := mintAppJWT(s.cfg)
+	appJWT, err := github.MintAppJWT(s.Cfg)
 	if err != nil {
 		log.Printf("app jwt failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "app auth failed"})
 		return
 	}
-	userToken, err := s.gh.exchangeCode(s.cfg, in.Code)
+	userToken, err := s.Gh.ExchangeCode(s.Cfg, in.Code)
 	if err != nil {
 		log.Printf("exchange code failed slug=%s: %v", st.Slug, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "github authorization failed"})
 		return
 	}
-	login, err := s.gh.authenticatedUser(userToken)
+	login, err := s.Gh.AuthenticatedUser(userToken)
 	if err != nil {
 		log.Printf("user lookup failed slug=%s: %v", st.Slug, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "github authorization failed"})
@@ -66,7 +69,7 @@ func (s *server) handleExchange(w http.ResponseWriter, r *http.Request) {
 	}
 	instID := in.InstallationID
 	if instID == 0 {
-		found, err := s.gh.findInstallation(appJWT, login)
+		found, err := s.Gh.FindInstallation(appJWT, login)
 		if err != nil {
 			log.Printf("installation list failed: %v", err)
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "installation lookup failed"})
@@ -75,13 +78,13 @@ func (s *server) handleExchange(w http.ResponseWriter, r *http.Request) {
 		if found == 0 {
 			writeJSON(w, http.StatusConflict, map[string]any{
 				"error":       "app not installed on this account",
-				"install_url": "https://github.com/apps/" + s.cfg.AppSlug + "/installations/new",
+				"install_url": "https://github.com/apps/" + s.Cfg.AppSlug + "/installations/new",
 			})
 			return
 		}
 		instID = found
 	} else {
-		instLogin, _, _, err := s.gh.installationInfo(appJWT, instID)
+		instLogin, _, _, err := s.Gh.InstallationInfo(appJWT, instID)
 		if err != nil {
 			log.Printf("installation lookup failed id=%d: %v", instID, err)
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "installation lookup failed"})
@@ -92,7 +95,7 @@ func (s *server) handleExchange(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	exists, err := s.gh.repoExists(userToken, login, st.Slug)
+	exists, err := s.Gh.RepoExists(userToken, login, st.Slug)
 	if err != nil {
 		log.Printf("repo lookup failed %s/%s: %v", login, st.Slug, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "github lookup failed"})
@@ -100,25 +103,25 @@ func (s *server) handleExchange(w http.ResponseWriter, r *http.Request) {
 	}
 	created := false
 	if !exists {
-		if err := s.gh.generateRepo(userToken, s.cfg.TemplateOwner, s.cfg.TemplateRepo, login, st.Slug); err != nil {
+		if err := s.Gh.GenerateRepo(userToken, s.Cfg.TemplateOwner, s.Cfg.TemplateRepo, login, st.Slug); err != nil {
 			log.Printf("repo generate failed %s/%s: %v", login, st.Slug, err)
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "repo creation failed"})
 			return
 		}
 		created = true
 	}
-	installToken, err := s.gh.createInstallToken(appJWT, instID)
+	installToken, err := s.Gh.CreateInstallToken(appJWT, instID)
 	if err != nil {
 		log.Printf("install token failed id=%d: %v", instID, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "install token failed"})
 		return
 	}
-	if err := s.gh.ensurePages(installToken, login, st.Slug); err != nil {
+	if err := s.Gh.EnsurePages(installToken, login, st.Slug); err != nil {
 		log.Printf("pages enable failed %s/%s: %v", login, st.Slug, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "pages enable failed"})
 		return
 	}
-	tok, err := s.sessionCookie(sessionPayload{
+	tok, err := s.sessionCookie(auth.SessionPayload{
 		Owner: login, Slug: st.Slug, Inst: instID,
 		Exp: time.Now().Add(7 * 24 * time.Hour).Unix(),
 	})

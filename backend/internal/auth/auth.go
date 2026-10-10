@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"crypto/hmac"
@@ -10,15 +10,15 @@ import (
 	"time"
 )
 
-// statePayload binds a slug request to a GitHub redirect. 10 minute life.
+// StatePayload binds a slug request to a GitHub redirect. 10 minute life.
 // Owner travels in the token, never in user input.
-type statePayload struct {
+type StatePayload struct {
 	Slug string `json:"slug"`
 	Exp  int64  `json:"exp"`
 }
 
-// sessionPayload identifies an installed site. 7 day life.
-type sessionPayload struct {
+// SessionPayload identifies an installed site. 7 day life.
+type SessionPayload struct {
 	Owner string `json:"owner"`
 	Slug  string `json:"slug"`
 	Inst  int64  `json:"inst"`
@@ -27,8 +27,8 @@ type sessionPayload struct {
 
 var b64 = base64.RawURLEncoding
 
-// signToken serializes payload to JSON and appends an HMAC signature.
-func signToken(key string, payload any) (string, error) {
+// SignToken serializes payload to JSON and appends an HMAC signature.
+func SignToken(key string, payload any) (string, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -39,8 +39,8 @@ func signToken(key string, payload any) (string, error) {
 	return body + "." + b64.EncodeToString(mac.Sum(nil)), nil
 }
 
-// verifyToken checks the signature, expiry, and decodes into out.
-func verifyToken(key, token string, out any) error {
+// VerifyToken checks the signature, expiry, and decodes into out.
+func VerifyToken(key, token string, out any) error {
 	body, sig, ok := splitOnce(token)
 	if !ok {
 		return errors.New("bad token format")

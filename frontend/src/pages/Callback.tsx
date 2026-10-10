@@ -16,18 +16,17 @@ export default function Callback() {
   const [installUrl, setInstallUrl] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    const payload: ExchangePayload = {
-      code: q.get('code'),
-      state: q.get('state'),
-    }
+    const code = q.get('code')
+    const state = q.get('state')
     const inst = Number(q.get('installation_id'))
-    if (inst) payload.installation_id = inst
     // State may be absent on the install leg; the backend falls back
     // to the pending cookie. Only code is mandatory here.
-    if (!payload.code) {
+    if (!code) {
       setError('callback is missing code')
       return
     }
+    const payload: ExchangePayload = { code, state }
+    if (inst) payload.installation_id = inst
     postExchange(payload)
       .then(({ status, body }) => {
         if (status !== 200) {

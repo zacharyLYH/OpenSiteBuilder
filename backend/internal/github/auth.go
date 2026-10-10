@@ -1,4 +1,4 @@
-package main
+package github
 
 import (
 	"crypto"
@@ -14,10 +14,12 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"opensitebuilder-backend/internal/config"
 )
 
-// mintAppJWT signs a 10 minute app token. The private key never leaves disk.
-func mintAppJWT(cfg Config) (string, error) {
+// MintAppJWT signs a 10 minute app token. The private key never leaves disk.
+func MintAppJWT(cfg config.Config) (string, error) {
 	pemRaw, err := os.ReadFile(cfg.PrivateKeyPath)
 	if err != nil {
 		return "", err
@@ -50,14 +52,14 @@ func mintAppJWT(cfg Config) (string, error) {
 	return header + "." + payload + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
-// exchangeCode trades GH_CODE plus client_secret for GH_USER.
-func (g *ghClient) exchangeCode(cfg Config, code string) (string, error) {
+// ExchangeCode trades GH_CODE plus client_secret for GH_USER.
+func (g *Client) ExchangeCode(cfg config.Config, code string) (string, error) {
 	var out struct {
 		AccessToken string `json:"access_token"`
 		Error       string `json:"error"`
 		ErrorDesc   string `json:"error_description"`
 	}
-	st, err := g.do(http.MethodPost, g.oauthBase+"/login/oauth/access_token", "",
+	st, err := g.do(http.MethodPost, g.OAuthBase+"/login/oauth/access_token", "",
 		map[string]string{"client_id": cfg.ClientID, "client_secret": cfg.ClientSecret, "code": code}, &out)
 	if err != nil {
 		return "", err
@@ -68,12 +70,12 @@ func (g *ghClient) exchangeCode(cfg Config, code string) (string, error) {
 	return out.AccessToken, nil
 }
 
-// authenticatedUser returns the login of the user a token acts as.
-func (g *ghClient) authenticatedUser(token string) (string, error) {
+// AuthenticatedUser returns the login of the user a token acts as.
+func (g *Client) AuthenticatedUser(token string) (string, error) {
 	var out struct {
 		Login string `json:"login"`
 	}
-	st, err := g.do(http.MethodGet, g.apiBase+"/user", token, nil, &out)
+	st, err := g.do(http.MethodGet, g.APIBase+"/user", token, nil, &out)
 	if err != nil {
 		return "", err
 	}
@@ -83,15 +85,15 @@ func (g *ghClient) authenticatedUser(token string) (string, error) {
 	return out.Login, nil
 }
 
-// findInstallation returns the install ID for an owner login, or 0.
-func (g *ghClient) findInstallation(appJWT, owner string) (int64, error) {
+// FindInstallation returns the install ID for an owner login, or 0.
+func (g *Client) FindInstallation(appJWT, owner string) (int64, error) {
 	var out []struct {
 		ID      int64 `json:"id"`
 		Account struct {
 			Login string `json:"login"`
 		} `json:"account"`
 	}
-	st, err := g.do(http.MethodGet, g.apiBase+"/app/installations?per_page=100", appJWT, nil, &out)
+	st, err := g.do(http.MethodGet, g.APIBase+"/app/installations?per_page=100", appJWT, nil, &out)
 	if err != nil {
 		return 0, err
 	}
@@ -106,15 +108,15 @@ func (g *ghClient) findInstallation(appJWT, owner string) (int64, error) {
 	return 0, nil
 }
 
-// installationInfo confirms which account an install belongs to.
-func (g *ghClient) installationInfo(appJWT string, id int64) (owner string, repoSelection string, status int, err error) {
+// InstallationInfo confirms which account an install belongs to.
+func (g *Client) InstallationInfo(appJWT string, id int64) (owner string, repoSelection string, status int, err error) {
 	var out struct {
 		Account struct {
 			Login string `json:"login"`
 		} `json:"account"`
 		RepositorySelection string `json:"repository_selection"`
 	}
-	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/app/installations/%d", g.apiBase, id), appJWT, nil, &out)
+	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/app/installations/%d", g.APIBase, id), appJWT, nil, &out)
 	if err != nil {
 		return "", "", st, err
 	}
@@ -124,12 +126,12 @@ func (g *ghClient) installationInfo(appJWT string, id int64) (owner string, repo
 	return out.Account.Login, out.RepositorySelection, st, nil
 }
 
-// createInstallToken mints GH_INSTALL for one installation.
-func (g *ghClient) createInstallToken(appJWT string, id int64) (string, error) {
+// CreateInstallToken mints GH_INSTALL for one installation.
+func (g *Client) CreateInstallToken(appJWT string, id int64) (string, error) {
 	var out struct {
 		Token string `json:"token"`
 	}
-	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/app/installations/%d/access_tokens", g.apiBase, id), appJWT, map[string]any{}, &out)
+	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/app/installations/%d/access_tokens", g.APIBase, id), appJWT, map[string]any{}, &out)
 	if err != nil {
 		return "", err
 	}

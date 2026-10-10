@@ -1,4 +1,4 @@
-package main
+package github
 
 import (
 	"encoding/base64"
@@ -7,8 +7,8 @@ import (
 	"net/http"
 )
 
-// fileOp is one path plus content write inside a commit.
-type fileOp struct {
+// FileOp is one path plus content write inside a commit.
+type FileOp struct {
 	Path    string
 	Content string
 }
@@ -20,16 +20,16 @@ type treeEntry struct {
 	SHA  string `json:"sha"`
 }
 
-// treeNode is one entry of a recursive tree listing.
-type treeNode struct {
+// TreeNode is one entry of a recursive tree listing.
+type TreeNode struct {
 	Path string `json:"path"`
 	SHA  string `json:"sha"`
 	Size *int   `json:"size"`
 	Type string `json:"type"`
 }
 
-// commitFiles pushes files as one commit: blobs, tree, commit, ref move.
-func (g *ghClient) commitFiles(token, owner, repo, message string, files []fileOp) (string, error) {
+// CommitFiles pushes files as one commit: blobs, tree, commit, ref move.
+func (g *Client) CommitFiles(token, owner, repo, message string, files []FileOp) (string, error) {
 	base, err := g.refSHA(token, owner, repo)
 	if err != nil {
 		return "", err
@@ -57,13 +57,13 @@ func (g *ghClient) commitFiles(token, owner, repo, message string, files []fileO
 }
 
 // refSHA returns the commit SHA of branch main.
-func (g *ghClient) refSHA(token, owner, repo string) (string, error) {
+func (g *Client) refSHA(token, owner, repo string) (string, error) {
 	var out struct {
 		Object struct {
 			SHA string `json:"sha"`
 		} `json:"object"`
 	}
-	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/git/ref/heads/main", g.apiBase, owner, repo), token, nil, &out)
+	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/git/ref/heads/main", g.APIBase, owner, repo), token, nil, &out)
 	if err != nil {
 		return "", err
 	}
@@ -74,11 +74,11 @@ func (g *ghClient) refSHA(token, owner, repo string) (string, error) {
 }
 
 // createBlob stores file content and returns its blob SHA.
-func (g *ghClient) createBlob(token, owner, repo, content string) (string, error) {
+func (g *Client) createBlob(token, owner, repo, content string) (string, error) {
 	var out struct {
 		SHA string `json:"sha"`
 	}
-	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/git/blobs", g.apiBase, owner, repo),
+	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/git/blobs", g.APIBase, owner, repo),
 		token, map[string]string{"content": content, "encoding": "utf-8"}, &out)
 	if err != nil {
 		return "", err
@@ -90,11 +90,11 @@ func (g *ghClient) createBlob(token, owner, repo, content string) (string, error
 }
 
 // createTree builds a tree on top of base and returns its SHA.
-func (g *ghClient) createTree(token, owner, repo, base string, entries []treeEntry) (string, error) {
+func (g *Client) createTree(token, owner, repo, base string, entries []treeEntry) (string, error) {
 	var out struct {
 		SHA string `json:"sha"`
 	}
-	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/git/trees", g.apiBase, owner, repo),
+	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/git/trees", g.APIBase, owner, repo),
 		token, map[string]any{"base_tree": base, "tree": entries}, &out)
 	if err != nil {
 		return "", err
@@ -106,11 +106,11 @@ func (g *ghClient) createTree(token, owner, repo, base string, entries []treeEnt
 }
 
 // createCommit commits a tree on top of parent and returns the commit SHA.
-func (g *ghClient) createCommit(token, owner, repo, message, tree, parent string) (string, error) {
+func (g *Client) createCommit(token, owner, repo, message, tree, parent string) (string, error) {
 	var out struct {
 		SHA string `json:"sha"`
 	}
-	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/git/commits", g.apiBase, owner, repo),
+	st, err := g.do(http.MethodPost, fmt.Sprintf("%s/repos/%s/%s/git/commits", g.APIBase, owner, repo),
 		token, map[string]any{"message": message, "tree": tree, "parents": []string{parent}}, &out)
 	if err != nil {
 		return "", err
@@ -122,8 +122,8 @@ func (g *ghClient) createCommit(token, owner, repo, message, tree, parent string
 }
 
 // updateRef moves branch main to the new commit.
-func (g *ghClient) updateRef(token, owner, repo, sha string) error {
-	st, err := g.do(http.MethodPatch, fmt.Sprintf("%s/repos/%s/%s/git/refs/heads/main", g.apiBase, owner, repo),
+func (g *Client) updateRef(token, owner, repo, sha string) error {
+	st, err := g.do(http.MethodPatch, fmt.Sprintf("%s/repos/%s/%s/git/refs/heads/main", g.APIBase, owner, repo),
 		token, map[string]any{"sha": sha, "force": false}, nil)
 	if err != nil {
 		return err
@@ -134,8 +134,8 @@ func (g *ghClient) updateRef(token, owner, repo, sha string) error {
 	return nil
 }
 
-// repoTree lists all files at main recursively.
-func (g *ghClient) repoTree(token, owner, repo string) ([]treeNode, error) {
+// RepoTree lists all files at main recursively.
+func (g *Client) RepoTree(token, owner, repo string) ([]TreeNode, error) {
 	base, err := g.refSHA(token, owner, repo)
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (g *ghClient) repoTree(token, owner, repo string) ([]treeNode, error) {
 			SHA string `json:"sha"`
 		} `json:"tree"`
 	}
-	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/git/commits/%s", g.apiBase, owner, repo, base), token, nil, &commit)
+	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/git/commits/%s", g.APIBase, owner, repo, base), token, nil, &commit)
 	if err != nil {
 		return nil, err
 	}
@@ -153,11 +153,11 @@ func (g *ghClient) repoTree(token, owner, repo string) ([]treeNode, error) {
 		return nil, fmt.Errorf("commit lookup failed: status=%d", st)
 	}
 	var tree struct {
-		Tree      []treeNode `json:"tree"`
+		Tree      []TreeNode `json:"tree"`
 		Truncated bool       `json:"truncated"`
 	}
 	st, err = g.do(http.MethodGet,
-		fmt.Sprintf("%s/repos/%s/%s/git/trees/%s?recursive=1", g.apiBase, owner, repo, commit.Tree.SHA), token, nil, &tree)
+		fmt.Sprintf("%s/repos/%s/%s/git/trees/%s?recursive=1", g.APIBase, owner, repo, commit.Tree.SHA), token, nil, &tree)
 	if err != nil {
 		return nil, err
 	}
@@ -167,15 +167,15 @@ func (g *ghClient) repoTree(token, owner, repo string) ([]treeNode, error) {
 	return tree.Tree, nil
 }
 
-// fileContent returns decoded text of one file at main.
-func (g *ghClient) fileContent(token, owner, repo, path string) (content, sha string, err error) {
+// FileContent returns decoded text of one file at main.
+func (g *Client) FileContent(token, owner, repo, path string) (content, sha string, err error) {
 	var out struct {
 		Content  string `json:"content"`
 		Encoding string `json:"encoding"`
 		SHA      string `json:"sha"`
 	}
 	st, gerr := g.do(http.MethodGet,
-		fmt.Sprintf("%s/repos/%s/%s/contents/%s?ref=main", g.apiBase, owner, repo, path), token, nil, &out)
+		fmt.Sprintf("%s/repos/%s/%s/contents/%s?ref=main", g.APIBase, owner, repo, path), token, nil, &out)
 	if gerr != nil {
 		return "", "", gerr
 	}
