@@ -1,8 +1,7 @@
+import { getProjectSlug } from '../lib/project'
+
 export default function Nav() {
-  let lastSlug = ''
-  try {
-    lastSlug = localStorage.getItem('osb_last_slug') || ''
-  } catch { /* private mode */ }
+  const lastSlug = getProjectSlug() || ''
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/80 backdrop-blur">
       <nav className="mx-auto flex max-w-3xl items-center gap-6 p-4">
@@ -12,7 +11,7 @@ export default function Nav() {
         </a>
         <a href="/" className="text-sm font-medium text-slate-600 hover:text-slate-900">Publish</a>
         {lastSlug && (
-          <a href={`/editor?slug=${encodeURIComponent(lastSlug)}`} className="text-sm font-medium text-slate-600 hover:text-slate-900">
+          <a href="/canvas" className="text-sm font-medium text-slate-600 hover:text-slate-900">
             Editor ({lastSlug})
           </a>
         )}

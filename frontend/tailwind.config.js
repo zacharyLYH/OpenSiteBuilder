@@ -5,5 +5,6 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [],
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  plugins: [require('tailwindcss-animate')],
 }

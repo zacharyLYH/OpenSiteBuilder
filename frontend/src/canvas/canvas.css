@@ -1,0 +1,70 @@
+/* Nebulous base: soft color blooms on near-white. */
+.canvas-backdrop {
+  background:
+    radial-gradient(42rem 30rem at 12% 6%, rgba(129, 140, 248, 0.16), transparent 60%),
+    radial-gradient(36rem 28rem at 88% 16%, rgba(56, 189, 248, 0.16), transparent 60%),
+    radial-gradient(50rem 34rem at 50% 112%, rgba(148, 163, 184, 0.2), transparent 60%),
+    #f8fafc;
+}
+
+/* Dot guides: real DOM (gradient dots don't paint reliably here). One cell
+   per grid square — same columns, rows, and gaps as RGL — with a point at
+   each cell's top-left corner, i.e. exactly on item edges. */
+.canvas-dots {
+  display: grid;
+  pointer-events: none;
+}
+
+.canvas-dot {
+  position: relative;
+}
+
+.canvas-dot::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(100, 116, 139, 0.45);
+}
+
+/* Drop ghost while dragging from the palette. */
+.react-grid-placeholder {
+  background: rgba(56, 189, 248, 0.15) !important;
+  border: 1px dashed #38bdf8 !important;
+  border-radius: 12px !important;
+}
+
+.canvas-selected {
+  box-shadow: 0 0 0 2px #38bdf8;
+  border-radius: 12px;
+}
+
+/* Resize polish: glowing borders + bolded resize edge. */
+.react-grid-item.resizing {
+  z-index: 20;
+  box-shadow:
+    0 0 0 2px #38bdf8,
+    0 0 32px rgba(56, 189, 248, 0.65);
+  border-radius: 14px;
+}
+
+.react-grid-item > .react-resizable-handle {
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+}
+
+.react-grid-item:hover > .react-resizable-handle,
+.canvas-selected > .react-resizable-handle {
+  opacity: 0.75;
+}
+
+.react-grid-item.resizing > .react-resizable-handle {
+  background-color: #0284c7;
+  border-radius: 6px 0 12px 0;
+  box-shadow: 0 0 12px rgba(2, 132, 199, 0.9);
+  opacity: 1;
+}

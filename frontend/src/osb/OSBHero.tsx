@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBTheme } from './types'
+import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBField, type OSBTheme } from './types'
 import OSBButton from './OSBButton'
 
 export type OSBHeroConfig = {
@@ -31,6 +31,35 @@ export const OSB_HERO_DEFAULTS: OSBHeroConfig = {
 export function resolveHeroConfig(provided?: Partial<OSBHeroConfig>): OSBHeroConfig {
   return resolveConfig(OSB_HERO_DEFAULTS, provided)
 }
+
+export const OSB_HERO_FIELDS: OSBField[] = [
+  { key: 'eyebrow', label: 'Small tagline above the title', kind: 'text' },
+  { key: 'title', label: 'Title', kind: 'text' },
+  { key: 'body', label: 'Text', kind: 'longtext' },
+  { key: 'primaryLabel', label: 'Main button text', kind: 'text' },
+  { key: 'secondaryLabel', label: 'Second button text', hint: 'Empty hides it.', kind: 'text' },
+  { key: 'imageSrc', label: 'Image web address', hint: 'Empty shows a placeholder block.', kind: 'text' },
+  { key: 'imageAlt', label: 'Image description', hint: 'Read aloud for visitors who cannot see the image.', kind: 'text' },
+  {
+    key: 'layout',
+    label: 'Layout',
+    kind: 'select',
+    options: [
+      { value: 'split', label: 'Side by side' },
+      { value: 'stacked', label: 'Stacked' },
+    ],
+  },
+  {
+    key: 'align',
+    label: 'Alignment',
+    kind: 'select',
+    options: [
+      { value: 'left', label: 'Left' },
+      { value: 'center', label: 'Center' },
+    ],
+  },
+  { key: 'theme', label: 'Appearance', kind: 'theme' },
+]
 
 const EYEBROW_CLASSES: Record<OSBTheme, string> = {
   light: 'text-slate-500',
@@ -74,7 +103,7 @@ export default function OSBHero({ config }: OSBHeroProps) {
   const split = c.layout === 'split'
 
   return (
-    <section className="w-full">
+    <section className="h-full w-full">
       <div className={cn(split && 'sm:grid sm:grid-cols-2 sm:items-center sm:gap-8')}>
         <div className={cn('flex flex-col gap-4 py-6', OSB_ALIGN_CLASSES[c.align])}>
           {c.eyebrow !== '' && (

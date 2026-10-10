@@ -1,6 +1,6 @@
 import Home from './pages/Home'
 import Callback from './pages/Callback'
-import Editor from './pages/Editor'
+import CanvasPage from './canvas/CanvasPage'
 import Nav from './components/Nav'
 import OsbMount from './osb/mount'
 
@@ -9,13 +9,7 @@ export default function App() {
   if (path === '/callback') return <Callback />
   // Dev-only screenshot mount for e2e specs. Never linked in prod.
   if (path === '/osb-mount' && import.meta.env.DEV) return <OsbMount />
-  if (path === '/editor')
-    return (
-      <>
-        <Nav />
-        <Editor />
-      </>
-    )
+  if (path === '/canvas') return <CanvasPage />
   return (
     <>
       <Nav />

@@ -53,4 +53,15 @@ describe('Home publish flow originates correct requests', () => {
     expect(href()).toBe('http://localhost/')
     expect(localStorage.getItem('osb_last_slug')).toBeNull()
   })
+
+  it('opens the editor without rewriting the project slug', () => {
+    localStorage.setItem('osb_last_slug', 'my-shop')
+    const href = mockLocation('http://localhost/')
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open editor' }))
+
+    // Single-writer rule: opening never touches storage, only publish does.
+    expect(localStorage.getItem('osb_last_slug')).toBe('my-shop')
+    expect(href()).toBe('/canvas')
+  })
 })

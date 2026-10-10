@@ -37,9 +37,6 @@ export default function Callback() {
             setTimeout(() => { window.location.href = body.install_url }, 1500)
           }
         } else {
-          try {
-            localStorage.setItem('osb_last_slug', body.slug)
-          } catch { /* private mode */ }
           setResult(body)
         }
       })
@@ -58,10 +55,9 @@ export default function Callback() {
       )}
       {result && (
         <div className="mt-4 space-y-2 text-sm">
-          <p>Repo ensured: <code className="rounded bg-slate-100 px-1">{result.owner}/{result.slug}</code></p>
-          <p>Created this run: <code className="rounded bg-slate-100 px-1">{String(result.created)}</code></p>
-          <p>Site: <a className="underline" href={result.url}>{result.url}</a></p>
-          <p><a className="underline" href={`/editor?slug=${encodeURIComponent(result.slug)}`}>Open editor</a></p>
+          <p>Site connected: <code className="rounded bg-slate-100 px-1">{result.owner}/{result.slug}</code></p>
+          <p><a className="underline" href={result.url}>{result.url}</a></p>
+          <p><a className="underline" href="/canvas">Open visual editor</a></p>
         </div>
       )}
       {!error && !result && <p className="mt-4 text-sm text-slate-600">Exchanging with backend…</p>}

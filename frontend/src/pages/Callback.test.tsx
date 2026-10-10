@@ -30,7 +30,8 @@ describe('Callback drives the real exchange', () => {
     render(<Callback />)
 
     expect(await screen.findByText(/maya\/my-shop/, {}, { timeout: 10000 })).toBeTruthy()
-    expect(localStorage.getItem('osb_last_slug')).toBe('my-shop')
+    // Single-writer rule: only Home publish sets the slug, never the callback.
+    expect(localStorage.getItem('osb_last_slug')).toBeNull()
     const seen = await mockCalls()
     if (seen.calls['POST /repos/tmpl-owner/tmpl-repo/generate'] !== 1) {
       throw new Error(`generate must run once, saw ${JSON.stringify(seen.calls)}`)
@@ -44,6 +45,7 @@ describe('Callback drives the real exchange', () => {
     render(<Callback />)
 
     expect(await screen.findByText(/maya\/my-shop/, {}, { timeout: 10000 })).toBeTruthy()
+    expect(localStorage.getItem('osb_last_slug')).toBeNull()
   })
 
   it('shows failure when the code is already spent', async () => {

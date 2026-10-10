@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBTheme } from './types'
+import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBField, type OSBTheme } from './types'
 import OSBButton from './OSBButton'
 
 export type OSBCardConfig = {
@@ -29,6 +29,43 @@ export const OSB_CARD_DEFAULTS: OSBCardConfig = {
 export function resolveCardConfig(provided?: Partial<OSBCardConfig>): OSBCardConfig {
   return resolveConfig(OSB_CARD_DEFAULTS, provided)
 }
+
+export const OSB_CARD_FIELDS: OSBField[] = [
+  { key: 'title', label: 'Title', kind: 'text' },
+  { key: 'body', label: 'Text', kind: 'longtext' },
+  { key: 'actionLabel', label: 'Button text', hint: 'Empty hides the button.', kind: 'text' },
+  { key: 'imageSrc', label: 'Image web address', hint: 'Empty shows a placeholder block.', kind: 'text' },
+  { key: 'imageAlt', label: 'Image description', hint: 'Read aloud for visitors who cannot see the image.', kind: 'text' },
+  {
+    key: 'imagePosition',
+    label: 'Image position',
+    kind: 'select',
+    options: [
+      { value: 'top', label: 'On top' },
+      { value: 'side', label: 'On the side' },
+    ],
+  },
+  {
+    key: 'variant',
+    label: 'Card style',
+    kind: 'select',
+    options: [
+      { value: 'elevated', label: 'Raised' },
+      { value: 'outlined', label: 'Outline' },
+      { value: 'plain', label: 'Plain' },
+    ],
+  },
+  {
+    key: 'align',
+    label: 'Alignment',
+    kind: 'select',
+    options: [
+      { value: 'left', label: 'Left' },
+      { value: 'center', label: 'Center' },
+    ],
+  },
+  { key: 'theme', label: 'Appearance', kind: 'theme' },
+]
 
 const SHELL_CLASSES: Record<OSBCardConfig['variant'], Record<OSBTheme, string>> = {
   elevated: {
@@ -85,7 +122,7 @@ export default function OSBCard({ config }: OSBCardProps) {
   const side = c.imagePosition === 'side'
 
   return (
-    <article className={cn('w-full overflow-hidden rounded-xl', themed(c.theme, SHELL_CLASSES[c.variant]))}>
+    <article className={cn('h-full w-full overflow-hidden rounded-xl', themed(c.theme, SHELL_CLASSES[c.variant]))}>
       <div className={cn(side && 'sm:grid sm:grid-cols-2')}>
         <CardImage c={c} />
         <div className={cn('flex flex-col gap-3 p-6', OSB_ALIGN_CLASSES[c.align])}>

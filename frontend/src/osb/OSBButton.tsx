@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBTheme } from './types'
+import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBField, type OSBTheme } from './types'
 
 export type OSBButtonConfig = {
   label: string
@@ -24,6 +24,39 @@ export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
 export function resolveButtonConfig(provided?: Partial<OSBButtonConfig>): OSBButtonConfig {
   return resolveConfig(OSB_BUTTON_DEFAULTS, provided)
 }
+
+export const OSB_BUTTON_FIELDS: OSBField[] = [
+  { key: 'label', label: 'Button text', kind: 'text' },
+  {
+    key: 'variant',
+    label: 'Style',
+    kind: 'select',
+    options: [
+      { value: 'primary', label: 'Primary' },
+      { value: 'secondary', label: 'Secondary' },
+      { value: 'outline', label: 'Outline' },
+    ],
+  },
+  {
+    key: 'size',
+    label: 'Size',
+    kind: 'select',
+    options: [
+      { value: 'sm', label: 'Small' },
+      { value: 'md', label: 'Medium' },
+    ],
+  },
+  {
+    key: 'align',
+    label: 'Alignment',
+    kind: 'select',
+    options: [
+      { value: 'left', label: 'Left' },
+      { value: 'center', label: 'Center' },
+    ],
+  },
+  { key: 'theme', label: 'Appearance', kind: 'theme' },
+]
 
 // Complete static classes only — never interpolate (PRD §6.6).
 const VARIANT_CLASSES: Record<OSBButtonConfig['variant'], Record<OSBTheme, string>> = {
@@ -54,7 +87,7 @@ export interface OSBButtonProps {
 export default function OSBButton({ config, onClick }: OSBButtonProps) {
   const c = resolveButtonConfig(config)
   return (
-    <div className={cn('w-full', OSB_ALIGN_CLASSES[c.align])}>
+    <div className={cn('h-full w-full', OSB_ALIGN_CLASSES[c.align])}>
       <button
         type="button"
         disabled={c.disabled}

@@ -1,9 +1,43 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import type { SiteNode } from '../src/site/types'
+import { GRID_MARGIN_X } from '../src/canvas/grid'
 
 /** Mount a node stack through the generic /osb-mount harness. */
 export async function mountNodes(page: Page, nodes: SiteNode[]): Promise<void> {
   await page.goto('/osb-mount#nodes=' + encodeURIComponent(JSON.stringify(nodes)))
+}
+
+export interface Cell {
+  x: number
+  y: number
+}
+
+export interface Span {
+  cols: number
+  rows: number
+}
+
+/**
+ * Drag source onto the target top-left cell of the canvas grid, spanning
+ * `span` cells. Cursor math (item lands centered on the cursor) lives here
+ * alone: pitch is measured live from the dot guides, so no test hardcodes
+ * pixels and every resolution stays deterministic.
+ */
+export async function dropToCell(
+  page: Page,
+  source: Locator,
+  target: Locator,
+  cell: Cell,
+  span: Span,
+): Promise<void> {
+  const dot = await page.getByTestId('canvas-dots').locator('i').first().boundingBox()
+  const pitch = dot!.width + GRID_MARGIN_X
+  await source.dragTo(target, {
+    targetPosition: {
+      x: (cell.x + span.cols / 2) * pitch,
+      y: (cell.y + span.rows / 2) * pitch,
+    },
+  })
 }
 
 export const LONG_TEXT =

@@ -25,6 +25,24 @@ export function resolveConfig<T extends object>(
 /** Shared text alignment knob. */
 export type OSBAlign = 'left' | 'center'
 
+/** Catalog category (PRD §4.3). */
+export type OSBCategory = 'Essentials' | 'Content' | 'Patterns'
+
+/** Grid footprint in dot squares. cols/rows = drop size. */
+export type OSBGridSize = {
+  minCols: number
+  minRows: number
+  maxCols: number
+  maxRows: number
+  cols: number
+  rows: number
+}
+
+/** One drawer field. kind picks the control; labels are plain-language. */
+export type OSBField =
+  | { key: string; label: string; hint?: string; kind: 'text' | 'longtext' | 'theme' }
+  | { key: string; label: string; hint?: string; kind: 'select'; options: { value: string; label: string }[] }
+
 export const OSB_ALIGN_CLASSES: Record<OSBAlign, string> = {
   left: 'text-left',
   center: 'text-center',

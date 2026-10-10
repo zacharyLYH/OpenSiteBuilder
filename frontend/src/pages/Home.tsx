@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label'
 import { ErrorNote } from '../components/Notice'
 import { getState } from '../api'
 import { CLIENT_ID, githubAuthorizeUrl } from '../config'
+import { setProjectSlug } from '../lib/project'
 
 const STEPS = [
   { n: '01', title: 'Name it', text: 'Pick a site name. We create the repo in your GitHub account — no terminal, no setup.' },
@@ -19,6 +20,10 @@ export default function Home() {
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
 
+  async function openEditor() {
+    window.location.href = '/canvas'
+  }
+
   async function publish() {
     setError(null)
     setBusy(true)
@@ -28,9 +33,7 @@ export default function Home() {
         setError(body.error || 'state failed')
         return
       }
-      try {
-        localStorage.setItem('osb_last_slug', slug)
-      } catch { /* private mode: slug stays in the URL */ }
+      setProjectSlug(slug)
       window.location.href = githubAuthorizeUrl(CLIENT_ID, body.state)
     } finally {
       setBusy(false)
@@ -64,6 +67,9 @@ export default function Home() {
                   />
                   <Button className="h-12 px-8 text-base" onClick={publish} disabled={busy}>
                     {busy ? 'Starting…' : 'Publish'}
+                  </Button>
+                  <Button className="h-12 px-6 text-base" variant="outline" onClick={openEditor}>
+                    Open editor
                   </Button>
                 </div>
                 <p className="text-xs text-slate-500">
