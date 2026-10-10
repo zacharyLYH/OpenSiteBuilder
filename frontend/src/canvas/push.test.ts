@@ -47,7 +47,9 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
       'src/lib/utils.ts',
       'src/osb/OSBButton.tsx',
       'src/osb/OSBCard.tsx',
+      'src/osb/OSBFooter.tsx',
       'src/osb/OSBHero.tsx',
+      'src/osb/OSBNavbar.tsx',
       'src/osb/types.ts',
     ])
     // Every registered node type must import a component that actually ships.

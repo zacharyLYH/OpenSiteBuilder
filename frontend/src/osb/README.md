@@ -2,7 +2,8 @@
 
 Components end users put on their sites. All prefixed `OSB` to separate them
 from the builder's own UI (`src/components/`). Higher-order primitives are the
-unit users touch: `OSBCard`, `OSBHero`, plus `OSBButton` for standalone actions.
+unit users touch: `OSBNavbar` and `OSBFooter` for page chrome, `OSBHero` and
+`OSBCard` for content blocks, plus `OSBButton` for standalone actions.
 Each component owns its text rendering directly — there are no shared leaf
 primitives and no per-component unit tests; screenshots are the contract.
 Light + dark are the only themes — every config has a `theme` key, rendered

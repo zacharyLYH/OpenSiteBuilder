@@ -171,7 +171,9 @@ export default function CanvasPage() {
             className="pointer-events-none fixed bottom-0 left-0 right-0 top-14 flex flex-col items-center justify-center gap-1"
           >
             <p className="text-sm font-medium text-slate-500">Drag a component here to start building</p>
-            <p className="text-xs text-slate-400">Card · Hero · Button from the bar above</p>
+            <p className="text-xs text-slate-400">
+              {OSB_NODE_TYPES.map((t) => OSB_REGISTRY[t].name).join(' · ')} from the bar above
+            </p>
           </div>
         )}
         {mounted && (
