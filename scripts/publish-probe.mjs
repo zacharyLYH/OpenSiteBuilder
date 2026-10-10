@@ -84,9 +84,10 @@ if (ensure) {
   console.log(`pages: ${pages.status === 201 ? 'enabled' : pages.status === 409 ? 'already-enabled' : 'FAILED ' + pages.status}`)
 }
 
-// P1-equivalent: rewrite src/App.jsx with the run marker, single-file commit.
+// P1-equivalent: append a run marker export, single-file commit.
 let content = fs.readFileSync(path.join(root, 'template/src/App.jsx'), 'utf8')
-content = content.replace('osb-e2e-probe', marker)
+content = content.replace(/\nexport const __probe = ".*"\n?$/, '')
+content += `\nexport const __probe = "${marker}"\n`
 const ref = await gh('GET', `${API}/repos/${OWNER}/${REPO}/git/ref/heads/main`, token)
 const base = ref.json.object.sha
 const blob = await gh('POST', `${API}/repos/${OWNER}/${REPO}/git/blobs`, token, { content, encoding: 'utf-8' })
