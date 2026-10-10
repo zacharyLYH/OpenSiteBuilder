@@ -1,8 +1,5 @@
-// GitHub App identity shown to users during install/authorize.
-// Secrets never live here; only the public client ID.
-export const APP_SLUG = 'opensitebuilder-bytesbylyh-dev'
-export const CLIENT_ID = 'Iv23liBOHhapv9XPFgLw'
-
+// GitHub App authorize URL for the OAuth leg. The public client ID is served
+// by the backend (single source: the CLIENT_ID env var), never hardcoded here.
 export function githubAuthorizeUrl(clientId: string, state: string): string {
   return (
     'https://github.com/login/oauth/authorize' +

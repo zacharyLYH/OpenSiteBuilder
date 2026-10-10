@@ -9,7 +9,9 @@ import { dropToCell } from './helpers'
 test('canvas: compose hero+card+button, reposition button, persist, screenshot', async ({
   page,
 }) => {
-  await page.addInitScript(() => localStorage.setItem('osb_last_slug', 'e2e-canvas'))
+  await page.context().addCookies([
+    { name: 'obs_curr_project_name', value: 'e2e-canvas', url: 'http://localhost:9199' },
+  ])
   await page.setViewportSize({ width: 1280, height: 1100 })
   await page.goto('/canvas')
 

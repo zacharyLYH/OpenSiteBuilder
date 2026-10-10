@@ -3,7 +3,7 @@
 // context includes scripts/.
 //
 // Control: POST /__scenario {userLogin, installLogin, repoExists,
-//   generateStatus, pagesStatus, exchangeFails, updateRefStatus, treeExtras}
+//   generateStatus, pagesStatus, exchangeFails, updateRefStatus}
 // Inspect: GET /__calls -> {calls, tokens, generateBody}
 // Reset: POST /__reset
 import http from 'node:http'
@@ -20,7 +20,6 @@ const happy = () => ({
   pagesStatus: 201,
   exchangeFails: false,
   updateRefStatus: 200,
-  treeExtras: [],
 })
 
 let opts = happy()
@@ -118,24 +117,6 @@ const server = http.createServer(async (req, res) => {
   if (p.includes('/git/refs/heads/main') && req.method === 'PATCH') {
     if (opts.updateRefStatus === 200) return json(res, 200, { ref: 'refs/heads/main' })
     return json(res, opts.updateRefStatus, { message: 'mocked ref failure' })
-  }
-  if (p.includes('/git/commits/') && req.method === 'GET') {
-    return json(res, 200, { tree: { sha: 'tree-sha' } })
-  }
-  if (p.includes('/git/trees/') && req.method === 'GET') {
-    const tree = [
-      { path: 'src/App.jsx', sha: 'f-sha', size: 10, type: 'blob' },
-      { path: 'index.html', sha: 'h-sha', size: 10, type: 'blob' },
-    ]
-    for (const e of opts.treeExtras) tree.push({ path: e.path, sha: 'x-sha', size: 10, type: e.type })
-    return json(res, 200, { tree, truncated: false })
-  }
-  if (p.includes('/contents/') && req.method === 'GET') {
-    return json(res, 200, {
-      content: Buffer.from('mock file body').toString('base64'),
-      encoding: 'base64',
-      sha: 'f-sha',
-    })
   }
   if (req.method === 'GET' && p.startsWith('/repos/') && p.split('/').length === 4) {
     if (opts.repoExists) return json(res, 200, { full_name: 'x/y' })

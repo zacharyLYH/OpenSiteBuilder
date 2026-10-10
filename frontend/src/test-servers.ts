@@ -74,7 +74,7 @@ function alive(pid: number): boolean {
 // dropBin also removes the shared run binary; only the global setup,
 // which rebuilds it right after, may pass true.
 export function sweepStaleArtifacts(dropBin = false): void {
-  let entries: string[] = []
+  let entries: string[]
   try {
     entries = fs.readdirSync(os.tmpdir())
   } catch {

@@ -16,7 +16,9 @@ export function setApiBase(url: string): void {
 
 async function call(path: string, opts?: RequestInit): Promise<ApiResult> {
   const r = await fetch(apiBase + path, opts)
-  return { status: r.status, body: await r.json() }
+  // Non-JSON bodies (proxy errors, empty responses) must not throw.
+  const body = await r.json().catch(() => ({}))
+  return { status: r.status, body }
 }
 
 export const getState = (slug: string): Promise<ApiResult> =>
@@ -34,12 +36,6 @@ export const postExchange = (payload: ExchangePayload): Promise<ApiResult> =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-
-export const getRepoFiles = (slug: string): Promise<ApiResult> =>
-  call(`/api/repo?slug=${encodeURIComponent(slug)}`);
-
-export const getRepoFile = (slug: string, path: string): Promise<ApiResult> =>
-  call(`/api/repo?slug=${encodeURIComponent(slug)}&path=${encodeURIComponent(path)}`);
 
 export interface PublishFile {
   path: string

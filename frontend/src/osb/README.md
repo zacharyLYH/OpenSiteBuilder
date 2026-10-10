@@ -20,8 +20,7 @@ default. To add a knob: interface + defaults + render. Nothing else.
 `registry.ts` (`OSB_REGISTRY`) is the single record of node types: each type
 name is written once as a key. `OSBNodeType`, `OSB_NODE_TYPES`, defaults, and
 rendering all derive from it — nothing is re-declared elsewhere.
-`renderer.tsx` (`OSBNodeRenderer`) turns `site.json` nodes into React.
-Insert menu / editor / publisher all read these — no per-component branches.
+Insert menu / editor / publisher all read it — no per-component branches.
 
 ## Screenshots
 

@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test'
 
 // Clean slate + mid-drag states, pinned separately from the composed shot.
 test('canvas empty: nebula backdrop with an invitation, no nodes', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('osb_last_slug', 'e2e-canvas-empty'))
+  await page.context().addCookies([
+    { name: 'obs_curr_project_name', value: 'e2e-canvas-empty', url: 'http://localhost:9199' },
+  ])
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/canvas')
 
@@ -12,7 +14,9 @@ test('canvas empty: nebula backdrop with an invitation, no nodes', async ({ page
 })
 
 test('canvas small viewport: dots stay square, empty state holds', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('osb_last_slug', 'e2e-canvas-small'))
+  await page.context().addCookies([
+    { name: 'obs_curr_project_name', value: 'e2e-canvas-small', url: 'http://localhost:9199' },
+  ])
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/canvas')
 
@@ -27,7 +31,9 @@ test('canvas small viewport: dots stay square, empty state holds', async ({ page
 test('canvas dragging: ghost preview follows the card mid-drag, then it lands', async ({
   page,
 }) => {
-  await page.addInitScript(() => localStorage.setItem('osb_last_slug', 'e2e-canvas-drag'))
+  await page.context().addCookies([
+    { name: 'obs_curr_project_name', value: 'e2e-canvas-drag', url: 'http://localhost:9199' },
+  ])
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/canvas')
 

@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBField, type OSBTheme } from './types'
+import { OSB_ALIGN_CLASSES, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
 import OSBButton from './OSBButton'
 
 export type OSBCardConfig = {
@@ -24,10 +24,6 @@ export const OSB_CARD_DEFAULTS: OSBCardConfig = {
   variant: 'elevated',
   align: 'left',
   theme: 'light',
-}
-
-export function resolveCardConfig(provided?: Partial<OSBCardConfig>): OSBCardConfig {
-  return resolveConfig(OSB_CARD_DEFAULTS, provided)
 }
 
 export const OSB_CARD_FIELDS: OSBField[] = [
@@ -113,7 +109,7 @@ export interface OSBCardProps {
 }
 
 export default function OSBCard({ config }: OSBCardProps) {
-  const raw = resolveCardConfig(config)
+  const raw = resolveConfig(OSB_CARD_DEFAULTS, config)
   // Empty slots are omitted; a fully empty card still renders a title shell.
   const c: OSBCardConfig =
     raw.title === '' && raw.body === '' && raw.actionLabel === ''
@@ -122,7 +118,7 @@ export default function OSBCard({ config }: OSBCardProps) {
   const side = c.imagePosition === 'side'
 
   return (
-    <article className={cn('h-full w-full overflow-hidden rounded-xl', themed(c.theme, SHELL_CLASSES[c.variant]))}>
+    <article className={cn('h-full w-full overflow-hidden rounded-xl', SHELL_CLASSES[c.variant][c.theme])}>
       <div className={cn(side && 'sm:grid sm:grid-cols-2')}>
         <CardImage c={c} />
         <div className={cn('flex flex-col gap-3 p-6', OSB_ALIGN_CLASSES[c.align])}>

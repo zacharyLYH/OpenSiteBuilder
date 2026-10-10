@@ -18,6 +18,13 @@ import (
 	"opensitebuilder-backend/internal/config"
 )
 
+// appJWTTTL is GitHub's ceiling for app JWTs: it rejects any issued-at time
+// more than 10 minutes in the past. Do not raise this.
+const appJWTTTL = 10 * time.Minute
+
+// jwtIATSkew backdates iat to absorb small clock drift between us and GitHub.
+const jwtIATSkew int64 = 60
+
 // MintAppJWT signs a 10 minute app token. The private key never leaves disk.
 func MintAppJWT(cfg config.Config) (string, error) {
 	pemRaw, err := os.ReadFile(cfg.PrivateKeyPath)
@@ -43,7 +50,7 @@ func MintAppJWT(cfg config.Config) (string, error) {
 	now := time.Now().Unix()
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
 	payload := base64.RawURLEncoding.EncodeToString([]byte(
-		fmt.Sprintf(`{"iss":%q,"iat":%d,"exp":%d}`, cfg.AppID, now-60, now+600)))
+		fmt.Sprintf(`{"iss":%q,"iat":%d,"exp":%d}`, cfg.AppID, now-jwtIATSkew, now+int64(appJWTTTL.Seconds()))))
 	digest := sha256.Sum256([]byte(header + "." + payload))
 	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
 	if err != nil {
@@ -85,45 +92,55 @@ func (g *Client) AuthenticatedUser(token string) (string, error) {
 	return out.Login, nil
 }
 
-// FindInstallation returns the install ID for an owner login, or 0.
-func (g *Client) FindInstallation(appJWT, owner string) (int64, error) {
-	var out []struct {
-		ID      int64 `json:"id"`
-		Account struct {
-			Login string `json:"login"`
-		} `json:"account"`
-	}
-	st, err := g.do(http.MethodGet, g.APIBase+"/app/installations?per_page=100", appJWT, nil, &out)
-	if err != nil {
-		return 0, err
-	}
-	if st != http.StatusOK {
-		return 0, fmt.Errorf("installation list failed: status=%d", st)
-	}
-	for _, in := range out {
-		if strings.EqualFold(in.Account.Login, owner) {
-			return in.ID, nil
-		}
-	}
-	return 0, nil
+// installPageSize matches GitHub's max page size for installation listings.
+const installPageSize = 100
+
+type installation struct {
+	ID      int64 `json:"id"`
+	Account struct {
+		Login string `json:"login"`
+	} `json:"account"`
 }
 
-// InstallationInfo confirms which account an install belongs to.
-func (g *Client) InstallationInfo(appJWT string, id int64) (owner string, repoSelection string, status int, err error) {
+// FindInstallation returns the install ID for an owner login, or 0. It walks
+// every page, so an account with more than one page of installs is still found.
+func (g *Client) FindInstallation(appJWT, owner string) (int64, error) {
+	for page := 1; ; page++ {
+		var out []installation
+		st, err := g.do(http.MethodGet,
+			fmt.Sprintf("%s/app/installations?per_page=%d&page=%d", g.APIBase, installPageSize, page), appJWT, nil, &out)
+		if err != nil {
+			return 0, err
+		}
+		if st != http.StatusOK {
+			return 0, fmt.Errorf("installation list failed: status=%d", st)
+		}
+		for _, in := range out {
+			if strings.EqualFold(in.Account.Login, owner) {
+				return in.ID, nil
+			}
+		}
+		if len(out) < installPageSize {
+			return 0, nil
+		}
+	}
+}
+
+// InstallationAccount confirms which account an install belongs to.
+func (g *Client) InstallationAccount(appJWT string, id int64) (string, error) {
 	var out struct {
 		Account struct {
 			Login string `json:"login"`
 		} `json:"account"`
-		RepositorySelection string `json:"repository_selection"`
 	}
 	st, err := g.do(http.MethodGet, fmt.Sprintf("%s/app/installations/%d", g.APIBase, id), appJWT, nil, &out)
 	if err != nil {
-		return "", "", st, err
+		return "", err
 	}
 	if st != http.StatusOK {
-		return "", "", st, fmt.Errorf("installation lookup failed: status=%d", st)
+		return "", fmt.Errorf("installation lookup failed: status=%d", st)
 	}
-	return out.Account.Login, out.RepositorySelection, st, nil
+	return out.Account.Login, nil
 }
 
 // CreateInstallToken mints GH_INSTALL for one installation.

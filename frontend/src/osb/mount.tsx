@@ -25,7 +25,7 @@ function isDark(n: SiteNode): boolean {
  * Dev-only `/osb-mount` route. Never linked in prod.
  */
 export default function OsbMount() {
-  const nodes = useMemo(parseHash, [])
+  const nodes = useMemo(() => parseHash(), [])
   if (nodes === null) {
     return <div data-testid="osb-mount-empty">missing #nodes=[site.json nodes]</div>
   }

@@ -2,10 +2,26 @@ package server
 
 import (
 	"net/http"
+	"time"
 
 	"opensitebuilder-backend/internal/auth"
 	"opensitebuilder-backend/internal/config"
 	"opensitebuilder-backend/internal/github"
+)
+
+// Timeouts, in one place.
+const (
+	// sessionTTL bounds how long a signed editor session stays usable.
+	sessionTTL = 24 * time.Hour
+	// stateTTL is the window to finish the GitHub authorize + install journey
+	// before the signed state (and its pending cookie) expire.
+	stateTTL = 10 * time.Minute
+)
+
+// Per-client-IP API budget (all API routes share one bucket).
+const (
+	apiRatePerMinute = 120
+	apiBurst         = 30
 )
 
 // Server carries config and the GitHub client to every handler.
@@ -23,27 +39,17 @@ func New(cfg config.Config, gh *github.Client) *Server {
 func NewMux(s *Server) *http.ServeMux {
 	mux := http.NewServeMux()
 	health := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		if !requireMethod(w, r, http.MethodGet) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
 	mux.HandleFunc("/healthz", health)
-	mux.HandleFunc("/api/healthz", health)
-	mux.HandleFunc("/api/state", s.handleState)
-	mux.HandleFunc("/api/exchange", s.handleExchange)
-	mux.HandleFunc("/api/repo", s.handleRepo)
-	mux.HandleFunc("/api/publish", s.handlePublish)
+	api := newRateLimiter(apiRatePerMinute, apiBurst)
+	mux.HandleFunc("/api/state", api.middleware(s.handleState))
+	mux.HandleFunc("/api/exchange", api.middleware(s.handleExchange))
+	mux.HandleFunc("/api/publish", api.middleware(s.handlePublish))
 	return mux
-}
-
-func (s *Server) sessionCookie(sess auth.SessionPayload) (string, error) {
-	tok, err := auth.SignToken(s.Cfg.SessionKey, sess)
-	if err != nil {
-		return "", err
-	}
-	return tok, nil
 }
 
 func (s *Server) readSession(r *http.Request) (*auth.SessionPayload, error) {
@@ -59,14 +65,13 @@ func (s *Server) readSession(r *http.Request) (*auth.SessionPayload, error) {
 }
 
 func (s *Server) setSession(w http.ResponseWriter, tok string) {
-	c := &http.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     "osb_session",
 		Value:    tok,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   s.Cfg.SecureCookies,
-		MaxAge:   7 * 24 * 3600,
-	}
-	http.SetCookie(w, c)
+		MaxAge:   int(sessionTTL.Seconds()),
+	})
 }

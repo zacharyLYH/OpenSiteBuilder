@@ -20,12 +20,12 @@ export interface CanvasDoc {
 const EMPTY: CanvasDoc = { version: 1, nodes: [] }
 
 /** Project name comes from the existing onboarding flow, not new UI. */
-export function projectSlug(): string {
+export function currentProjectName(): string {
   return getProjectSlug() || 'my-site'
 }
 
-export function storageKey(slug: string): string {
-  return `osb.project.${slug}`
+export function storageKey(projectName: string): string {
+  return `osb.project.${projectName}`
 }
 
 export function loadDoc(key: string): CanvasDoc {

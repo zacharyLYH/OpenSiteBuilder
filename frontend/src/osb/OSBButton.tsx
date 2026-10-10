@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBField, type OSBTheme } from './types'
+import { OSB_ALIGN_CLASSES, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
 
 export type OSBButtonConfig = {
   label: string
@@ -19,10 +19,6 @@ export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
   theme: 'light',
   disabled: false,
   fullWidth: false,
-}
-
-export function resolveButtonConfig(provided?: Partial<OSBButtonConfig>): OSBButtonConfig {
-  return resolveConfig(OSB_BUTTON_DEFAULTS, provided)
 }
 
 export const OSB_BUTTON_FIELDS: OSBField[] = [
@@ -85,7 +81,7 @@ export interface OSBButtonProps {
 }
 
 export default function OSBButton({ config, onClick }: OSBButtonProps) {
-  const c = resolveButtonConfig(config)
+  const c = resolveConfig(OSB_BUTTON_DEFAULTS, config)
   return (
     <div className={cn('h-full w-full', OSB_ALIGN_CLASSES[c.align])}>
       <button
@@ -95,7 +91,7 @@ export default function OSBButton({ config, onClick }: OSBButtonProps) {
         className={cn(
           'inline-flex max-w-full items-center justify-center whitespace-normal break-words rounded-md font-medium transition-colors',
           'disabled:pointer-events-none disabled:opacity-50',
-          themed(c.theme, VARIANT_CLASSES[c.variant]),
+          VARIANT_CLASSES[c.variant][c.theme],
           SIZE_CLASSES[c.size],
           c.fullWidth && 'w-full',
         )}

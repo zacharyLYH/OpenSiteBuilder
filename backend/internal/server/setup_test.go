@@ -56,7 +56,7 @@ func newTestEnv(t *testing.T, opts mockOptions) *testEnv {
 		GitHubAPIBase:   mock.url(),
 		GitHubOAuthBase: mock.url(),
 	}
-	srv := httptest.NewServer(NewMux(New(cfg, github.NewClientWithBases(mock.url(), mock.url()))))
+	srv := httptest.NewServer(NewMux(New(cfg, github.NewClient(mock.url(), mock.url()))))
 	t.Cleanup(srv.Close)
 
 	jar, err := cookiejar.New(nil)
@@ -108,15 +108,4 @@ func (e *testEnv) login(slug string) {
 	if code != 200 {
 		e.t.Fatalf("login exchange failed: %d %v", code, body)
 	}
-}
-
-// decode is a small helper for response assertions.
-func decode(t *testing.T, r *http.Response) map[string]any {
-	t.Helper()
-	defer r.Body.Close()
-	var body map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	return body
 }

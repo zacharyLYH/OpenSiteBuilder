@@ -11,11 +11,10 @@ import './canvas.css'
 import { OSB_NODE_TYPES, OSB_REGISTRY, type OSBNodeType } from '../osb/registry'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
 import ConfigDrawer from './ConfigDrawer'
-import { loadDoc, projectSlug, storageKey, canPlace, type CanvasDoc, type PlacedNode } from './doc'
+import { loadDoc, currentProjectName, storageKey, canPlace, type CanvasDoc } from './doc'
 import { clearProjectSlug } from '../lib/project'
-import { GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, minGridWidth, rowHeightFor } from './grid'
+import { GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, canvasMetrics, minGridWidth } from './grid'
 import { pushDoc } from './push'
 import { useDebouncedEffect } from './useDebouncedEffect'
 
@@ -28,25 +27,16 @@ const noOverlap: Compactor = {
 }
 
 export default function CanvasPage() {
-  const [slug] = useState(projectSlug)
-  const key = storageKey(slug)
+  const [projectName] = useState(currentProjectName)
+  const key = storageKey(projectName)
   const [doc, setDoc] = useState<CanvasDoc>(() => loadDoc(key))
-  const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [pushing, setPushing] = useState(false)
   const [pushMsg, setPushMsg] = useState('')
   const { width, containerRef, mounted } = useContainerWidth()
-  // True square cells: row height equals column width at any resolution.
-  // The wrapper enforces the band minimum so RGL never measures too narrow.
-  const cell = width > 0 ? rowHeightFor(width) : 48
-  const dotRows = Math.max(
-    30,
-    ...doc.nodes.map((n) => n.y + n.rows + 8),
-  )
-  // Definite height so the empty grid is a real drop target and grows with content.
-  const mainH = typeof window !== 'undefined' ? window.innerHeight - 56 : 800
-  const bottom = doc.nodes.reduce((m, n) => Math.max(m, n.y + n.rows), 0)
-  const wrapH = Math.max(mainH, bottom * (cell + GRID_MARGIN_Y) + 64)
+  // One query owns every resolution-dependent size (cell, dots, scroll height).
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 856
+  const { cell, dotRows, height } = canvasMetrics(width, viewportHeight, doc.nodes)
   // Palette drag type travels in a ref, not dataTransfer (reliable in tests).
   const dragType = useRef<OSBNodeType | null>(null)
 
@@ -85,40 +75,27 @@ export default function CanvasPage() {
     }))
   }
 
-  const onDrop = (next: Layout, item: LayoutItem | undefined) => {
-    void next
-    if (!item) return
+  const onDrop = (_layout: Layout, item: LayoutItem | undefined) => {
     const type = dragType.current
     dragType.current = null
-    if (!type || !(type in OSB_REGISTRY)) return
+    if (!type || !item) return
     const g = OSB_REGISTRY[type].grid
     const rect = { x: item.x, y: item.y, cols: g.cols, rows: g.rows }
     // KISS: overlaps never land; the user rearranges manually.
     if (!canPlace(doc.nodes, rect)) return
-    const node: PlacedNode = { id: crypto.randomUUID(), type, config: {}, x: rect.x, y: rect.y, cols: g.cols, rows: g.rows }
-    setDoc((d) => ({ ...d, nodes: [...d.nodes, node] }))
+    setDoc((d) => ({ ...d, nodes: [...d.nodes, { id: crypto.randomUUID(), type, config: {}, ...rect }] }))
   }
 
   const selected = doc.nodes.find((n) => n.id === selectedId) ?? null
   const side = selected && selected.x + selected.cols / 2 >= GRID_COLS / 2 ? 'left' : 'right'
-  const visible = OSB_NODE_TYPES.filter((t) =>
-    OSB_REGISTRY[t].name.toLowerCase().includes(query.trim().toLowerCase()),
-  )
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-white">
       <header className="flex h-14 items-center gap-2 border-b border-slate-200 px-3">
         <Badge data-testid="canvas-project" variant="secondary" className="font-mono">
-          {slug}
+          {projectName}
         </Badge>
-        <Input
-          aria-label="Find a component"
-          placeholder="Find a component…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-44"
-        />
-        {visible.map((t) => (
+        {OSB_NODE_TYPES.map((t) => (
           <Button
             key={t}
             data-testid={`palette-${t}`}
@@ -158,7 +135,7 @@ export default function CanvasPage() {
           onClick={() => {
             setPushing(true)
             setPushMsg('Pushing…')
-            pushDoc(doc, slug)
+            pushDoc(doc, projectName)
               .then((r) => {
                 setPushMsg(r.ok ? `Pushed ${r.commit!.slice(0, 7)}` : `Push failed: ${r.error}`)
               })
@@ -171,7 +148,7 @@ export default function CanvasPage() {
       </header>
 
       <main data-testid="canvas" onClick={() => setSelectedId(null)} className="relative h-[calc(100vh-3.5rem)] overflow-auto">
-        <div ref={containerRef} style={{ minWidth: minGridWidth(), height: wrapH }} className="relative">
+        <div ref={containerRef} style={{ minWidth: minGridWidth(), height }} className="relative">
           <div className="canvas-backdrop pointer-events-none absolute inset-0" />
           <div
             aria-hidden
@@ -207,9 +184,7 @@ export default function CanvasPage() {
             dropConfig={{ enabled: true, defaultItem: { w: 10, h: 10 } }}
             onDropDragOver={() => {
               const t = dragType.current
-              if (!t || !(t in OSB_REGISTRY)) return false
-              const g = OSB_REGISTRY[t].grid
-              return { w: g.cols, h: g.rows }
+              return t ? { w: OSB_REGISTRY[t].grid.cols, h: OSB_REGISTRY[t].grid.rows } : false
             }}
             onDrop={onDrop}
             resizeConfig={{ handles: ['se'] }}

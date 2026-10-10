@@ -13,7 +13,9 @@
  */
 export const PROJECT_COOKIE = 'obs_curr_project_name'
 
-const MAX_AGE = 31536000 // 1 year: persists across refreshes/tab closures
+// 30 days: long enough to reopen the last project across visits, short enough
+// that a shared browser forgets it. The session cookie is the real gate.
+const MAX_AGE = 60 * 60 * 24 * 30
 
 function cookieAttrs(maxAge: number): string {
   const secure = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : ''

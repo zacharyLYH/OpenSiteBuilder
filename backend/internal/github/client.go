@@ -16,18 +16,14 @@ type Client struct {
 	OAuthBase string
 }
 
-func NewClient() *Client {
-	return &Client{
-		http:      &http.Client{Timeout: 30 * time.Second},
-		APIBase:   "https://api.github.com",
-		OAuthBase: "https://github.com",
-	}
-}
+// githubTimeout bounds one HTTP call to GitHub (the mock honors it too).
+const githubTimeout = 30 * time.Second
 
-// NewClientWithBases is the test seam: same client, mock endpoints.
-func NewClientWithBases(apiBase, oauthBase string) *Client {
+// NewClient builds a client against explicit API/OAuth bases. Production
+// passes github.com defaults; tests pass the mock.
+func NewClient(apiBase, oauthBase string) *Client {
 	return &Client{
-		http:      &http.Client{Timeout: 30 * time.Second},
+		http:      &http.Client{Timeout: githubTimeout},
 		APIBase:   apiBase,
 		OAuthBase: oauthBase,
 	}

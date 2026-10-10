@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,13 +31,6 @@ type mockOptions struct {
 	// Failure injection.
 	ExchangeFails   bool // every code exchange fails like a spent code
 	UpdateRefStatus int  // PATCH ref (default 200; 422 simulates push conflict)
-	// Extra files visible in the recursive tree (e.g. ".github/workflows/deploy.yml").
-	TreeExtras []mockTreeFile
-}
-
-type mockTreeFile struct {
-	Path string
-	Type string // "blob" or "tree"
 }
 
 // ghMock is the only GitHub double. One httptest server answers both the
@@ -206,32 +198,6 @@ func (m *ghMock) serve(w http.ResponseWriter, r *http.Request) {
 		writeMockJSON(w, m.opts.UpdateRefStatus, map[string]string{"message": "mocked ref failure"})
 		return
 	}
-	if strings.Contains(p, "/git/commits/") && r.Method == "GET" {
-		writeMockJSON(w, 200, map[string]any{"tree": map[string]string{"sha": "tree-sha"}})
-		return
-	}
-	if strings.Contains(p, "/git/trees/") && r.Method == "GET" {
-		nodes := []any{
-			map[string]any{"path": "src/App.jsx", "sha": "f-sha", "size": 10, "type": "blob"},
-			map[string]any{"path": "index.html", "sha": "h-sha", "size": 10, "type": "blob"},
-		}
-		for _, e := range m.opts.TreeExtras {
-			nodes = append(nodes, map[string]any{"path": e.Path, "sha": "x-sha", "size": 10, "type": e.Type})
-		}
-		writeMockJSON(w, 200, map[string]any{"tree": nodes, "truncated": false})
-		return
-	}
-
-	// Single file contents.
-	if strings.Contains(p, "/contents/") && r.Method == "GET" {
-		writeMockJSON(w, 200, map[string]string{
-			"content":  base64.StdEncoding.EncodeToString([]byte("mock file body")),
-			"encoding": "base64",
-			"sha":      "f-sha",
-		})
-		return
-	}
-
 	// Plain repo lookup.
 	if r.Method == "GET" && strings.Count(p, "/") == 3 && strings.HasPrefix(p, "/repos/") {
 		if m.opts.RepoExists {

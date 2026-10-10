@@ -2,15 +2,11 @@ import type { ComponentType, ReactNode } from 'react'
 import OSBButton, { OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS, type OSBButtonConfig } from './OSBButton'
 import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, type OSBCardConfig } from './OSBCard'
 import OSBHero, { OSB_HERO_DEFAULTS, OSB_HERO_FIELDS, type OSBHeroConfig } from './OSBHero'
-import type { OSBCategory, OSBField, OSBGridSize } from './types'
-
-export type { OSBCategory } from './types'
+import type { OSBField, OSBGridSize } from './types'
 
 export interface OSBEntry {
   /** Human-readable name shown in the palette. */
   name: string
-  /** Catalog category (PRD §4.3). */
-  category: OSBCategory
   defaults: Record<string, unknown>
   fields: OSBField[]
   /** Footprint in checkerboard cells. w/h = drop size. */
@@ -20,7 +16,6 @@ export interface OSBEntry {
 
 function defineEntry<C extends Record<string, unknown>>(
   name: string,
-  category: OSBCategory,
   defaults: C,
   fields: OSBField[],
   grid: OSBGridSize,
@@ -28,7 +23,6 @@ function defineEntry<C extends Record<string, unknown>>(
 ): OSBEntry {
   return {
     name,
-    category,
     defaults,
     fields,
     grid,
@@ -44,7 +38,6 @@ function defineEntry<C extends Record<string, unknown>>(
 export const OSB_REGISTRY = {
   card: defineEntry(
     'Card',
-    'Content',
     OSB_CARD_DEFAULTS,
     OSB_CARD_FIELDS,
     { minCols: 6, minRows: 8, maxCols: 32, maxRows: 24, cols: 10, rows: 10 },
@@ -52,7 +45,6 @@ export const OSB_REGISTRY = {
   ),
   hero: defineEntry(
     'Hero',
-    'Patterns',
     OSB_HERO_DEFAULTS,
     OSB_HERO_FIELDS,
     { minCols: 10, minRows: 8, maxCols: 32, maxRows: 24, cols: 20, rows: 8 },
@@ -60,7 +52,6 @@ export const OSB_REGISTRY = {
   ),
   button: defineEntry(
     'Button',
-    'Essentials',
     OSB_BUTTON_DEFAULTS,
     OSB_BUTTON_FIELDS,
     { minCols: 4, minRows: 2, maxCols: 32, maxRows: 4, cols: 6, rows: 2 },

@@ -3,7 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -16,8 +16,7 @@ import (
 // Owner comes from the token, never from user input. State falls back
 // to the pending cookie when the install leg drops it from the URL.
 func (s *Server) handleExchange(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var in struct {
@@ -26,11 +25,11 @@ func (s *Server) handleExchange(w http.ResponseWriter, r *http.Request) {
 		State          string `json:"state"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad json"})
+		fail(w, http.StatusBadRequest, "bad json")
 		return
 	}
 	if in.Code == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code required"})
+		fail(w, http.StatusBadRequest, "code required")
 		return
 	}
 	state := in.State
@@ -40,39 +39,39 @@ func (s *Server) handleExchange(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if state == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state required (publish again to restart)"})
+		fail(w, http.StatusBadRequest, "state required (publish again to restart)")
 		return
 	}
 	var st auth.StatePayload
 	if err := auth.VerifyToken(s.Cfg.SessionKey, state, &st); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad state: " + err.Error()})
+		fail(w, http.StatusBadRequest, "bad state: "+err.Error())
 		return
 	}
 	// Mint first: installation lookup costs nothing single-use.
 	appJWT, err := github.MintAppJWT(s.Cfg)
 	if err != nil {
-		log.Printf("app jwt failed: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "app auth failed"})
+		slog.Error("app jwt failed", "err", err)
+		fail(w, http.StatusInternalServerError, "app auth failed")
 		return
 	}
 	userToken, err := s.Gh.ExchangeCode(s.Cfg, in.Code)
 	if err != nil {
-		log.Printf("exchange code failed slug=%s: %v", st.Slug, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "github authorization failed"})
+		slog.Error("exchange code failed", "slug", st.Slug, "err", err)
+		fail(w, http.StatusBadGateway, "github authorization failed")
 		return
 	}
 	login, err := s.Gh.AuthenticatedUser(userToken)
 	if err != nil {
-		log.Printf("user lookup failed slug=%s: %v", st.Slug, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "github authorization failed"})
+		slog.Error("user lookup failed", "slug", st.Slug, "err", err)
+		fail(w, http.StatusBadGateway, "github authorization failed")
 		return
 	}
 	instID := in.InstallationID
 	if instID == 0 {
 		found, err := s.Gh.FindInstallation(appJWT, login)
 		if err != nil {
-			log.Printf("installation list failed: %v", err)
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "installation lookup failed"})
+			slog.Error("installation list failed", "err", err)
+			fail(w, http.StatusBadGateway, "installation lookup failed")
 			return
 		}
 		if found == 0 {
@@ -84,55 +83,55 @@ func (s *Server) handleExchange(w http.ResponseWriter, r *http.Request) {
 		}
 		instID = found
 	} else {
-		instLogin, _, _, err := s.Gh.InstallationInfo(appJWT, instID)
+		instLogin, err := s.Gh.InstallationAccount(appJWT, instID)
 		if err != nil {
-			log.Printf("installation lookup failed id=%d: %v", instID, err)
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "installation lookup failed"})
+			slog.Error("installation lookup failed", "id", instID, "err", err)
+			fail(w, http.StatusBadGateway, "installation lookup failed")
 			return
 		}
 		if !strings.EqualFold(instLogin, login) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "installation belongs to another account"})
+			fail(w, http.StatusForbidden, "installation belongs to another account")
 			return
 		}
 	}
 	exists, err := s.Gh.RepoExists(userToken, login, st.Slug)
 	if err != nil {
-		log.Printf("repo lookup failed %s/%s: %v", login, st.Slug, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "github lookup failed"})
+		slog.Error("repo lookup failed", "owner", login, "slug", st.Slug, "err", err)
+		fail(w, http.StatusBadGateway, "github lookup failed")
 		return
 	}
 	created := false
 	if !exists {
 		if err := s.Gh.GenerateRepo(userToken, s.Cfg.TemplateOwner, s.Cfg.TemplateRepo, login, st.Slug); err != nil {
-			log.Printf("repo generate failed %s/%s: %v", login, st.Slug, err)
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "repo creation failed"})
+			slog.Error("repo generate failed", "owner", login, "slug", st.Slug, "err", err)
+			fail(w, http.StatusBadGateway, "repo creation failed")
 			return
 		}
 		created = true
 	}
 	installToken, err := s.Gh.CreateInstallToken(appJWT, instID)
 	if err != nil {
-		log.Printf("install token failed id=%d: %v", instID, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "install token failed"})
+		slog.Error("install token failed", "id", instID, "err", err)
+		fail(w, http.StatusBadGateway, "install token failed")
 		return
 	}
 	if err := s.Gh.EnsurePages(installToken, login, st.Slug); err != nil {
-		log.Printf("pages enable failed %s/%s: %v", login, st.Slug, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "pages enable failed"})
+		slog.Error("pages enable failed", "owner", login, "slug", st.Slug, "err", err)
+		fail(w, http.StatusBadGateway, "pages enable failed")
 		return
 	}
-	tok, err := s.sessionCookie(auth.SessionPayload{
+	tok, err := auth.SignToken(s.Cfg.SessionKey, auth.SessionPayload{
 		Owner: login, Slug: st.Slug, Inst: instID,
-		Exp: time.Now().Add(7 * 24 * time.Hour).Unix(),
+		Exp: time.Now().Add(sessionTTL).Unix(),
 	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "session failed"})
+		fail(w, http.StatusInternalServerError, "session failed")
 		return
 	}
 	s.setSession(w, tok)
 	// Pending state served its purpose; clear it.
 	http.SetCookie(w, &http.Cookie{Name: "osb_pending", Value: "", Path: "/", MaxAge: -1})
-	log.Printf("exchange ok owner=%s slug=%s created=%v", login, st.Slug, created)
+	slog.Info("exchange ok", "owner", login, "slug", st.Slug, "created", created)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"owner": login, "slug": st.Slug, "created": created,
 		"url": fmt.Sprintf("https://%s.github.io/%s/", login, st.Slug),

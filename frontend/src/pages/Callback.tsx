@@ -10,21 +10,25 @@ interface ExchangeResult {
 }
 
 export default function Callback() {
-  const q = new URLSearchParams(window.location.search)
   const [result, setResult] = React.useState<ExchangeResult | null>(null)
-  const [error, setError] = React.useState<string | null>(null)
   const [installUrl, setInstallUrl] = React.useState<string | null>(null)
+  // Missing code is knowable at mount, so seed it here rather than set state
+  // synchronously inside the effect.
+  const [error, setError] = React.useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('code') === null
+      ? 'callback is missing code'
+      : null,
+  )
 
   React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const q = new URLSearchParams(window.location.search)
     const code = q.get('code')
     const state = q.get('state')
     const inst = Number(q.get('installation_id'))
     // State may be absent on the install leg; the backend falls back
     // to the pending cookie. Only code is mandatory here.
-    if (!code) {
-      setError('callback is missing code')
-      return
-    }
+    if (!code) return
     const payload: ExchangePayload = { code, state }
     if (inst) payload.installation_id = inst
     postExchange(payload)
@@ -34,13 +38,14 @@ export default function Callback() {
           if (status === 409 && body.install_url) {
             setInstallUrl(body.install_url)
             // Publish already consented to this journey; continue automatically.
-            setTimeout(() => { window.location.href = body.install_url }, 1500)
+            timer = setTimeout(() => { window.location.href = body.install_url }, 1500)
           }
         } else {
           setResult(body)
         }
       })
       .catch((e) => setError(String(e)))
+    return () => clearTimeout(timer)
   }, [])
 
   return (

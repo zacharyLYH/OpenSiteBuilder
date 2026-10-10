@@ -13,7 +13,7 @@ describe('generatePage', () => {
         { id: 'c', type: 'card', config: {}, x: 0, y: 5, cols: 4, rows: 3 },
       ]),
     )
-    expect(out).toContain(`import OSBHero from '../osb/OSBHero'`)
+    expect(out).toContain(`import OSBHero from './osb/OSBHero'`)
     expect(out).toContain(`export default function SitePage()`)
     const hero = out.indexOf('<OSBHero')
     const button = out.indexOf('<OSBButton')

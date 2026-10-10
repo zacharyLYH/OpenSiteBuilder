@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { ErrorNote } from '../components/Notice'
 import { getState } from '../api'
-import { CLIENT_ID, githubAuthorizeUrl } from '../config'
+import { githubAuthorizeUrl } from '../config'
 import { setProjectSlug } from '../lib/project'
 
 const STEPS = [
@@ -16,11 +16,11 @@ const STEPS = [
 ]
 
 export default function Home() {
-  const [slug, setSlug] = React.useState('osb-e2e-probe')
+  const [slug, setSlug] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
 
-  async function openEditor() {
+  function openEditor() {
     window.location.href = '/canvas'
   }
 
@@ -34,7 +34,9 @@ export default function Home() {
         return
       }
       setProjectSlug(slug)
-      window.location.href = githubAuthorizeUrl(CLIENT_ID, body.state)
+      window.location.href = githubAuthorizeUrl(body.client_id, body.state)
+    } catch (e) {
+      setError(String(e))
     } finally {
       setBusy(false)
     }

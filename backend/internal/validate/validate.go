@@ -5,12 +5,12 @@ import (
 	"strings"
 )
 
-// SlugRe constrains site names to lowercase letters, numbers, hyphens.
-var SlugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
+// slugRe constrains site names to lowercase letters, numbers, hyphens.
+var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
 
 // ValidSlug reports whether slug may be used for a site/repo name.
 func ValidSlug(slug string) bool {
-	return SlugRe.MatchString(slug)
+	return slugRe.MatchString(slug)
 }
 
 // PublishablePath reports whether path may be written through P1.
@@ -36,7 +36,7 @@ func PublishablePath(p string) bool {
 	case strings.HasPrefix(p, "public/"):
 		return true
 	case p == "index.html" || p == "package.json" || p == "vite.config.js" ||
-		p == "tailwind.config.js" || p == "postcss.config.js":
+		p == "tailwind.config.js" || p == "postcss.config.js" || p == "site.json":
 		return true
 	}
 	return false

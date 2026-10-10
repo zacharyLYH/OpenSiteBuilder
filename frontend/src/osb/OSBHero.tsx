@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, themed, type OSBAlign, type OSBField, type OSBTheme } from './types'
+import { OSB_ALIGN_CLASSES, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
 import OSBButton from './OSBButton'
 
 export type OSBHeroConfig = {
@@ -26,10 +26,6 @@ export const OSB_HERO_DEFAULTS: OSBHeroConfig = {
   layout: 'split',
   align: 'left',
   theme: 'light',
-}
-
-export function resolveHeroConfig(provided?: Partial<OSBHeroConfig>): OSBHeroConfig {
-  return resolveConfig(OSB_HERO_DEFAULTS, provided)
 }
 
 export const OSB_HERO_FIELDS: OSBField[] = [
@@ -97,7 +93,7 @@ export interface OSBHeroProps {
 }
 
 export default function OSBHero({ config }: OSBHeroProps) {
-  const raw = resolveHeroConfig(config)
+  const raw = resolveConfig(OSB_HERO_DEFAULTS, config)
   const c: OSBHeroConfig =
     raw.title === '' && raw.body === '' ? { ...raw, title: 'Hero title' } : raw
   const split = c.layout === 'split'
@@ -107,7 +103,7 @@ export default function OSBHero({ config }: OSBHeroProps) {
       <div className={cn(split && 'sm:grid sm:grid-cols-2 sm:items-center sm:gap-8')}>
         <div className={cn('flex flex-col gap-4 py-6', OSB_ALIGN_CLASSES[c.align])}>
           {c.eyebrow !== '' && (
-            <p className={cn('text-xs font-semibold uppercase tracking-widest', themed(c.theme, EYEBROW_CLASSES))}>
+            <p className={cn('text-xs font-semibold uppercase tracking-widest', EYEBROW_CLASSES[c.theme])}>
               {c.eyebrow}
             </p>
           )}

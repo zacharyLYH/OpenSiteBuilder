@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -20,13 +20,12 @@ type publishFile struct {
 
 // POST /api/publish {files:[{path,content}], message?} runs P1.
 func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	sess, err := s.readSession(r)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "login required"})
+		fail(w, http.StatusUnauthorized, "login required")
 		return
 	}
 	var in struct {
@@ -34,11 +33,11 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		Message string        `json:"message"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&in); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad json"})
+		fail(w, http.StatusBadRequest, "bad json")
 		return
 	}
 	if err := checkFiles(in.Files); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	msg := strings.TrimSpace(in.Message)
@@ -46,30 +45,30 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		msg = "osb publish"
 	}
 	if len(msg) > 200 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "message too long"})
+		fail(w, http.StatusBadRequest, "message too long")
 		return
 	}
 	appJWT, err := github.MintAppJWT(s.Cfg)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "app auth failed"})
+		fail(w, http.StatusInternalServerError, "app auth failed")
 		return
 	}
 	token, err := s.Gh.CreateInstallToken(appJWT, sess.Inst)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "install token failed"})
+		fail(w, http.StatusBadGateway, "install token failed")
 		return
 	}
 	commit, err := s.Gh.CommitFiles(token, sess.Owner, sess.Slug, msg, fileOps(in.Files))
 	if err != nil {
 		if strings.Contains(err.Error(), "push conflict") {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "push conflict, retry"})
+			fail(w, http.StatusConflict, "push conflict, retry")
 			return
 		}
-		log.Printf("publish failed %s/%s: %v", sess.Owner, sess.Slug, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "upload failed"})
+		slog.Error("publish failed", "owner", sess.Owner, "slug", sess.Slug, "err", err)
+		fail(w, http.StatusBadGateway, "upload failed")
 		return
 	}
-	log.Printf("publish ok owner=%s slug=%s files=%d commit=%.7s", sess.Owner, sess.Slug, len(in.Files), commit)
+	slog.Info("publish ok", "owner", sess.Owner, "slug", sess.Slug, "files", len(in.Files), "commit", commit)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"commit": commit,
 		"url":    fmt.Sprintf("https://%s.github.io/%s/", sess.Owner, sess.Slug),

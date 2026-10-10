@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { pushDoc, siteJson } from './push'
+import { tagFor } from './codegen'
 import { validateSite } from '../site/validate'
+import { OSB_NODE_TYPES } from '../osb/registry'
 import type { CanvasDoc } from './doc'
 
 const DOC: CanvasDoc = {
@@ -38,8 +40,23 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
       message: string
     }
     expect(payload.message).toBe('canvas publish')
-    expect(payload.files.map((f) => f.path).sort()).toEqual(['site.json', 'src/App.jsx'])
     const app = payload.files.find((f) => f.path === 'src/App.jsx')!.content
+    expect(payload.files.map((f) => f.path).sort()).toEqual([
+      'site.json',
+      'src/App.jsx',
+      'src/lib/utils.ts',
+      'src/osb/OSBButton.tsx',
+      'src/osb/OSBCard.tsx',
+      'src/osb/OSBHero.tsx',
+      'src/osb/types.ts',
+    ])
+    // Every registered node type must import a component that actually ships.
+    const shipped = new Map(payload.files.map((f) => [f.path, f.content]))
+    for (const type of OSB_NODE_TYPES) {
+      const tag = tagFor(type)
+      expect(app).toContain(`from './osb/${tag}'`)
+      expect(shipped.get(`src/osb/${tag}.tsx`)).toBeTruthy()
+    }
     expect(app).toContain('<OSBHero')
     expect(app.indexOf('<OSBHero')).toBeLessThan(app.indexOf('<OSBButton'))
     const site = payload.files.find((f) => f.path === 'site.json')!.content
