@@ -7,6 +7,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     globalSetup: ['./vitest.global-setup.ts'],
+    exclude: ['e2e/**', 'node_modules/**'],
     // IO-bound against real backends; finders may wait up to 10s.
     testTimeout: 30000,
   },

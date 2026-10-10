@@ -2,6 +2,7 @@
 secrets
 frontend/node_modules
 frontend/dist
+frontend/test-results
 template/node_modules
 template/dist
 .DS_Store
