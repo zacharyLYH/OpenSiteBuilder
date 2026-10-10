@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { render, screen, waitFor } from '@testing-library/react'
 import Callback from './Callback'
 import { getState } from '../api'
+import { getProjectSlug } from '../lib/project'
 import { mockLocation, installHttp, resetScenario, setScenario, mockCalls, useIsolatedServers } from '../test-utils'
 
 let closeServers: () => Promise<void>
@@ -14,9 +15,17 @@ afterAll(async () => {
   await closeServers()
 })
 
+function clearCookies(): void {
+  for (const part of document.cookie.split(';')) {
+    const name = part.split('=', 1)[0]?.trim()
+    if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
+  }
+}
+
 beforeEach(async () => {
   vi.unstubAllGlobals()
   localStorage.clear()
+  clearCookies()
   installHttp()
   await resetScenario()
 })
@@ -31,7 +40,7 @@ describe('Callback drives the real exchange', () => {
 
     expect(await screen.findByText(/maya\/my-shop/, {}, { timeout: 10000 })).toBeTruthy()
     // Single-writer rule: only Home publish sets the slug, never the callback.
-    expect(localStorage.getItem('osb_last_slug')).toBeNull()
+    expect(getProjectSlug()).toBeNull()
     const seen = await mockCalls()
     if (seen.calls['POST /repos/tmpl-owner/tmpl-repo/generate'] !== 1) {
       throw new Error(`generate must run once, saw ${JSON.stringify(seen.calls)}`)
@@ -45,7 +54,7 @@ describe('Callback drives the real exchange', () => {
     render(<Callback />)
 
     expect(await screen.findByText(/maya\/my-shop/, {}, { timeout: 10000 })).toBeTruthy()
-    expect(localStorage.getItem('osb_last_slug')).toBeNull()
+    expect(getProjectSlug()).toBeNull()
   })
 
   it('shows failure when the code is already spent', async () => {

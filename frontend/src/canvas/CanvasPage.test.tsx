@@ -2,25 +2,38 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import CanvasPage from './CanvasPage'
 import { mockLocation } from '../test-utils'
+import { getProjectSlug, setProjectSlug, PROJECT_COOKIE } from '../lib/project'
 import { storageKey } from './doc'
+
+function clearCookies(): void {
+  for (const part of document.cookie.split(';')) {
+    const name = part.split('=', 1)[0]?.trim()
+    if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
+  }
+}
 
 beforeEach(() => {
   vi.unstubAllGlobals()
   localStorage.clear()
+  clearCookies()
 })
 
 describe('CanvasPage', () => {
   it('exits the current project back to home', () => {
-    localStorage.setItem('osb_last_slug', 'shop')
+    setProjectSlug('shop')
     const href = mockLocation('http://localhost/canvas')
     render(<CanvasPage />)
+    // Canvas reads the project name from the cookie (intermediate state).
+    expect(getProjectSlug()).toBe('shop')
+    expect(document.cookie).toContain(`${PROJECT_COOKIE}=shop`)
     fireEvent.click(screen.getByRole('button', { name: 'Exit project' }))
+    expect(getProjectSlug()).toBeNull()
     expect(localStorage.getItem('osb_last_slug')).toBeNull()
     expect(href()).toBe('/')
   })
 
   it('opens the settings drawer when a placed node is clicked', async () => {
-    localStorage.setItem('osb_last_slug', 'shop')
+    setProjectSlug('shop')
     localStorage.setItem(
       storageKey('shop'),
       JSON.stringify({
