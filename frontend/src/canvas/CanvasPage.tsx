@@ -19,20 +19,24 @@ import {
   storageKey,
   canInsertReason,
   canPlace,
+  conflictIds,
   containerFloor,
+  dragSpan,
   eventCell,
   insertNode,
   insertPattern,
   moveNode,
-  nestTargetAt,
   reasonText,
   removeNode,
   resolveDrop,
   resolveInsert,
   validateDoc,
   type CanvasDoc,
+  type DocResult,
   type DocValidation,
+  type DragPayload,
   type PlacedNode,
+  type RejectReason,
 } from './doc'
 import { clearProjectSlug } from '../lib/project'
 import { GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, canvasMetrics, minGridWidth } from './grid'
@@ -69,11 +73,13 @@ function PaletteButton({
   label,
   onPick,
   onClear,
+  onStart,
 }: {
   testid: string
   label: string
   onPick: () => void
   onClear: () => void
+  onStart: () => void
 }) {
   return (
     <Button
@@ -84,6 +90,7 @@ function PaletteButton({
       onPointerDown={onPick}
       onDragStart={(e) => {
         onPick()
+        onStart()
         e.dataTransfer.setData('text/plain', label)
       }}
       onDragEnd={onClear}
@@ -104,17 +111,22 @@ export default function CanvasPage() {
   const key = projectName ? storageKey(projectName) : ''
   const [doc, setDoc] = useState<CanvasDoc>(() => (key ? loadDoc(key) : { version: 1, nodes: [] }))
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [hoverId, setHoverId] = useState<string | null>(null)
-  // Container hovered by a drag it must refuse (red ring feedback).
-  const [badHover, setBadHover] = useState<string | null>(null)
-  // Live invalid-cell preview for child drags inside a container.
+  // One highlight rule while dragging: every border blue, conflicts red.
+  const [dragging, setDragging] = useState(false)
+  const [conflicts, setConflicts] = useState<string[]>([])
+  // Live drop-cell preview for child drags inside a container: blue where
+  // the footprint fits, red where it would be refused.
   const [childGhost, setChildGhost] = useState<{
     parentId: string
     x: number
     y: number
     cols: number
     rows: number
+    ok: boolean
   } | null>(null)
+  // Resync RGL's internal layout from props every gesture end, so a
+  // refused drag can never linger as a phantom.
+  const [layoutEpoch, setLayoutEpoch] = useState(0)
   // Live RGL-drag validity (red outline while over a forbidden spot).
   const [dragCheck, setDragCheck] = useState<{ id: string; ok: boolean } | null>(null)
   // On-demand validation panel (touch and friends are checked on click,
@@ -125,6 +137,8 @@ export default function CanvasPage() {
   // Transient drop feedback: rejected gestures fail silently otherwise.
   const [dropMsg, setDropMsg] = useState<string | null>(null)
   const dropMsgTimer = useRef<number | null>(null)
+  // Colors the RGL drop placeholder red while the previewed spot is forbidden.
+  const [dropForbidden, setDropForbidden] = useState(false)
   // Live child-resize preview (committed to the doc on mouse-up).
   const [resizing, setResizing] = useState<{ id: string; cols: number; rows: number } | null>(null)
   const { width, containerRef, mounted } = useContainerWidth()
@@ -132,12 +146,8 @@ export default function CanvasPage() {
   const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 856
   const roots = useMemo(() => doc.nodes.filter((n) => n.parentId === null), [doc])
   const { cell, dotRows, height } = canvasMetrics(width, viewportHeight, roots)
-  // Palette drag type travels in a ref, not dataTransfer (reliable in tests).
-  const dragType = useRef<OSBNodeType | null>(null)
-  // Palette pattern (multi-node composition) being dragged, if any.
-  const dragPattern = useRef<string | null>(null)
-  // Existing child being reparented/repositioned.
-  const dragId = useRef<string | null>(null)
+  // One drag vocabulary for every gesture (palette, pattern, move).
+  const dragRef = useRef<DragPayload | null>(null)
   // Latest doc for async gesture commits (resize mouse-up).
   const docRef = useRef(doc)
   docRef.current = doc
@@ -172,29 +182,56 @@ export default function CanvasPage() {
     [doc, roots],
   )
 
-  const commit = (next: Layout) => {
+  const commit = (next: Layout, active?: LayoutItem | null) => {
     setDragCheck(null)
-    setDoc((d) => {
-      let nodes = d.nodes
-      for (const l of next) {
-        const cur = nodes.find((n) => n.id === l.i)
-        if (!cur || cur.parentId !== null) continue
-        if (cur.x === l.x && cur.y === l.y && cur.cols === l.w && cur.rows === l.h) continue
-        // Fungible move: nest when the center lands in an accepting
-        // container, else stay at root — one shared resolution.
-        const resolved = resolveDrop(nodes, l.i, { x: l.x, y: l.y, cols: l.w, rows: l.h })
-        if (!resolved) continue
-        const r = moveNode({ ...d, nodes }, l.i, resolved.rect, resolved.parentId)
-        if (r.ok) nodes = r.doc.nodes
-      }
-      return { ...d, nodes }
-    })
+    setDragging(false)
+    markConflicts([])
+    setDropForbidden(false)
+    // Resync RGL: a refused gesture must not linger as a phantom. Bumping
+    // the key rebuilds RGL's internal layout from props every gesture end.
+    setLayoutEpoch((e) => e + 1)
+    // Functional read: rapid gestures always validate against the latest
+    // doc, never a stale render closure.
+    const d = docRef.current
+    // Only the item the user actually dragged may persist. Anything else in
+    // `next` that differs is RGL internal drift — never write it back.
+    const targets = active?.i
+      ? next.filter((l) => l.i === active.i)
+      : (() => {
+          const changed = next.filter((l) => {
+            const cur = d.nodes.find((n) => n.id === l.i)
+            return (
+              cur &&
+              cur.parentId === null &&
+              (cur.x !== l.x || cur.y !== l.y || cur.cols !== l.w || cur.rows !== l.h)
+            )
+          })
+          return changed.length === 1 ? changed : []
+        })()
+    let nodes = d.nodes
+    let failed: RejectReason | null = null
+    for (const l of targets) {
+      const cur = nodes.find((n) => n.id === l.i)
+      if (!cur || cur.parentId !== null) continue
+      if (cur.x === l.x && cur.y === l.y && cur.cols === l.w && cur.rows === l.h) continue
+      // Fungible move: nest when the center lands in an accepting
+      // container, else stay at root — one shared resolution.
+      const resolved = resolveDrop(nodes, l.i, { x: l.x, y: l.y, cols: l.w, rows: l.h })
+      if (!resolved) continue
+      const r = moveNode({ ...d, nodes }, l.i, resolved.rect, resolved.parentId)
+      if (r.ok) nodes = r.doc.nodes
+      else if (!failed) failed = r.reason
+    }
+    if (nodes !== d.nodes) setDoc({ ...d, nodes })
+    // Bounce with words: a refused drag snaps back AND says why.
+    if (failed) reject(failed)
   }
 
   /** Live validity while an RGL item drags: red outline over forbidden
    * spots, nest-aware so a valid nesting never flashes red. Updates only
    * when the verdict flips, not on every mousemove. */
   const onDragCheck = (next: Layout) => {
+    setDragging(true)
     const nodes = docRef.current.nodes
     const changed = next.find((l) => {
       const cur = nodes.find((n) => n.id === l.i)
@@ -207,30 +244,23 @@ export default function CanvasPage() {
       resolved !== null &&
       canInsertReason(nodes, cur.type, resolved.rect, resolved.parentId, cur.id) === null
     setDragCheck((prev) => (prev && prev.id === cur.id && prev.ok === ok ? prev : { id: cur.id, ok }))
+    markConflicts(
+      resolved ? conflictIds(nodes, cur.id, cur.type, resolved.rect, resolved.parentId) : [],
+    )
   }
 
-  const dropSpan = (): { cols: number; rows: number } | null => {
-    if (dragId.current) {
-      const n = doc.nodes.find((x) => x.id === dragId.current)
-      return n ? { cols: n.cols, rows: n.rows } : null
-    }
-    if (dragPattern.current) {
-      const p = OSB_PATTERNS[dragPattern.current]
-      return p ? { cols: p.containerCols, rows: p.containerRows } : null
-    }
-    if (dragType.current) {
-      const g = OSB_REGISTRY[dragType.current].grid
-      return { cols: g.cols, rows: g.rows }
-    }
-    return null
+  /** Red-conflict ids, updated only on change (drag events fire constantly). */
+  const markConflicts = (ids: string[]) => {
+    setConflicts((prev) =>
+      prev.length === ids.length && prev.every((id, i) => id === ids[i]) ? prev : ids,
+    )
   }
 
   const clearDrag = () => {
-    dragType.current = null
-    dragPattern.current = null
-    dragId.current = null
-    setHoverId((h) => (h === null ? h : null))
-    setBadHover((b) => (b === null ? b : null))
+    dragRef.current = null
+    setDragging(false)
+    markConflicts([])
+    setDropForbidden(false)
     setChildGhost((g) => (g === null ? g : null))
   }
 
@@ -241,78 +271,75 @@ export default function CanvasPage() {
     dropMsgTimer.current = window.setTimeout(() => setDropMsg(null), 2600)
   }
 
+  /** One landing for every op result: apply + select, or bounce with words. */
+  const applyResult = (r: DocResult, selectId?: string) => {
+    if (r.ok) {
+      setDoc(r.doc)
+      if (selectId !== undefined) setSelectedId(selectId)
+    } else {
+      reject(r.reason)
+    }
+  }
+
   /** Palette or child drop onto the root canvas (RGL onDrop). Container
    * drops are owned by the container div (see onContainerDrop): RGL's native
    * listener fires before React handlers bubble, so without the guard below
    * one child drop would move twice and strand RGL's dropping placeholder. */
   const onDrop = (_layout: Layout, item: LayoutItem | undefined, e?: Event) => {
     if ((e?.target as HTMLElement | undefined)?.closest?.('[data-testid^="container-"]') != null) return
-    const type = dragType.current
-    const patternKey = dragPattern.current
-    const movingId = dragId.current
+    const drag = dragRef.current
     clearDrag()
-    if (!item) return
-    if (movingId) {
+    if (!item || !drag) return
+    if (drag.kind === 'move') {
       // Take-out to root (or re-nest): keep the child's size, resolve the
       // landing cell through the shared center-point rule.
-      const moving = doc.nodes.find((n) => n.id === movingId)
+      const moving = doc.nodes.find((n) => n.id === drag.id)
       if (!moving) return
       const resolved = resolveDrop(
         doc.nodes,
-        movingId,
+        drag.id,
         { x: item.x, y: item.y, cols: moving.cols, rows: moving.rows },
       )
       if (!resolved) return
-      const r = moveNode(doc, movingId, resolved.rect, resolved.parentId)
-      if (r.ok) {
-        setDoc(r.doc)
-        setSelectedId(movingId)
-      } else {
-        reject(r.reason)
-      }
+      applyResult(moveNode(doc, drag.id, resolved.rect, resolved.parentId), drag.id)
       return
     }
     // Pattern drop: the whole composition lands atomically or not at all.
-    if (patternKey) {
-      const r = insertPattern(
-        doc,
-        patternKey,
-        crypto.randomUUID(),
-        { x: item.x, y: item.y, cols: 0, rows: 0 },
-        OSB_PATTERNS[patternKey].children.map(() => crypto.randomUUID()),
+    if (drag.kind === 'pattern') {
+      const pattern = OSB_PATTERNS[drag.pattern]
+      if (!pattern) return
+      const containerId = crypto.randomUUID()
+      applyResult(
+        insertPattern(
+          doc,
+          drag.pattern,
+          containerId,
+          { x: item.x, y: item.y, cols: 0, rows: 0 },
+          pattern.children.map(() => crypto.randomUUID()),
+        ),
+        containerId,
       )
-      if (r.ok) {
-        setDoc(r.doc)
-        setSelectedId(r.doc.nodes[r.doc.nodes.length - OSB_PATTERNS[patternKey].children.length - 1].id)
-      } else {
-        reject(r.reason)
-      }
       return
     }
-    if (!type) return
-    const g = OSB_REGISTRY[type].grid
-    // Child-driven nesting ou root: one shared center-point resolution,
-    // then the single gate (insertNode owns the verdict + feedback).
-    const resolved = resolveInsert(doc.nodes, type, { x: item.x, y: item.y, cols: g.cols, rows: g.rows })
+    const g = OSB_REGISTRY[drag.type].grid
+    // Fresh atom: one shared center-point resolution, then the single gate.
+    const resolved = resolveInsert(doc.nodes, drag.type, { x: item.x, y: item.y, cols: g.cols, rows: g.rows })
     const id = crypto.randomUUID()
-    const r = insertNode(doc, { id, type, config: {}, parentId: resolved.parentId, ...resolved.rect })
-    if (r.ok) {
-      setDoc(r.doc)
-      setSelectedId(id)
-    } else {
-      reject(r.reason)
-    }
+    applyResult(
+      insertNode(doc, { id, type: drag.type, config: {}, parentId: resolved.parentId, ...resolved.rect }),
+      id,
+    )
   }
 
   /** Take-out: HTML5 child drag dropped on root background (bypasses RGL). */
   const onRootDrop = (e: React.DragEvent) => {
-    if (!dragId.current) return
+    const drag = dragRef.current
+    if (!drag || drag.kind !== 'move') return
     if ((e.target as HTMLElement).closest?.('[data-testid^="container-"]') != null) return
     if ((e.target as HTMLElement).closest?.('[data-parent]') != null) return
     e.preventDefault()
     e.stopPropagation()
-    const movingId = dragId.current
-    const moving = doc.nodes.find((n) => n.id === movingId)
+    const moving = doc.nodes.find((n) => n.id === drag.id)
     clearDrag()
     if (!moving) return
     const el = e.currentTarget as HTMLElement
@@ -325,88 +352,56 @@ export default function CanvasPage() {
       cols: moving.cols,
       rows: moving.rows,
     }
-    const res = moveNode(doc, movingId, rect, null)
-    if (res.ok) {
-      setDoc(res.doc)
-      setSelectedId(movingId)
-    } else {
-      reject(res.reason)
-    }
+    applyResult(moveNode(doc, drag.id, rect, null), drag.id)
   }
 
   /** Drop (palette child or existing node) onto a container div. */
   const onContainerDrop = (e: React.DragEvent, parent: PlacedNode) => {
     e.preventDefault()
     e.stopPropagation()
-    const span = dropSpan()
-    const type = dragType.current
-    const movingId = dragId.current
+    const drag = dragRef.current
+    const span = dragSpan(drag, doc.nodes)
     clearDrag()
-    if (!span) return
+    if (!span || !drag || drag.kind === 'pattern') {
+      if (drag) reject('kind')
+      return
+    }
     const el = e.currentTarget as HTMLElement
     const at = eventCell(e.clientX, e.clientY, el.getBoundingClientRect(), parent, span)
     const rect = { ...at, ...span }
-    if (movingId) {
-      const moving = doc.nodes.find((n) => n.id === movingId)
+    if (drag.kind === 'move') {
+      const moving = doc.nodes.find((n) => n.id === drag.id)
       if (!moving || !canContain(parent.type, moving.type)) {
         reject('kind')
         return
       }
-      const r = moveNode(doc, movingId, rect, parent.id)
-      if (r.ok) {
-        setDoc(r.doc)
-        setSelectedId(movingId)
-      } else {
-        reject(r.reason)
-      }
+      applyResult(moveNode(doc, drag.id, rect, parent.id), drag.id)
       return
     }
-    if (!type || !canContain(parent.type, type)) {
+    if (!canContain(parent.type, drag.type)) {
       reject('kind')
       return
     }
     const id = crypto.randomUUID()
-    const r = insertNode(doc, { id, type, config: {}, parentId: parent.id, ...rect })
-    if (r.ok) {
-      setDoc(r.doc)
-      setSelectedId(id)
-    } else {
-      reject(r.reason)
-    }
+    applyResult(insertNode(doc, { id, type: drag.type, config: {}, parentId: parent.id, ...rect }), id)
   }
 
   const onContainerDragOver = (e: React.DragEvent, parent: PlacedNode) => {
-    const type = dragType.current
-    const movingId = dragId.current
-    const moving = movingId ? doc.nodes.find((n) => n.id === movingId) : null
+    const drag = dragRef.current
+    const moving = drag?.kind === 'move' ? doc.nodes.find((n) => n.id === drag.id) ?? null : null
     // Patterns are shells: hovering one over a container is always refused.
-    const active = type || moving || dragPattern.current
-    const ok = type
-      ? canContain(parent.type, type)
-      : moving && moving.parentId !== parent.id
-        ? canContain(parent.type, moving.type)
-        : moving && moving.parentId === parent.id
+    const active = drag !== null
     if (active) e.preventDefault()
-    // Update only on change: sky ring when acceptable, red when refused.
-    setHoverId((h) => {
-      const next = ok ? parent.id : null
-      return h === next ? h : next
-    })
-    setBadHover((b) => {
-      const next = active && !ok ? parent.id : null
-      return b === next ? b : next
-    })
-    // Live cell verdict: red ghost where this drag would be refused.
-    const span =
-      moving && !dragPattern.current
-        ? { cols: moving.cols, rows: moving.rows }
-        : type
-          ? { cols: OSB_REGISTRY[type].grid.cols, rows: OSB_REGISTRY[type].grid.rows }
-          : null
-    if (!span) {
+    // Live cell verdict: red ghost + red conflicts where this drag would be
+    // refused. Everything else stays blue (see dragging-on).
+    const span = dragSpan(drag, doc.nodes)
+    if (!span || !drag || drag.kind === 'pattern') {
       setChildGhost((g) => (g === null ? g : null))
+      if (drag?.kind === 'pattern') markConflicts([parent.id])
       return
     }
+    // Live cell verdict: red ghost + red conflicts where this drag would be
+    // refused. Everything else stays blue (see dragging-on).
     const ghostAt = eventCell(
       e.clientX,
       e.clientY,
@@ -415,22 +410,32 @@ export default function CanvasPage() {
       span,
     )
     const ghostRect = { ...ghostAt, ...span }
+    const dragType = drag.kind === 'move' ? (moving?.type ?? '') : drag.type
     const verdict =
-      moving && !dragPattern.current
-        ? canInsertReason(doc.nodes, moving.type, ghostRect, parent.id, moving.id)
-        : canInsertReason(doc.nodes, type!, ghostRect, parent.id)
+      drag.kind === 'move' && !moving
+        ? ('unknown-type' as const)
+        : canInsertReason(doc.nodes, dragType as OSBNodeType, ghostRect, parent.id, drag.kind === 'move' ? drag.id : undefined)
+    markConflicts(
+      verdict === null
+        ? []
+        : conflictIds(
+            doc.nodes,
+            drag.kind === 'move' ? drag.id : null,
+            dragType,
+            ghostRect,
+            parent.id,
+          ),
+    )
     setChildGhost((g) => {
-      const next =
-        verdict === null ? null : { parentId: parent.id, ...ghostRect }
+      const next = { parentId: parent.id, ...ghostRect, ok: verdict === null }
       if (
-        (g === null && next === null) ||
-        (g !== null &&
-          next !== null &&
-          g.parentId === next.parentId &&
-          g.x === next.x &&
-          g.y === next.y &&
-          g.cols === next.cols &&
-          g.rows === next.rows)
+        g !== null &&
+        g.parentId === next.parentId &&
+        g.x === next.x &&
+        g.y === next.y &&
+        g.cols === next.cols &&
+        g.rows === next.rows &&
+        g.ok === next.ok
       )
         return g
       return next
@@ -488,17 +493,13 @@ export default function CanvasPage() {
 
   const renderChildrenOf = (parent: PlacedNode) => {
     const kids = doc.nodes.filter((n) => n.parentId === parent.id)
-    const hovering = hoverId === parent.id
     // Bounds on demand: transparent atoms (text) are invisible otherwise.
-    const showBounds = hovering || parent.id === selectedId
+    // Dragging lights every border blue via dragging-on; conflicts go red.
+    const showBounds = parent.id === selectedId
     return (
       <>
         <div
-          className={
-            hovering
-              ? 'pointer-events-none absolute inset-0 opacity-40'
-              : `pointer-events-none absolute inset-0${showBounds ? ' show-child-bounds' : ''}`
-          }
+          className={`pointer-events-none absolute inset-0${showBounds ? ' show-child-bounds' : ''}`}
         >
           {kids.map((k) => (
             <div
@@ -514,9 +515,8 @@ export default function CanvasPage() {
                   e.preventDefault()
                   return
                 }
-                dragId.current = k.id
-                dragType.current = null
-                dragPattern.current = null
+                dragRef.current = { kind: 'move', id: k.id }
+                setDragging(true)
                 e.dataTransfer.setData('text/plain', k.id)
               }}
               onDragEnd={clearDrag}
@@ -525,7 +525,7 @@ export default function CanvasPage() {
                 setSelectedId(k.id)
               }}
               style={childPos(parent, resizing?.id === k.id ? { ...k, ...resizing } : k)}
-              className={`osb-child pointer-events-auto ${k.id === selectedId ? 'canvas-selected overflow-hidden' : 'overflow-hidden'}`}
+              className={`osb-child pointer-events-auto ${k.id === selectedId ? 'canvas-selected overflow-hidden' : 'overflow-hidden'}${conflicts.includes(k.id) ? ' drag-conflict' : ''}`}
             >
               {OSB_REGISTRY[k.type].render(k.config)}
               {k.id === selectedId && (
@@ -553,13 +553,17 @@ export default function CanvasPage() {
             </div>
           ))}
         </div>
-        {hovering && <div aria-hidden data-testid={`drop-wash-${parent.id}`} className="pointer-events-none absolute inset-0 bg-sky-400/10" />}
         {childGhost && childGhost.parentId === parent.id && (
           <div
             aria-hidden
             data-testid="drop-ghost"
+            data-ok={childGhost.ok}
             style={childPos(parent, childGhost)}
-            className="pointer-events-none absolute rounded-md border-2 border-dashed border-rose-500 bg-rose-500/10"
+            className={
+              childGhost.ok
+                ? 'pointer-events-none absolute rounded-md border-2 border-dashed border-sky-500 bg-sky-500/10'
+                : 'pointer-events-none absolute rounded-md border-2 border-dashed border-rose-500 bg-rose-500/10'
+            }
           />
         )}
         {kids.length === 0 && (
@@ -579,16 +583,13 @@ export default function CanvasPage() {
   const renderNodeBody = (n: PlacedNode) => {
     const entry = OSB_REGISTRY[n.type]
     if (entry.kind !== 'container') return entry.render(n.config)
-    const hovering = hoverId === n.id
-    // Red when a drag hovers a container that can't take it; sky when it can.
-    const ring = hovering ? 'ring-4 ring-sky-400' : badHover === n.id ? 'ring-4 ring-rose-500' : ''
     return (
       <div
         data-testid={`container-${n.id}`}
         data-type={n.type}
         onDragOver={(e) => onContainerDragOver(e, n)}
         onDrop={(e) => onContainerDrop(e, n)}
-        className={`relative h-full w-full ${ring}`}
+        className={`relative h-full w-full${conflicts.includes(n.id) ? ' drag-conflict' : ''}`}
       >
         {entry.render(n.config)}
         {renderChildrenOf(n)}
@@ -643,11 +644,10 @@ export default function CanvasPage() {
             testid={`palette-${t}`}
             label={OSB_REGISTRY[t].name}
             onPick={() => {
-              dragType.current = t
-              dragPattern.current = null
-              dragId.current = null
+              dragRef.current = { kind: 'palette', type: t }
             }}
             onClear={clearDrag}
+            onStart={() => setDragging(true)}
           />
         ))}
         {OSB_PATTERN_IDS.map((p) => (
@@ -656,11 +656,10 @@ export default function CanvasPage() {
             testid={`palette-pattern-${p}`}
             label={OSB_PATTERNS[p].name}
             onPick={() => {
-              dragPattern.current = p
-              dragType.current = null
-              dragId.current = null
+              dragRef.current = { kind: 'pattern', pattern: p }
             }}
             onClear={clearDrag}
+            onStart={() => setDragging(true)}
           />
         ))}
         <span className="ml-auto text-xs text-slate-400">Drag onto the canvas · drag to move · corner to resize</span>
@@ -742,16 +741,8 @@ export default function CanvasPage() {
       <main
         data-testid="canvas"
         onClick={() => setSelectedId(null)}
-        onDragOver={(e) => {
-          // Container hovers own their feedback; the background only clears
-          // the cell ghost on the way out.
-          if ((e.target as HTMLElement).closest?.('[data-testid^="container-"]') != null) return
-          setChildGhost((g) => (g === null ? g : null))
-          // Allow root take-out drops.
-          if (dragId.current) e.preventDefault()
-        }}
         onDrop={onRootDrop}
-        className="relative h-[calc(100vh-3.5rem)] overflow-auto"
+        className={`relative h-[calc(100vh-3.5rem)] overflow-auto${dragging ? ' dragging-on' : ''}${dropForbidden ? ' drop-forbidden' : ''}`}
       >
         <div ref={containerRef} style={{ minWidth: minGridWidth(), height }} className="relative">
           <div className="canvas-backdrop pointer-events-none absolute inset-0" />
@@ -783,6 +774,7 @@ export default function CanvasPage() {
         )}
         {mounted && (
           <GridLayout
+            key={layoutEpoch}
             width={width}
             layout={layout}
             className="min-h-full"
@@ -791,44 +783,54 @@ export default function CanvasPage() {
             dropConfig={{ enabled: true, defaultItem: { w: 10, h: 10 } }}
             dragConfig={{ cancel: '.osb-child' }}
             onDropDragOver={(e) => {
-              // Inside a container the container owns feedback (hover ring);
-              // a root-cell ghost there would fight it and strand on drop.
-              if (dragId.current && (e.target as HTMLElement).closest?.('[data-testid^="container-"]') != null) {
+              // Inside a container the container owns feedback (red/blue
+              // ghost); a root-cell ghost there would fight it.
+              if ((e.target as HTMLElement).closest?.('[data-testid^="container-"]') != null) {
                 return false
               }
-              if (dragId.current) {
-                const n = doc.nodes.find((x) => x.id === dragId.current)
-                return n ? { w: n.cols, h: n.rows } : false
-              }
-              const pk = dragPattern.current
-              if (pk) {
-                const p = OSB_PATTERNS[pk]
-                return p ? { w: p.containerCols, h: p.containerRows } : false
-              }
-              const t = dragType.current
-              if (!t) return false
-              // No false promise: only preview drops the gate would accept.
-              // Center-point rule first (a center inside an accepting
-              // container nests), then the root overlap gate.
-              const g = OSB_REGISTRY[t].grid
+              // Dragged footprint at the cursor + conflicts, for palette,
+              // pattern, and take-out drags alike. The container path owns
+              // its own feedback, so this only paints root-area state.
+              const drag = dragRef.current
+              const span = dragSpan(drag, doc.nodes)
+              if (!span || !drag) return false
               const el = containerRef.current
-              if (el) {
-                const r = el.getBoundingClientRect()
-                const ix = Math.round((e.clientX - r.left) / (cell + GRID_MARGIN_X) - g.cols / 2)
-                const iy = Math.round((e.clientY - r.top) / (cell + GRID_MARGIN_Y) - g.rows / 2)
-                const rect = { x: ix, y: iy, cols: g.cols, rows: g.rows }
-                const target = nestTargetAt(doc.nodes, { x: ix + g.cols / 2, y: iy + g.rows / 2 })
-                if (target && canContain(target.type, t)) return { w: g.cols, h: g.rows }
-                if (!target && canPlace(doc.nodes, rect, null)) return { w: g.cols, h: g.rows }
-                return false
-              }
-              return { w: g.cols, h: g.rows }
+              if (!el) return { w: span.cols, h: span.rows }
+              const r = el.getBoundingClientRect()
+              const ix = Math.round((e.clientX - r.left) / (cell + GRID_MARGIN_X) - span.cols / 2)
+              const iy = Math.round((e.clientY - r.top) / (cell + GRID_MARGIN_Y) - span.rows / 2)
+              const rect = { x: ix, y: iy, ...span }
+              const resolved =
+                drag.kind === 'move'
+                  ? resolveDrop(doc.nodes, drag.id, rect)
+                  : drag.kind === 'palette'
+                    ? resolveInsert(doc.nodes, drag.type, rect)
+                    : { parentId: null as string | null, rect }
+              if (!resolved) return false
+              const selfId = drag.kind === 'move' ? drag.id : null
+              const nodeType =
+                drag.kind === 'move'
+                  ? (doc.nodes.find((x) => x.id === drag.id)?.type ?? 'text')
+                  : drag.kind === 'palette'
+                    ? drag.type
+                    : 'card'
+              markConflicts(conflictIds(doc.nodes, selfId, nodeType, resolved.rect, resolved.parentId))
+              setChildGhost((g) => (g === null ? g : null))
+              // The placeholder always shows the footprint; red = forbidden.
+              const ok =
+                drag.kind === 'move'
+                  ? canInsertReason(doc.nodes, nodeType as OSBNodeType, resolved.rect, resolved.parentId, drag.id) === null
+                  : drag.kind === 'palette'
+                    ? canInsertReason(doc.nodes, drag.type, resolved.rect, resolved.parentId) === null
+                    : canPlace(doc.nodes, rect, null)
+              setDropForbidden((prev) => (prev === !ok ? prev : !ok))
+              return { w: span.cols, h: span.rows }
             }}
             onDrop={onDrop}
             resizeConfig={{ handles: ['se'] }}
             onDrag={onDragCheck}
-            onDragStop={commit}
-            onResizeStop={commit}
+            onDragStop={(layout, _old, dragged) => commit(layout, dragged)}
+            onResizeStop={(layout, _old, dragged) => commit(layout, dragged)}
           >
             {roots.map((n) => (
               <div
@@ -840,7 +842,7 @@ export default function CanvasPage() {
                   e.stopPropagation()
                   setSelectedId(n.id)
                 }}
-                className={`relative ${n.id === selectedId || hoverId === n.id ? 'canvas-selected h-full' : 'h-full'}${dragCheck && dragCheck.id === n.id && !dragCheck.ok ? ' drag-invalid' : ''}`}
+                className={`relative ${n.id === selectedId ? 'canvas-selected h-full' : 'h-full'}${dragCheck && dragCheck.id === n.id && !dragCheck.ok ? ' drag-invalid' : ''}${conflicts.includes(n.id) ? ' drag-conflict' : ''}`}
               >
                 {renderNodeBody(n)}
                 {n.id === selectedId && (

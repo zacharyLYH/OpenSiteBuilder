@@ -266,6 +266,35 @@ export function containerFitsKids(
 export type DocResult = { ok: true; doc: CanvasDoc } | { ok: false; reason: RejectReason }
 
 /**
+ * The single drag vocabulary. Every gesture (palette, pattern, or moving
+ * an existing node) funnels through one ref of this shape — the editor
+ * never tracks parallel dragType/dragId/dragPattern states that can drift
+ * out of sync.
+ */
+export type DragPayload =
+  | { kind: 'palette'; type: OSBNodeType }
+  | { kind: 'pattern'; pattern: string }
+  | { kind: 'move'; id: string }
+
+/** Dragged footprint in cells, from the payload + current nodes. */
+export function dragSpan(
+  drag: DragPayload | null,
+  nodes: PlacedNode[],
+): { cols: number; rows: number } | null {
+  if (!drag) return null
+  if (drag.kind === 'move') {
+    const n = nodes.find((x) => x.id === drag.id)
+    return n ? { cols: n.cols, rows: n.rows } : null
+  }
+  if (drag.kind === 'pattern') {
+    const p = OSB_PATTERNS[drag.pattern]
+    return p ? { cols: p.containerCols, rows: p.containerRows } : null
+  }
+  const g = OSB_REGISTRY[drag.type].grid
+  return { cols: g.cols, rows: g.rows }
+}
+
+/**
  * One document path for insert/move/remove. Move is fungible: reposition
  * within one parent, reparent across parents, or take out to root are the
  * same call — only parentId + rect differ.
@@ -415,6 +444,33 @@ export function resolveInsert(
     return { parentId: target.id, rect: { ...local, ...span } }
   }
   return { parentId: null, rect }
+}
+
+/**
+ * Who turns red while a footprint is dragged: siblings it would overlap at
+ * the resolved target (self excluded), or the container itself when the
+ * kind rule refuses the dragged type. One rule for roots and nested
+ * children alike — leaves sit fully within containers, so only true
+ * overlaps (never mere edge touch) conflict. Pure and unit-tested.
+ */
+export function conflictIds(
+  nodes: PlacedNode[],
+  selfId: string | null,
+  type: string,
+  rect: CellRect,
+  parentId: string | null,
+): string[] {
+  if (parentId !== null) {
+    const parent = nodes.find((n) => n.id === parentId)
+    if (!parent) return []
+    if (!canContain(parent.type, type)) return [parentId]
+    return nodes
+      .filter((n) => n.parentId === parentId && n.id !== selfId && collides(rect, n))
+      .map((n) => n.id)
+  }
+  return nodes
+    .filter((n) => n.parentId === null && n.id !== selfId && collides(rect, n))
+    .map((n) => n.id)
 }
 
 /** Parent-local cell for a pointer position over a container (HTML5 drops

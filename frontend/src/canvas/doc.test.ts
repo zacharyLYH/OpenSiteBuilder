@@ -4,6 +4,7 @@ import {
   canInsertReason,
   canPlace,
   collides,
+  conflictIds,
   containerFloor,
   eventCell,
   insertNode,
@@ -412,6 +413,39 @@ describe('drop resolution: one center-point rule for every gesture', () => {
     expect(eventCell(100, 150, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 3, y: 7 })
     expect(eventCell(9999, 9999, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 8, y: 9 })
     expect(eventCell(-50, -50, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 0, y: 0 })
+  })
+})
+
+describe('conflictIds: one red rule for roots and nested children', () => {
+  // card1 (0,0,12,10) with button kid (1,6,4,1); text at (12,0,6,1).
+  const doc: CanvasDoc = {
+    version: 1,
+    nodes: [
+      root('card1', 'card', 0, 0, 12, 10),
+      kid('b1', 'button', 'card1', 1, 6, 4, 1),
+      root('t1', 'text', 12, 0, 6, 1),
+    ],
+  }
+
+  it('flags root siblings the dragged rect overlaps, excluding self', () => {
+    expect(conflictIds(doc.nodes, null, 'text', { x: 10, y: 0, cols: 6, rows: 1 }, null)).toEqual(
+      expect.arrayContaining(['card1', 't1']),
+    )
+    // A moving node never conflicts with itself.
+    expect(conflictIds(doc.nodes, 't1', 'text', { x: 12, y: 0, cols: 6, rows: 1 }, null)).toEqual([])
+    // Mere edge touch is legal: no conflict.
+    expect(conflictIds(doc.nodes, null, 'text', { x: 18, y: 0, cols: 6, rows: 1 }, null)).toEqual([])
+  })
+
+  it('flags nested kids the dragged rect overlaps inside the container', () => {
+    // Image dragged over the button kid (not over the title).
+    expect(conflictIds(doc.nodes, null, 'image', { x: 2, y: 6, cols: 4, rows: 2 }, 'card1')).toEqual(['b1'])
+    expect(conflictIds(doc.nodes, null, 'button', { x: 5, y: 6, cols: 4, rows: 1 }, 'card1')).toEqual([])
+  })
+
+  it('flags the container itself when the kind rule refuses', () => {
+    expect(conflictIds(doc.nodes, null, 'card', { x: 0, y: 0, cols: 6, rows: 4 }, 'card1')).toEqual(['card1'])
+    expect(conflictIds(doc.nodes, 'b1', 'button', { x: 5, y: 6, cols: 4, rows: 1 }, 'nope')).toEqual([])
   })
 })
 

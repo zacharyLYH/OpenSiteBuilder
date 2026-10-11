@@ -30,16 +30,36 @@
   background: rgba(100, 116, 139, 0.45);
 }
 
-/* Drop ghost while dragging from the palette. */
+/* Drop ghost while dragging: the dragged footprint, vivid border always.
+ * Blue = fits here, red (see .drop-forbidden) = gate would refuse it. */
 .react-grid-placeholder {
-  background: rgba(56, 189, 248, 0.15) !important;
-  border: 1px dashed #38bdf8 !important;
+  background: rgba(2, 132, 199, 0.22) !important;
+  border: 2px solid #0284c7 !important;
   border-radius: 12px !important;
+  box-shadow: 0 0 24px rgba(2, 132, 199, 0.45);
+}
+
+.drop-forbidden .react-grid-placeholder {
+  background: rgba(244, 63, 94, 0.2) !important;
+  border: 2px dashed #f43f5e !important;
+  box-shadow: 0 0 24px rgba(244, 63, 94, 0.45);
 }
 
 .canvas-selected {
   box-shadow: 0 0 0 2px #38bdf8;
   border-radius: 12px;
+}
+
+/* One highlight rule while dragging: every border blue, conflicts red. */
+.dragging-on [data-testid='canvas-node'],
+.dragging-on [data-testid^='container-'] {
+  outline: 2px solid rgba(56, 189, 248, 0.75);
+  outline-offset: -2px;
+}
+
+.drag-conflict {
+  outline: 2px solid #f43f5e !important;
+  box-shadow: 0 0 24px rgba(244, 63, 94, 0.45);
 }
 
 /* Bounds on demand: atoms with transparent fills (text) are invisible
@@ -59,9 +79,11 @@
   border-radius: 14px;
 }
 
-/* Vivid lift while dragging; red when the landing spot is forbidden. */
+/* Vivid lift while dragging; red when the landing spot is forbidden.
+ * The dragged item keeps its full rendering (bg included) at all times. */
 .react-grid-item.react-draggable-dragging {
   z-index: 20;
+  opacity: 1;
   box-shadow:
     0 0 0 3px #0284c7,
     0 0 44px rgba(2, 132, 199, 0.6);

@@ -137,11 +137,38 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   )
   await expect(page.getByTestId('drop-ghost')).toBeVisible()
   await expect(page.getByTestId('drop-ghost')).toHaveClass(/rose/)
+  await expect(page.getByTestId('drop-ghost')).toHaveAttribute('data-ok', 'false')
+  await expect(grid).toHaveScreenshot('osb-nesting-ghost.png')
   await page.mouse.up()
   await page.waitForTimeout(900)
   doc = await docOf(page)
   expect(doc.nodes.find((n) => n.id === kidId)).toMatchObject({ parentId: cardId, x: 5, y: 6 })
   await expect(page.getByTestId('drop-message')).toContainText('That spot is taken')
+  await closeDrawerIfOpen(page)
+
+  // Image over text: the overlapped title lights red (not the whole card),
+  // and releasing refuses without moving anything.
+  const imgPal = page.getByTestId('palette-image')
+  const imgBox = (await imgPal.boundingBox())!
+  await page.mouse.move(imgBox.x + imgBox.width / 2, imgBox.y + imgBox.height / 2)
+  await page.mouse.down()
+  const tcbox = (await page.getByTestId(`container-${cardId}`).boundingBox())!
+  // Title center: parent-local (5,2); the 8x6 image would cover it.
+  await page.mouse.move(
+    tcbox.x + ((1 + 4) / 12) * tcbox.width,
+    tcbox.y + ((1 + 1) / 10) * tcbox.height,
+    { steps: 8 },
+  )
+  const titleKid = page.locator(`[data-parent="${cardId}"]`).first()
+  await expect(titleKid).toHaveClass(/drag-conflict/)
+  await expect(page.getByTestId('drop-ghost')).toBeVisible()
+  await expect(grid).toHaveScreenshot('osb-nesting-conflict.png')
+  await page.mouse.up()
+  await page.waitForTimeout(900)
+  // Nothing landed: shell + 3 pattern kids + text + nested button.
+  expect((await docOf(page)).nodes).toHaveLength(6)
+  await expect(page.getByTestId('drop-message')).toContainText('That spot is taken')
+  await expect(grid).toHaveScreenshot('osb-nesting-denied.png')
   await closeDrawerIfOpen(page)
 
   // Invalid: a card can never nest inside a card (R1 kind deny). Doc unchanged.
@@ -161,6 +188,7 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await page.getByTestId('validate').click()
   await expect(page.getByTestId('validate-panel')).toBeVisible()
   expect(await page.getByTestId('validate-panel').textContent()).toContain('scattered')
+  await expect(grid).toHaveScreenshot('osb-nesting-validate.png')
   await page.getByRole('button', { name: 'Close checks' }).click()
   await expect(page.getByTestId('validate-panel')).toHaveCount(0)
 
@@ -177,6 +205,7 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await parked.click()
   const rhandle = page.getByTestId(`resize-${parkedId0}`)
   await expect(rhandle).toBeVisible()
+  await expect(grid).toHaveScreenshot('osb-nesting-resize.png')
   const hbox = (await rhandle.boundingBox())!
   const dot = await page.getByTestId('canvas-dots').locator('i').first().boundingBox()
   const pitchX = dot!.width + GRID_MARGIN_X
@@ -199,6 +228,7 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
     .first()
     .evaluate((el) => getComputedStyle(el).outlineStyle)
   expect(outline).toBe('dashed')
+  await expect(grid).toHaveScreenshot('osb-nesting-bounds.png')
   await closeDrawerIfOpen(page)
 
   // Take out: reload first (child-origin drags need a fresh gesture
@@ -233,6 +263,7 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
     { steps: 10 },
   )
   await expect(freed).toHaveClass(/drag-invalid/)
+  await expect(grid).toHaveScreenshot('osb-nesting-drag-invalid.png')
   await page.mouse.up()
   await page.waitForTimeout(900)
   expect((await docOf(page)).nodes.find((n) => n.id === freedId)).toMatchObject({ parentId: null, x: 20, y: 0 })

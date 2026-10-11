@@ -82,10 +82,22 @@ layouts are almost always misdrops. Overlap is rejected at placement by
 - **Canvas** owns structure: add, move, resize (roots via grid handles,
   nested atoms via SE handle), reorder, delete. The only way to change
   what is where. Rejected gestures say why in the header (overlap, gap,
-  …), never fail silently. Dragging shows a vivid outline; hovering a
-  forbidden spot turns it red — at root and, via a red drop-cell ghost,
-  inside containers too. One center-point rule (`resolveDrop` /
-  `resolveInsert`) routes every gesture; the gate alone delivers verdicts.
+  …), never fail silently — refused drags snap back and the doc is
+  untouched. While any drag runs, every border lights blue; footprints
+  that would overlap turn red — at root and, via the same rule plus a
+  red drop-cell ghost, inside containers. Exactly one ghost ever shows:
+  over a container the cell ghost owns feedback and the root placeholder
+  hides; over root background the placeholder (blue = fits, red dashed =
+  forbidden) owns it. (Leaves sit fully within containers, so only true
+  overlaps, never mere edge touch, conflict.)
+   One center-point rule (`resolveDrop` / `resolveInsert`) routes every
+   gesture; the gate alone delivers verdicts; one rule (`conflictIds`)
+   paints every conflict. All mutations funnel through the op layer, which
+   a seeded fuzz test hammers to prove disallowed placements never
+   register. The grid renderer never owns positions: a gesture commit
+   persists only the item the user actually dragged, and the grid remounts
+   every gesture end so a refused drag can never linger as a phantom —
+   refused drags snap back, the doc is untouched, and nothing else moves.
 - **Sidebar** owns non-spatial props only: text content, styling
   (variant, theme, shadow, alignment), links, image sources. It never
   creates, moves, resizes, or deletes nodes, and never does spatial
@@ -115,5 +127,6 @@ once for everyone — never branch one component.
 - **Side panel structural editing** (Add-child, spatial controls).
 - **Ghost internals** (prop-rendered buttons/text that are not nodes).
 - **Footprint ≠ render size** (big box, small pill).
-- **Sparse layouts as valid.** Replaced by the §5 contiguity rule.
+- **Sparse layouts as placement-valid.** Touch is checked on demand (§5),
+  never at drop time — but nothing may overlap, ever.
 - **Container-in-container / recursion.** Still forbidden (depth ≤ 1).
