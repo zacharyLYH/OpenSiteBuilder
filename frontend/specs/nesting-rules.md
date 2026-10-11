@@ -44,14 +44,14 @@ No per-component branches. A placement is rejected iff any holds:
   never container-in-container; collection-backed kinds never on canvas.
 - **R2 CONTAINMENT** — the full child rect sits inside the parent inner
   rect (root: within canvas columns). Sticking out is rejected.
-- **R3 EXCLUSIVITY** — siblings never overlap. Touching edges is fine
-  (and required by §5).
-- **R4 INTEGRITY** — rect is well-formed: integer coords, ≥ 1x1, ≥ the
-  atom's declared minimum.
+- **R3 EXCLUSIVITY** — siblings never overlap. Touching edges is fine.
+- **R4 INTEGRITY** — integer coords, ≥ 1x1, within the type's min/max
+  footprint. The box is the component: no zero-size or off-grid rects.
 
-Nesting is child-driven only: dragging a container over an existing node
-never absorbs it. Hit-testing uses the dragged item's center point
-against the container rect.
+Pieces move like legos: touching is NOT a placement rule. Nesting is
+child-driven only: dragging a container over an existing node never
+absorbs it. Hit-testing uses the dragged item's center point against the
+container rect (floored, so odd-sized atoms stay integral).
 
 ## 4. Cohesion: if you can see it, it is a node or a style prop
 
@@ -61,26 +61,31 @@ button, no hero/navbar prop-rendered buttons, no title/body props that
 render text. Pattern factories create those as real child nodes at
 insert time, so the doc layer always knows where everything is.
 
-## 5. Contiguity validator (site.json)
+## 5. Touch validator (on demand)
+
+Touch is checked by the **Validate** button (header, top right), not at
+placement time — pieces move freely first, then Validate reports.
 
 Within each sibling set (the root, and inside each container), rects
-must form **one edge-connected patch**: every node shares at least a
+should form **one edge-connected patch**: every node shares at least a
 partial edge segment with another node, transitively. Corner-only
-contact does not count. Zero or one node is vacuously valid. Gaps and
-islands fail validation.
+contact does not count. Zero or one node is vacuously valid. Validate
+lists every violation (touch, overlap, overflow, undersize); a clean doc
+reports all checks pass.
 
 Rationale: real sites are dense contiguous blocks; sparse scattered
-layouts are almost always misdrops. Overlap is already rejected by §3;
-this rule rejects the opposite failure (drift). Enforcement: editor
-treats a disconnected drop as invalid with a reason; `site.json`
-validation rejects disconnected docs.
+layouts are almost always misdrops. Overlap is rejected at placement by
+§3; drift is reported here.
 
 ## 6. Division of responsibility
 
 - **Canvas** owns structure: add, move, resize (roots via grid handles,
   nested atoms via SE handle), reorder, delete. The only way to change
   what is where. Rejected gestures say why in the header (overlap, gap,
-  …), never fail silently.
+  …), never fail silently. Dragging shows a vivid outline; hovering a
+  forbidden spot turns it red — at root and, via a red drop-cell ghost,
+  inside containers too. One center-point rule (`resolveDrop` /
+  `resolveInsert`) routes every gesture; the gate alone delivers verdicts.
 - **Sidebar** owns non-spatial props only: text content, styling
   (variant, theme, shadow, alignment), links, image sources. It never
   creates, moves, resizes, or deletes nodes, and never does spatial

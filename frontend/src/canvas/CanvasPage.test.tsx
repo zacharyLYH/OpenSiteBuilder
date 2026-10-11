@@ -158,6 +158,48 @@ describe('CanvasPage', () => {
     expect(await screen.findByTestId('canvas-empty')).toBeTruthy()
   })
 
+  it('validate button lists touch issues on demand', async () => {
+    setProjectSlug('shop')
+    localStorage.setItem(
+      storageKey('shop'),
+      JSON.stringify({
+        version: 1,
+        nodes: [
+          { id: 'c1', type: 'card', config: {}, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
+          { id: 't1', type: 'text', config: { text: 'Far' }, parentId: null, x: 24, y: 0, cols: 6, rows: 1 },
+        ],
+      }),
+    )
+    mockLocation('http://localhost/canvas')
+    render(<CanvasPage />)
+    await screen.findAllByTestId('canvas-node')
+    fireEvent.click(screen.getByTestId('validate'))
+    expect(await screen.findByTestId('validate-panel')).toBeTruthy()
+    const issues = await screen.findAllByTestId('validate-issue')
+    expect(issues.length).toBeGreaterThan(0)
+    expect(issues.map((el) => el.textContent).join('|')).toContain('scattered')
+  })
+
+  it('validate button passes a connected doc', async () => {
+    setProjectSlug('shop')
+    localStorage.setItem(
+      storageKey('shop'),
+      JSON.stringify({
+        version: 1,
+        nodes: [
+          { id: 'c1', type: 'card', config: {}, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
+          { id: 't1', type: 'text', config: { text: 'Near' }, parentId: null, x: 12, y: 0, cols: 6, rows: 1 },
+        ],
+      }),
+    )
+    mockLocation('http://localhost/canvas')
+    render(<CanvasPage />)
+    await screen.findAllByTestId('canvas-node')
+    fireEvent.click(screen.getByTestId('validate'))
+    expect(await screen.findByTestId('validate-ok')).toBeTruthy()
+    expect(screen.queryByTestId('validate-issue')).toBeNull()
+  })
+
   it('warns when pieces are scattered instead of touching', async () => {
     setProjectSlug('shop')
     localStorage.setItem(

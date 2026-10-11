@@ -61,7 +61,7 @@ export const OSB_REGISTRY = {
     'Text',
     OSB_TEXT_DEFAULTS,
     OSB_TEXT_FIELDS,
-    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 12, cols: 8, rows: 2 },
+    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 12, cols: 6, rows: 1 },
     OSBText,
   ),
   button: defineEntry(

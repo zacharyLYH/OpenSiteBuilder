@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  canContain,
   canInsert,
   canInsertReason,
   canPlace,
   collides,
   containerFloor,
+  eventCell,
   insertNode,
   insertPattern,
   isContiguous,
@@ -14,11 +14,14 @@ import {
   nestTargetAt,
   reasonText,
   removeNode,
+  resolveDrop,
+  resolveInsert,
   touches,
   validateDoc,
   type CanvasDoc,
   type PlacedNode,
 } from './doc'
+import { canContain } from '../osb/registry'
 import { GRID_COLS } from './grid'
 import { OSB_NODE_TYPES, OSB_REGISTRY } from '../osb/registry'
 
@@ -113,7 +116,7 @@ describe('kind rule: containers hold any atom, nothing else nests', () => {
   })
 })
 
-describe('contiguity: pieces must touch (no screenshots — pure rules)', () => {
+describe('touch is validated on demand, not at placement (lego freedom)', () => {
   it('touches counts shared edges, not corners', () => {
     expect(touches({ x: 0, y: 0, cols: 4, rows: 4 }, { x: 4, y: 0, cols: 4, rows: 4 })).toBe(true)
     expect(touches({ x: 0, y: 0, cols: 4, rows: 4 }, { x: 0, y: 4, cols: 4, rows: 4 })).toBe(true)
@@ -142,16 +145,20 @@ describe('contiguity: pieces must touch (no screenshots — pure rules)', () => 
     ).toBe(false)
   })
 
-  it('insert rejects a scattered second node, accepts a touching one', () => {
+  it('insert lets a scattered second node land; the validator flags it', () => {
     const one: CanvasDoc = { version: 1, nodes: [root('c', 'card', 0, 0, 12, 10)] }
-    const far = insertNode(one, root('t', 'text', 20, 0, 8, 2))
-    expect(far.ok).toBe(false)
-    if (!far.ok) expect(far.reason).toBe('disconnected')
-    const near = insertNode(one, root('t', 'text', 12, 0, 8, 2))
+    const far = insertNode(one, root('t', 'text', 20, 0, 6, 1))
+    expect(far.ok).toBe(true)
+    if (!far.ok) return
+    expect(validateDoc(far.doc).ok).toBe(false)
+    expect(validateDoc(far.doc).errors.join('|')).toContain('scattered')
+    const near = insertNode(one, root('t', 'text', 12, 0, 6, 1))
     expect(near.ok).toBe(true)
+    if (!near.ok) return
+    expect(validateDoc(near.doc)).toEqual({ ok: true, errors: [] })
   })
 
-  it('move that splits the patch is rejected', () => {
+  it('move may split the patch; the validator flags the islands', () => {
     const doc: CanvasDoc = {
       version: 1,
       nodes: [
@@ -160,11 +167,13 @@ describe('contiguity: pieces must touch (no screenshots — pure rules)', () => 
         root('c', 'text', 8, 0, 4, 2),
       ],
     }
-    // Lifting the middle bridge away leaves two islands.
+    // Lifting the middle bridge away leaves two islands — allowed on the
+    // canvas, caught by Validate.
     const r = moveNode(doc, 'b', { x: 4, y: 6, cols: 4, rows: 2 }, null)
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.reason).toBe('disconnected')
-    // Sliding the right node under the left keeps edge contact.
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(validateDoc(r.doc).errors.join('|')).toContain('scattered')
+    // Sliding the right node under the left keeps one patch.
     const r2 = moveNode(doc, 'c', { x: 0, y: 2, cols: 4, rows: 2 }, null)
     expect(r2.ok).toBe(true)
   })
@@ -220,7 +229,7 @@ describe('fungible move: reposition / nest / take-out (no screenshots)', () => {
     expect((r as { ok: true; doc: CanvasDoc }).doc.nodes.find((n) => n.id === 'b1')?.parentId).toBeNull()
   })
 
-  it('rejects take-out that removes the middle bridge of a container row', () => {
+  it('take-out that splits the old row lands; the validator flags the islands', () => {
     const doc: CanvasDoc = {
       version: 1,
       nodes: [
@@ -230,11 +239,13 @@ describe('fungible move: reposition / nest / take-out (no screenshots)', () => {
         kid('k3', 'text', 'card1', 8, 0, 4, 2),
       ],
     }
-    // k2 touches the root patch at its take-out cell, but lifting it splits
-    // the container row into two islands.
+    // k2 touches the root patch at its take-out cell; lifting it splits the
+    // container row into islands — allowed on canvas, caught by Validate.
     const r = moveNode(doc, 'k2', { x: 12, y: 0, cols: 4, rows: 2 }, null)
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.reason).toBe('disconnected')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.doc.nodes.find((n) => n.id === 'k2')?.parentId).toBeNull()
+    expect(validateDoc(r.doc).errors.join('|')).toContain('scattered')
   })
 
   it('no absorb: moving a container over a root node is still an overlap', () => {
@@ -335,6 +346,75 @@ describe('nestLocal + reasonText (drop plumbing)', () => {
   })
 })
 
+describe('drop resolution: one center-point rule for every gesture', () => {
+  // card1 (0,0,12,10) with a button kid (1,6,4,1); text at (12,0,6,1).
+  const doc: CanvasDoc = {
+    version: 1,
+    nodes: [
+      root('card1', 'card', 0, 0, 12, 10),
+      kid('b1', 'button', 'card1', 1, 6, 4, 1),
+      root('t1', 'text', 12, 0, 6, 1),
+    ],
+  }
+
+  it('resolveDrop nests when the center lands in an accepting container', () => {
+    // Root button dragged so its center (10,2.5) sits in the card.
+    expect(resolveDrop(doc.nodes, 't1', { x: 8, y: 2, cols: 6, rows: 1 })).toEqual({
+      parentId: 'card1',
+      rect: { x: 6, y: 2, cols: 6, rows: 1 },
+    })
+  })
+
+  it('resolveDrop stays at root outside containers (routing only, no verdict)', () => {
+    expect(resolveDrop(doc.nodes, 't1', { x: 20, y: 0, cols: 6, rows: 1 })).toEqual({
+      parentId: null,
+      rect: { x: 20, y: 0, cols: 6, rows: 1 },
+    })
+  })
+
+  it('resolveDrop routes container-over-container to root (gate denies it)', () => {
+    const two: CanvasDoc = {
+      version: 1,
+      nodes: [root('card1', 'card', 0, 0, 12, 10), root('card2', 'card', 12, 0, 12, 10)],
+    }
+    // Center (5,4) sits in card1, but shells never nest: root routing, and
+    // the gate (not the router) rejects the overlap.
+    expect(resolveDrop(two.nodes, 'card2', { x: 2, y: 2, cols: 6, rows: 4 })).toEqual({
+      parentId: null,
+      rect: { x: 2, y: 2, cols: 6, rows: 4 },
+    })
+    expect(canInsertReason(two.nodes, 'card', { x: 2, y: 2, cols: 6, rows: 4 }, null, 'card2')).toBe('overlap')
+  })
+
+  it('resolveDrop returns null for unknown ids', () => {
+    expect(resolveDrop(doc.nodes, 'ghost', { x: 0, y: 0, cols: 1, rows: 1 })).toBeNull()
+  })
+
+  it('resolveInsert mirrors the rule for fresh palette rects', () => {
+    expect(resolveInsert(doc.nodes, 'button', { x: 8, y: 2, cols: 4, rows: 1 })).toEqual({
+      parentId: 'card1',
+      rect: { x: 8, y: 2, cols: 4, rows: 1 },
+    })
+    expect(resolveInsert(doc.nodes, 'text', { x: 20, y: 0, cols: 6, rows: 1 })).toEqual({
+      parentId: null,
+      rect: { x: 20, y: 0, cols: 6, rows: 1 },
+    })
+    // Odd-sized centers floor to integral cells.
+    expect(resolveInsert(doc.nodes, 'button', { x: 3, y: 6, cols: 4, rows: 1 })).toEqual({
+      parentId: 'card1',
+      rect: { x: 5, y: 6, cols: 4, rows: 1 },
+    })
+  })
+
+  it('eventCell maps pointer pixels to parent cells with edge clamping', () => {
+    const box = { left: 0, top: 0, width: 400, height: 200 }
+    const parent = { cols: 12, rows: 10 }
+    expect(eventCell(100, 150, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 3, y: 7 })
+    expect(eventCell(9999, 9999, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 8, y: 9 })
+    expect(eventCell(-50, -50, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 0, y: 0 })
+  })
+})
+
 describe('patterns: atomic compositions (no screenshots)', () => {
   it('inserts card + connected children in one call', () => {
     const r = insertPattern({ version: 1, nodes: [] }, 'card-content', 'c1', { x: 0, y: 0, cols: 0, rows: 0 }, [
@@ -358,7 +438,7 @@ describe('patterns: atomic compositions (no screenshots)', () => {
     expect(doc.nodes).toEqual([])
   })
 
-  it('a second pattern must touch the first (root contiguity)', () => {
+  it('a second pattern may land apart; the validator flags the gap', () => {
     let doc = (
       insertPattern({ version: 1, nodes: [] }, 'card-content', 'c1', { x: 0, y: 0, cols: 0, rows: 0 }, [
         't1',
@@ -367,7 +447,8 @@ describe('patterns: atomic compositions (no screenshots)', () => {
       ]) as { ok: true; doc: CanvasDoc }
     ).doc
     const far = insertPattern(doc, 'card-content', 'c2', { x: 20, y: 0, cols: 0, rows: 0 }, ['t3', 't4', 'b2'])
-    expect(far.ok).toBe(false)
+    expect(far.ok).toBe(true)
+    if (far.ok) expect(validateDoc(far.doc).errors.join('|')).toContain('scattered')
     const near = insertPattern(doc, 'card-content', 'c2', { x: 12, y: 0, cols: 0, rows: 0 }, ['t3', 't4', 'b2'])
     expect(near.ok).toBe(true)
     if (near.ok) doc = near.doc

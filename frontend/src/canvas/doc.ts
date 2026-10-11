@@ -172,7 +172,7 @@ export function canPlace(
 }
 
 /** A node with children can never itself nest elsewhere (depth guard). */
-export function isLeafNode(nodes: PlacedNode[], id: string): boolean {
+export function isChildless(nodes: PlacedNode[], id: string): boolean {
   return !nodes.some((n) => n.parentId === id)
 }
 
@@ -181,13 +181,6 @@ function parentChainOk(nodes: PlacedNode[], parentId: string | null): boolean {
   const parent = nodes.find((n) => n.id === parentId)
   if (!parent || parent.parentId !== null) return false
   return isContainerType(parent.type)
-}
-
-/** Sibling rects under one parent, optionally excluding one node. */
-function siblingRects(nodes: PlacedNode[], parentId: string | null, ignoreId?: string): CellRect[] {
-  return nodes
-    .filter((n) => n.parentId === parentId && n.id !== ignoreId)
-    .map((n) => ({ x: n.x, y: n.y, cols: n.cols, rows: n.rows }))
 }
 
 export type RejectReason =
@@ -201,19 +194,10 @@ export type RejectReason =
   | 'disconnected'
   | 'undersize'
 
-/** The single gate for every insert/move (R1–R4 + contiguity). Returns null
- * when the placement is valid, otherwise the reason it is not placeable:
- *
- * R1 KIND — containers live at root; only atoms nest, and only in
- *    containers. Collection kinds never sit on the canvas.
- * R2 CONTAINMENT — the full rect sits inside the parent inner rect.
- * R3 EXCLUSIVITY — siblings never overlap (touching edges is fine).
- * R4 INTEGRITY — integer coords, ≥ 1x1, within the type's min/max
- *    footprint. The box is the component: no zero-size or off-grid rects.
- *
- * Plus contiguity (§5): the resulting sibling set must stay one
- * edge-connected patch — no gaps, no islands.
- */
+/** The single gate for every insert/move (R1–R4). Placement stays Lego-free:
+ * kind, containment, exclusivity, integrity. Touching (contiguity) is NOT
+ * enforced here — pieces move freely, and the Validate action checks touch
+ * on demand (see validateDoc). Returns null when valid, else the reason. */
 export function canInsertReason(
   nodes: PlacedNode[],
   type: OSBNodeType,
@@ -232,7 +216,7 @@ export function canInsertReason(
     if (!parentChainOk(nodes, parentId)) return 'depth'
     if (!canContain(parent.type, type)) return 'kind'
     // Moving a node that already has children into a container is depth-2.
-    if (ignoreId && !isLeafNode(nodes, ignoreId)) return 'depth'
+    if (ignoreId && !isChildless(nodes, ignoreId)) return 'depth'
   }
   if (!canPlace(nodes, rect, parentId, ignoreId)) {
     // Distinguish containment from overlap for a useful reason.
@@ -244,7 +228,6 @@ export function canInsertReason(
     }
     return 'overlap'
   }
-  if (!isContiguous([...siblingRects(nodes, parentId, ignoreId), rect])) return 'disconnected'
   return null
 }
 
@@ -257,8 +240,6 @@ export function canInsert(
 ): boolean {
   return canInsertReason(nodes, type, rect, parentId, ignoreId) === null
 }
-
-export { canContain }
 
 /** Children bounding box + padding = container floor (no undersize). */
 export function containerFloor(
@@ -305,16 +286,10 @@ export function moveNode(
   if (!node) return { ok: false, reason: 'unknown-type' }
   const reason = canInsertReason(doc.nodes, node.type, rect, parentId, id)
   if (reason) return { ok: false, reason }
-  // Leaving the old sibling set must not strand it as islands.
-  if (node.parentId !== parentId && node.parentId !== null) {
-    if (!isContiguous(siblingRects(doc.nodes, node.parentId, id))) {
-      return { ok: false, reason: 'disconnected' }
-    }
-  }
   // Growing/moving a container over siblings is still an overlap (no
   // absorb, already rejected above); shrinking it under its own children
   // is rejected here.
-  if (!isLeafNode(doc.nodes, id)) {
+  if (!isChildless(doc.nodes, id)) {
     if (!containerFitsKids(doc.nodes, { id, cols: rect.cols, rows: rect.rows })) {
       return { ok: false, reason: 'undersize' }
     }
@@ -402,6 +377,61 @@ export function nestTargetAt(
         point.y < n.y + n.rows,
     ) ?? null
   )
+}
+
+/**
+ * Where an existing node's dragged rect lands: nested as a child when its
+ * center sits in an accepting container, otherwise at root. Pure routing —
+ * the caller still runs the result through moveNode (the gate).
+ */
+export function resolveDrop(
+  nodes: PlacedNode[],
+  id: string,
+  rect: CellRect,
+): { parentId: string | null; rect: CellRect } | null {
+  const node = nodes.find((n) => n.id === id)
+  if (!node) return null
+  const span = { cols: rect.cols, rows: rect.rows }
+  const center = { x: rect.x + span.cols / 2, y: rect.y + span.rows / 2 }
+  const target = nestTargetAt(nodes, center)
+  if (target && target.id !== id && canContain(target.type, node.type)) {
+    const local = nestLocal(target, center, span)
+    return { parentId: target.id, rect: { ...local, ...span } }
+  }
+  return { parentId: null, rect }
+}
+
+/** Where a fresh palette rect lands: same center-point rule as resolveDrop. */
+export function resolveInsert(
+  nodes: PlacedNode[],
+  type: OSBNodeType,
+  rect: CellRect,
+): { parentId: string | null; rect: CellRect } {
+  const span = { cols: rect.cols, rows: rect.rows }
+  const center = { x: rect.x + span.cols / 2, y: rect.y + span.rows / 2 }
+  const target = nestTargetAt(nodes, center)
+  if (target && canContain(target.type, type)) {
+    const local = nestLocal(target, center, span)
+    return { parentId: target.id, rect: { ...local, ...span } }
+  }
+  return { parentId: null, rect }
+}
+
+/** Parent-local cell for a pointer position over a container (HTML5 drops
+ * and hover ghosts share this math). Pure and unit-tested. */
+export function eventCell(
+  clientX: number,
+  clientY: number,
+  box: { left: number; top: number; width: number; height: number },
+  parent: { cols: number; rows: number },
+  span: { cols: number; rows: number },
+): { x: number; y: number } {
+  const fx = (clientX - box.left) / Math.max(1, box.width)
+  const fy = (clientY - box.top) / Math.max(1, box.height)
+  return {
+    x: Math.max(0, Math.min(parent.cols - span.cols, Math.floor(fx * parent.cols))),
+    y: Math.max(0, Math.min(parent.rows - span.rows, Math.floor(fy * parent.rows))),
+  }
 }
 
 export interface DocValidation {

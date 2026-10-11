@@ -23,8 +23,8 @@ export interface OSBPattern {
   children: PatternChild[]
 }
 
-function cardContent(): OSBPattern {
-  return {
+export const OSB_PATTERNS: Record<string, OSBPattern> = {
+  'card-content': {
     name: 'Card',
     containerCols: 12,
     containerRows: 10,
@@ -36,11 +36,7 @@ function cardContent(): OSBPattern {
       { type: 'text', config: { text: 'Card body copy.' }, x: 1, y: 3, cols: 8, rows: 3 },
       { type: 'button', config: { label: 'Learn more' }, x: 1, y: 6, cols: 4, rows: 1 },
     ],
-  }
-}
-
-export const OSB_PATTERNS: Record<string, OSBPattern> = {
-  'card-content': cardContent(),
+  },
 }
 
 export const OSB_PATTERN_IDS = Object.keys(OSB_PATTERNS)

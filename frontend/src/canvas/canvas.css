@@ -59,6 +59,22 @@
   border-radius: 14px;
 }
 
+/* Vivid lift while dragging; red when the landing spot is forbidden. */
+.react-grid-item.react-draggable-dragging {
+  z-index: 20;
+  box-shadow:
+    0 0 0 3px #0284c7,
+    0 0 44px rgba(2, 132, 199, 0.6);
+  border-radius: 14px;
+}
+
+.react-grid-item.drag-invalid {
+  box-shadow:
+    0 0 0 3px #e11d48,
+    0 0 40px rgba(225, 29, 72, 0.55);
+  border-radius: 14px;
+}
+
 .react-grid-item > .react-resizable-handle {
   width: 22px;
   height: 22px;

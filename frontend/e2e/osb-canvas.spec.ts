@@ -28,8 +28,8 @@ test('canvas: compose pattern+text, reposition text, persist, screenshot', async
     await page.getByRole('button', { name: 'Close settings' }).click()
   }
 
-  // Text touches the shell at x=12.
-  await dropToCell(page, page.getByTestId('palette-text'), grid, { x: 12, y: 0 }, { cols: 8, rows: 2 })
+  // Text lands beside the shell (free placement, no touch gate).
+  await dropToCell(page, page.getByTestId('palette-text'), grid, { x: 12, y: 0 }, { cols: 6, rows: 1 })
   await expect(page.getByTestId('canvas-node')).toHaveCount(5)
   if ((await page.getByTestId('config-drawer').count()) > 0) {
     await page.getByRole('button', { name: 'Close settings' }).click()
@@ -54,7 +54,7 @@ test('canvas: compose pattern+text, reposition text, persist, screenshot', async
   expect(at('card')).toHaveLength(1)
   expect(at('card')[0]).toMatchObject({ x: 0, y: 0, cols: 12, rows: 10 })
   expect(at('text')).toHaveLength(1)
-  expect(at('text')[0]).toMatchObject({ x: 12, y: 2, cols: 8, rows: 2 })
+  expect(at('text')[0]).toMatchObject({ x: 12, y: 2, cols: 6, rows: 1 })
   expect(validateDoc(doc)).toEqual({ ok: true, errors: [] })
 
   // The drag selected the text and opened its drawer; close it for a clean shot.

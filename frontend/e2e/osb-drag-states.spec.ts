@@ -62,7 +62,7 @@ test('drag states: kind reject, nest highlight, reposition', async ({ page }) =>
   const cardCY = cardBox!.y + cardBox!.height / 2
 
   // 1. REJECT: a card pattern over a card (containers never nest — R1 kind
-  // deny). No ring, no wash — the drop is refused and the doc is byte-identical.
+  // deny). Red ring, no wash — the drop is refused and the doc is byte-identical.
   const before = await page.evaluate(() => localStorage.getItem('osb.project.e2e-drag')!)
   const cardPal = page.getByTestId('palette-pattern-card-content')
   await cardPal.hover()
@@ -70,6 +70,7 @@ test('drag states: kind reject, nest highlight, reposition', async ({ page }) =>
   await page.mouse.move(cardCX, cardCY, { steps: 12 })
   await page.waitForTimeout(200)
   await expect(container).not.toHaveClass(/ring-sky-400/)
+  await expect(container).toHaveClass(/ring-rose-500/)
   await expect(page.getByTestId('drop-wash-card1')).toHaveCount(0)
   await expect(page).toHaveScreenshot('osb-drag-reject.png')
   await page.mouse.up()
