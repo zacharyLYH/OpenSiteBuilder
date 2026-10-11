@@ -3,14 +3,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import Home from '../pages/Home'
 import CanvasPage from '../canvas/CanvasPage'
 import { getProjectSlug, setProjectSlug, clearProjectSlug, PROJECT_COOKIE } from './project'
-import { mockLocation } from '../test-utils'
-
-function clearCookies(): void {
-  for (const part of document.cookie.split(';')) {
-    const name = part.split('=', 1)[0]?.trim()
-    if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
-  }
-}
+import { clearCookies, mockLocation } from '../test-utils'
 
 beforeEach(() => {
   vi.unstubAllGlobals()

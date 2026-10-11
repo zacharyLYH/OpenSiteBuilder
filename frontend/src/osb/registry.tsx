@@ -40,13 +40,11 @@ function defineEntry<C extends Record<string, unknown>>(
 
 /**
  * THE single record of node types. Each type name ('card', …) is written
- * exactly once, as a key here. OSBNodeType, OSB_NODE_TYPES, defaults, fields,
- * grid sizes, kinds, and rendering are all derived below — never re-declared.
- * Key order is the palette order.
+ * exactly once, as a key here; types, defaults, fields, grid sizes, kinds and
+ * rendering are all derived below. Key order is the palette order.
  *
  * Atoms (text, button, image) are the only visible leaves. Card is the only
- * container: chrome with no intrinsic content. Named compositions (card with
- * content, …) are patterns in ./patterns, not types here.
+ * container. Named compositions are patterns in ./patterns, not types here.
  */
 export const OSB_REGISTRY = {
   card: defineEntry(

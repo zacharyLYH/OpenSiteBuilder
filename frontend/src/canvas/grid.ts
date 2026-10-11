@@ -1,10 +1,8 @@
 /**
- * Single source of truth for every canvas size decision. No other module does
- * cell/row/height math — the canvas asks `canvasMetrics` once per render.
- *
- * Cells are TRUE squares: row height always equals column width, so dots sit
- * exactly on item edges at every resolution. Below the band minimum the canvas
- * scrolls instead of crushing content — alignment never breaks.
+ * Single source of truth for every canvas size decision. Cells are TRUE
+ * squares (row height == column width), so dots sit exactly on item edges at
+ * every resolution; below the band minimum the canvas scrolls instead of
+ * crushing content.
  */
 export const GRID_COLS = 32
 export const GRID_MARGIN_X = 8
@@ -18,12 +16,29 @@ export const HEADER_PX = 56
 export const cellSize = (containerWidth: number): number =>
   Math.max(MIN_CELL, (containerWidth - GRID_MARGIN_X * (GRID_COLS - 1)) / GRID_COLS)
 
-/** Row height == cell size. Always. That is what makes cells square. */
-export const rowHeightFor = cellSize
-
 /** Narrowest the grid may be; the scroll wrapper enforces this. */
 export const minGridWidth = (): number =>
   GRID_COLS * MIN_CELL + GRID_MARGIN_X * (GRID_COLS - 1)
+
+/**
+ * Root cell whose CENTRE sits under the pointer for a `span` footprint — the
+ * one pixel-to-cell rule for root-area drops. Containers use `eventCell`
+ * (parent fractions); this one uses the grid pitch so it lands exactly where
+ * the dot guides say it does.
+ */
+export function centeredCell(
+  clientX: number,
+  clientY: number,
+  box: { left: number; top: number },
+  span: { cols: number; rows: number },
+  cell: number,
+): { x: number; y: number; cols: number; rows: number } {
+  return {
+    x: Math.round((clientX - box.left) / (cell + GRID_MARGIN_X) - span.cols / 2),
+    y: Math.round((clientY - box.top) / (cell + GRID_MARGIN_Y) - span.rows / 2),
+    ...span,
+  }
+}
 
 export interface CanvasMetrics {
   /** Square cell size in px. */

@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
+import { ALIGN_OPTIONS, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
 
 export type OSBButtonConfig = {
   label: string
@@ -42,10 +42,7 @@ export const OSB_BUTTON_FIELDS: OSBField[] = [
     key: 'align',
     label: 'Alignment',
     kind: 'select',
-    options: [
-      { value: 'left', label: 'Left' },
-      { value: 'center', label: 'Center' },
-    ],
+    options: ALIGN_OPTIONS,
   },
   { key: 'theme', label: 'Appearance', kind: 'theme' },
 ]

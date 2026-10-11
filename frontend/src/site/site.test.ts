@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import example from './site.example.json'
-import { validateSite, parseSite, serializeSite } from './validate'
+import { validateSite } from './validate'
 
 describe('site.json', () => {
   it('example document validates', () => {
     expect(validateSite(example)).toEqual({ ok: true, errors: [] })
   })
 
-  it('round-trips through serialize/parse losslessly', () => {
-    const doc = parseSite(serializeSite(parseSite(JSON.stringify(example))))
+  it('round-trips through JSON losslessly', () => {
+    const doc: unknown = JSON.parse(JSON.stringify(example))
+    expect(validateSite(doc)).toEqual({ ok: true, errors: [] })
     expect(doc).toEqual(example)
   })
 

@@ -20,13 +20,16 @@ export default function Home() {
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
 
-  function openEditor() {
-    // Entering the canvas requires a project cookie (the canvas has no
-    // fallback name). The typed name wins; empty input starts 'my-site',
-    // the same default the input placeholder advertises.
-    const name = slug.trim() === '' ? 'my-site' : slug
+  // Entering the editor and publishing both establish the project cookie,
+  // then hand off — the typed name wins, and empty input starts 'my-site',
+  // the same default the input placeholder advertises.
+  function enter(name: string, href: string) {
     setProjectSlug(name)
-    window.location.href = '/canvas'
+    window.location.href = href
+  }
+
+  function openEditor() {
+    enter(slug.trim() === '' ? 'my-site' : slug, '/canvas')
   }
 
   async function publish() {
@@ -38,8 +41,7 @@ export default function Home() {
         setError(body.error || 'state failed')
         return
       }
-      setProjectSlug(slug)
-      window.location.href = githubAuthorizeUrl(body.client_id, body.state)
+      enter(slug, githubAuthorizeUrl(body.client_id, body.state))
     } catch (e) {
       setError(String(e))
     } finally {

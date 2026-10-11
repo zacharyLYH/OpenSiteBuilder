@@ -21,8 +21,11 @@ async function call(path: string, opts?: RequestInit): Promise<ApiResult> {
   return { status: r.status, body }
 }
 
+const jsonPost = (path: string, body: unknown): Promise<ApiResult> =>
+  call(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
 export const getState = (slug: string): Promise<ApiResult> =>
-  call(`/api/state?slug=${encodeURIComponent(slug)}`);
+  call(`/api/state?slug=${encodeURIComponent(slug)}`)
 
 export interface ExchangePayload {
   code: string | null
@@ -30,12 +33,7 @@ export interface ExchangePayload {
   installation_id?: number
 }
 
-export const postExchange = (payload: ExchangePayload): Promise<ApiResult> =>
-  call('/api/exchange', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+export const postExchange = (payload: ExchangePayload): Promise<ApiResult> => jsonPost('/api/exchange', payload)
 
 export interface PublishFile {
   path: string
@@ -43,8 +41,4 @@ export interface PublishFile {
 }
 
 export const publishFiles = (files: PublishFile[], message: string): Promise<ApiResult> =>
-  call('/api/publish', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files, message }),
-  });
+  jsonPost('/api/publish', { files, message })

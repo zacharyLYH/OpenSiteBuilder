@@ -1,45 +1,27 @@
 import { useState } from 'react'
 import { OSB_REGISTRY } from '../osb/registry'
-import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { Textarea } from '../components/ui/textarea'
+import type { OSBField } from '../osb/types'
 import type { PlacedNode } from './doc'
-import { useDebouncedEffect } from './useDebouncedEffect'
 
-function FieldControl({
-  id,
-  kind,
-  options,
-  value,
-  onChange,
-}: {
-  id: string
-  kind: string
-  options?: { value: string; label: string }[]
-  value: string
-  onChange: (v: string) => void
-}) {
-  if (kind === 'longtext') {
+/** The one control per field kind — the field itself carries its options. */
+function FieldControl({ field, value, onChange }: { field: OSBField; value: string; onChange: (v: string) => void }) {
+  const id = `osb-field-${field.key}`
+  if (field.kind === 'longtext')
     return <Textarea id={id} rows={3} value={value} onChange={(e) => onChange(e.target.value)} />
-  }
-  if (kind === 'select' && options) {
+  if (field.kind === 'select')
     return (
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {options.map((o) => (
+          {field.options.map((o) => (
             <SelectItem key={o.value} value={o.value}>
               {o.label}
             </SelectItem>
@@ -47,8 +29,7 @@ function FieldControl({
         </SelectContent>
       </Select>
     )
-  }
-  if (kind === 'theme') {
+  if (field.kind === 'theme')
     return (
       <div className="flex gap-1 rounded-md bg-slate-100 p-1">
         {['light', 'dark'].map((t) => (
@@ -65,7 +46,6 @@ function FieldControl({
         ))}
       </div>
     )
-  }
   return <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
 }
 
@@ -85,13 +65,12 @@ export default function ConfigDrawer({
 }) {
   const entry = OSB_REGISTRY[node.type]
   const [draft, setDraft] = useState<Record<string, unknown>>({ ...entry.defaults, ...node.config })
-  const [dirty, setDirty] = useState(false)
-
-  // Draft commits back on a debounce, but only after a real edit —
-  // selecting a node must never rewrite its stored config.
-  useDebouncedEffect(() => {
-    if (dirty) onApply(node.id, draft)
-  }, [draft, dirty, node.id], 300)
+  // Selecting a node never rewrites its stored config — only a real edit does.
+  const edit = (key: string, value: string) => {
+    const next = { ...draft, [key]: value }
+    setDraft(next)
+    onApply(node.id, next)
+  }
 
   return (
     <Sheet
@@ -110,25 +89,13 @@ export default function ConfigDrawer({
             </Button>
           </SheetClose>
         </SheetHeader>
-        <Badge variant="secondary" className="w-fit capitalize">
-          {node.type}
-        </Badge>
         <div className="pointer-events-none overflow-hidden rounded-md border border-slate-200">
           {entry.render(draft)}
         </div>
         {entry.fields.map((f) => (
           <div key={f.key} className="flex flex-col gap-1">
             <Label htmlFor={`osb-field-${f.key}`}>{f.label}</Label>
-            <FieldControl
-              id={`osb-field-${f.key}`}
-              kind={f.kind}
-              options={f.kind === 'select' ? f.options : undefined}
-              value={String(draft[f.key] ?? '')}
-              onChange={(v) => {
-                setDirty(true)
-                setDraft((d) => ({ ...d, [f.key]: v }))
-              }}
-            />
+            <FieldControl field={f} value={String(draft[f.key] ?? '')} onChange={(v) => edit(f.key, v)} />
             {f.hint && <p className="text-xs text-slate-500">{f.hint}</p>}
           </div>
         ))}

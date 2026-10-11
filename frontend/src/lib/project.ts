@@ -1,17 +1,6 @@
 /**
- * Project slug storage. Writers: Home publish (where the user gives the
- * name) and Home "Open editor" (typed name, or the advertised default when
- * the input is empty — the canvas itself has no fallback and redirects
- * home without this cookie). One clearer (canvas Exit project). Everything
- * else only reads.
- *
- * Cookie-backed (FE-only): survives refresh + tab close until explicitly
- * cleared, and travels automatically on every same-origin navigation.
- * NOTE: `HttpOnly` can only be set by a server `Set-Cookie` response —
- * `document.cookie` cannot create a readable HttpOnly cookie (and JS could
- * never read it back for Nav/Canvas). So the FE writer sets everything a
- * readable cookie supports (`Path`, `Max-Age`, `SameSite`, `Secure` on
- * https); if a backend ever owns this cookie it should add `HttpOnly`.
+ * Project slug storage, cookie-backed so it survives refresh and tab close.
+ * Writers: Home publish and Home "Open editor"; clearer: canvas Exit project.
  */
 export const PROJECT_COOKIE = 'obs_curr_project_name'
 
@@ -19,58 +8,26 @@ export const PROJECT_COOKIE = 'obs_curr_project_name'
 // that a shared browser forgets it. The session cookie is the real gate.
 const MAX_AGE = 60 * 60 * 24 * 30
 
-function cookieAttrs(maxAge: number): string {
-  const secure = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : ''
-  return `; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`
-}
-
 function readCookie(name: string): string | null {
-  try {
-    if (typeof document === 'undefined') return null
-    const cookies = document.cookie ? document.cookie.split('; ') : []
-    for (const c of cookies) {
-      const eq = c.indexOf('=')
-      if (eq < 0) continue
-      if (decodeURIComponent(c.slice(0, eq)) === name) {
-        return decodeURIComponent(c.slice(eq + 1))
-      }
-    }
-    return null
-  } catch {
-    return null
-  }
+  const prefix = `${encodeURIComponent(name)}=`
+  const hit = document.cookie.split('; ').find((c) => c.startsWith(prefix))
+  return hit ? decodeURIComponent(hit.slice(prefix.length)) : null
 }
 
 function writeCookie(name: string, value: string, maxAge: number): void {
-  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}${cookieAttrs(maxAge)}`
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`
 }
 
+/** No fallback: an empty or missing cookie means "no project", never a fake name. */
 export function getProjectSlug(): string | null {
-  try {
-    const v = readCookie(PROJECT_COOKIE)
-    // No fallback: empty/missing cookie means "no project", never a fake name.
-    if (!v || v.trim() === '') return null
-    return v
-  } catch {
-    return null
-  }
+  const v = readCookie(PROJECT_COOKIE)
+  return !v || v.trim() === '' ? null : v
 }
 
 /** The single write — called only from Home publish. */
-export function setProjectSlug(slug: string): void {
-  try {
-    writeCookie(PROJECT_COOKIE, slug, MAX_AGE)
-  } catch {
-    /* private mode */
-  }
-}
+export const setProjectSlug = (slug: string): void => writeCookie(PROJECT_COOKIE, slug, MAX_AGE)
 
 /** The single clear — called only from canvas Exit project. */
-export function clearProjectSlug(): void {
-  try {
-    writeCookie(PROJECT_COOKIE, '', 0)
-  } catch {
-    /* private mode */
-  }
-}
+export const clearProjectSlug = (): void => writeCookie(PROJECT_COOKIE, '', 0)
 

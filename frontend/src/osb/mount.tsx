@@ -29,10 +29,8 @@ function renderSiteNode(n: SiteNode): React.ReactNode {
 }
 
 /**
- * Generic screenshot mount. Knows NOTHING per-component: it renders whatever
- * node list the spec passes in `#nodes=<json>` through the registry.
- * All edge cases live in the spec files, not here.
- * Dev-only `/osb-mount` route. Never linked in prod.
+ * Generic screenshot mount for e2e specs: renders whatever node list the spec
+ * passes in `#nodes=<json>` through the registry. Dev-only /osb-mount route.
  */
 export default function OsbMount() {
   const nodes = useMemo(() => parseHash(), [])

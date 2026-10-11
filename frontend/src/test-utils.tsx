@@ -17,6 +17,14 @@ export async function useIsolatedServers(): Promise<() => Promise<void>> {
   }
 }
 
+/** Drop every cookie — the project cookie is the only cross-test state. */
+export function clearCookies(): void {
+  for (const part of document.cookie.split(';')) {
+    const name = part.split('=', 1)[0]?.trim()
+    if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
+  }
+}
+
 function requireServers(): Servers {
   if (!servers) throw new Error('useIsolatedServers() was not called in beforeAll')
   return servers

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import Home from './Home'
 import { getProjectSlug, PROJECT_COOKIE } from '../lib/project'
-import { mockLocation, installHttp, resetScenario, useIsolatedServers } from '../test-utils'
+import { clearCookies, mockLocation, installHttp, resetScenario, useIsolatedServers } from '../test-utils'
 
 let closeServers: () => Promise<void>
 
@@ -13,13 +13,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await closeServers()
 })
-
-function clearCookies(): void {
-  for (const part of document.cookie.split(';')) {
-    const name = part.split('=', 1)[0]?.trim()
-    if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
-  }
-}
 
 beforeEach(async () => {
   vi.unstubAllGlobals()

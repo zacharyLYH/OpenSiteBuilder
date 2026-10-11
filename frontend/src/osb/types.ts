@@ -2,33 +2,30 @@
 export type OSBTheme = 'light' | 'dark'
 
 /**
- * Config resolution rule (applies to EVERY OSB component):
- * each component declares a flat `XxxConfig` interface + `XXX_DEFAULTS`.
- * The component takes `config?: Partial<XxxConfig>` and shallow-merges it
- * over defaults via `resolveConfig`. Missing keys => defaults.
- *
- * To add a new knob: add the key to the interface + DEFAULTS + use it in
- * the render. No editor/inspector changes needed.
+ * Config rule (applies to EVERY OSB component): declare a flat `XxxConfig`
+ * interface + `XXX_DEFAULTS`, take `config?: Partial<XxxConfig>` and shallow-
+ * merge it here. Missing keys => defaults. No inspector changes needed.
  */
-export function resolveConfig<T extends object>(
-  defaults: T,
-  provided?: Partial<T>,
-): T {
-  if (!provided) return { ...defaults }
+export function resolveConfig<T extends object>(defaults: T, provided?: Partial<T>): T {
   const out = { ...defaults }
-  for (const k of Object.keys(provided) as (keyof T)[]) {
-    if (provided[k] !== undefined) out[k] = provided[k] as T[keyof T]
+  for (const [k, v] of Object.entries(provided ?? {})) {
+    if (v !== undefined) (out as Record<string, unknown>)[k] = v
   }
   return out
 }
 
 /** Nesting kind. Engine vocabulary: atom = visible leaf with no children,
- * container = empty chrome + free-form atom children, collection =
- * inspector-edited data with no canvas children. */
-export type OSBKind = 'atom' | 'container' | 'collection'
+ * container = empty chrome + free-form atom children. */
+export type OSBKind = 'atom' | 'container'
 
 /** Shared text alignment knob. */
 export type OSBAlign = 'left' | 'center'
+
+/** The one option list behind every "Alignment" drawer field. */
+export const ALIGN_OPTIONS: { value: OSBAlign; label: string }[] = [
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Center' },
+]
 
 /** Padding (dot squares) kept around children inside a container. */
 export const CONTAINER_PAD = 1

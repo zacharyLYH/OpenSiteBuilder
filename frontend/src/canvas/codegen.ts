@@ -18,11 +18,7 @@ function renderNode(node: PlacedNode, kids: PlacedNode[]): string {
     .sort(byFlow)
     .map((k) => `<${tagFor(k.type)} config={${JSON.stringify(k.config ?? {})}} />`)
     .join('\n')
-  const indented = inner
-    .split('\n')
-    .map((l) => `  ${l}`)
-    .join('\n')
-  return `<${tagFor(node.type)} ${cfg}>\n${indented}\n    </${tagFor(node.type)}>`
+  return `<${tagFor(node.type)} ${cfg}>\n${inner.replace(/^/gm, '  ')}\n    </${tagFor(node.type)}>`
 }
 
 /**

@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
+import { ALIGN_OPTIONS, OSB_ALIGN_CLASSES, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
 
 export type OSBTextConfig = {
   text: string
@@ -15,15 +15,7 @@ export const OSB_TEXT_DEFAULTS: OSBTextConfig = {
 
 export const OSB_TEXT_FIELDS: OSBField[] = [
   { key: 'text', label: 'Text', kind: 'longtext' },
-  {
-    key: 'align',
-    label: 'Alignment',
-    kind: 'select',
-    options: [
-      { value: 'left', label: 'Left' },
-      { value: 'center', label: 'Center' },
-    ],
-  },
+  { key: 'align', label: 'Alignment', kind: 'select', options: ALIGN_OPTIONS },
   { key: 'theme', label: 'Appearance', kind: 'theme' },
 ]
 

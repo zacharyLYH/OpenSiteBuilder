@@ -29,8 +29,6 @@ import { validateSite } from '../src/site/validate'
 //   red RGL drag       — freed button dragged over title flashes invalid,
 //                        releases snapped back.
 // ---------------------------------------------------------------------------
-type Planned = { type: string; parent: string; x: number; y: number; cols: number; rows: number }
-
 async function closeDrawerIfOpen(page: Page): Promise<void> {
   if ((await page.getByTestId('config-drawer').count()) > 0) {
     await page.getByRole('button', { name: 'Close settings' }).click()

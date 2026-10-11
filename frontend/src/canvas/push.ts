@@ -23,8 +23,7 @@ const OSB_COMPONENTS = import.meta.glob('../osb/OSB*.{ts,tsx}', {
 
 /**
  * Runtime files every published page needs. The generated App.jsx imports
- * these under ./osb/*, so they ride along on every push — the FE osb/ sources
- * stay the single source of truth (nothing duplicated into the template).
+ * these under ./osb/*, so the FE osb/ sources stay the single source of truth.
  */
 const RUNTIME_FILES = [
   ...Object.entries(OSB_COMPONENTS).map(([p, content]) => ({
@@ -36,8 +35,14 @@ const RUNTIME_FILES = [
 ]
 
 /** Canvas doc as a valid site.json (single page v1, children nested). */
+const siteNode = ({ id, type, config }: { id: string; type: string; config: Record<string, unknown> }) => ({
+  id,
+  type,
+  config: config ?? {},
+})
+
 export function siteJson(doc: CanvasDoc, slug: string): string {
-  const roots = doc.nodes.filter((n) => n.parentId === null)
+  const kidsOf = (id: string) => doc.nodes.filter((k) => k.parentId === id).map(siteNode)
   return JSON.stringify({
     version: SITE_SCHEMA_VERSION,
     site: { name: slug, theme: 'light' },
@@ -46,18 +51,12 @@ export function siteJson(doc: CanvasDoc, slug: string): string {
         id: 'home',
         path: '/',
         title: 'Home',
-        nodes: roots.map((n) => ({
-          id: n.id,
-          type: n.type,
-          config: n.config ?? {},
-          ...(doc.nodes.some((k) => k.parentId === n.id)
-            ? {
-                children: doc.nodes
-                  .filter((k) => k.parentId === n.id)
-                  .map((k) => ({ id: k.id, type: k.type, config: k.config ?? {} })),
-              }
-            : {}),
-        })),
+        nodes: doc.nodes
+          .filter((n) => n.parentId === null)
+          .map((n) => {
+            const children = kidsOf(n.id)
+            return { ...siteNode(n), ...(children.length > 0 ? { children } : {}) }
+          }),
       },
     ],
   })

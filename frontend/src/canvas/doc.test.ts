@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  canInsert,
   canInsertReason,
-  canPlace,
   collides,
   conflictIds,
   containerFloor,
@@ -47,20 +45,24 @@ const kid = (
 describe('placement gate (no screenshots — pure rules)', () => {
   it('rejects overlaps but allows edge-touching neighbors', () => {
     const nodes = [root('a', 'card', 0, 0, 12, 10)]
-    expect(canPlace(nodes, { x: 4, y: 4, cols: 4, rows: 4 })).toBe(false)
-    expect(canPlace(nodes, { x: 2, y: 2, cols: 2, rows: 2 })).toBe(false)
-    expect(canPlace(nodes, { x: 12, y: 0, cols: 4, rows: 4 })).toBe(true)
-    expect(canPlace(nodes, { x: 0, y: 10, cols: 8, rows: 2 })).toBe(true)
+    const at = (x: number, y: number, cols: number, rows: number) =>
+      canInsertReason(nodes, 'text', { x, y, cols, rows })
+    expect(at(4, 4, 4, 4)).toBe('overlap')
+    expect(at(2, 2, 2, 2)).toBe('overlap')
+    expect(at(12, 0, 4, 4)).toBeNull()
+    expect(at(0, 10, 8, 2)).toBeNull()
     expect(collides({ x: 0, y: 0, cols: 1, rows: 1 }, { x: 1, y: 0, cols: 1, rows: 1 })).toBe(false)
   })
 
   it('rejects off-grid rects: negatives, fractions, and overflow', () => {
-    expect(canPlace([], { x: -1, y: 0, cols: 4, rows: 4 })).toBe(false)
-    expect(canPlace([], { x: 0, y: -1, cols: 4, rows: 4 })).toBe(false)
-    expect(canPlace([], { x: 0.5, y: 0, cols: 4, rows: 4 })).toBe(false)
-    expect(canPlace([], { x: 0, y: 0, cols: 0, rows: 4 })).toBe(false)
-    expect(canPlace([], { x: GRID_COLS - 2, y: 0, cols: 4, rows: 1 })).toBe(false)
-    expect(canPlace([], { x: GRID_COLS - 4, y: 0, cols: 4, rows: 1 })).toBe(true)
+    const at = (x: number, y: number, cols: number, rows: number) =>
+      canInsertReason([], 'text', { x, y, cols, rows })
+    expect(at(-1, 0, 4, 4)).toBe('integrity')
+    expect(at(0, -1, 4, 4)).toBe('integrity')
+    expect(at(0.5, 0, 4, 4)).toBe('integrity')
+    expect(at(0, 0, 0, 4)).toBe('integrity')
+    expect(at(GRID_COLS - 2, 0, 4, 1)).toBe('containment')
+    expect(at(GRID_COLS - 4, 0, 4, 1)).toBeNull()
   })
 
   it('every registered footprint is sane: min >= 1, default inside min/max', () => {
@@ -79,7 +81,6 @@ describe('placement gate (no screenshots — pure rules)', () => {
   it('rejects footprints outside the type min/max with a reason', () => {
     // Button min is 2x1.
     expect(canInsertReason([], 'button', { x: 0, y: 0, cols: 1, rows: 1 }, null)).toBe('footprint')
-    expect(canInsert([], 'button', { x: 0, y: 0, cols: 1, rows: 1 }, null)).toBe(false)
     expect(canInsertReason([], 'button', { x: 0, y: 0, cols: 4, rows: 1 }, null)).toBeNull()
   })
 })
@@ -284,16 +285,16 @@ describe('fungible move: reposition / nest / take-out (no screenshots)', () => {
     expect(nestTargetAt(nodes, { x: 25, y: 5 })).toBeNull()
   })
 
-  it('canInsert validates unknown parents and nesting under nested nodes', () => {
-    expect(canInsert([], 'button', { x: 0, y: 0, cols: 4, rows: 1 }, 'ghost')).toBe(false)
+  it('the gate validates unknown parents and nesting under nested nodes', () => {
+    expect(canInsertReason([], 'button', { x: 0, y: 0, cols: 4, rows: 1 }, 'ghost')).toBe('depth')
     const doc: CanvasDoc = {
       version: 1,
       nodes: [root('c', 'card', 0, 0, 12, 10), kid('b', 'button', 'c', 0, 0, 4, 1)],
     }
     // 'b' is an atom inside a container: nothing nests under it, and a
     // container with children can never itself nest elsewhere.
-    expect(canInsert(doc.nodes, 'button', { x: 0, y: 0, cols: 4, rows: 1 }, 'b')).toBe(false)
-    expect(canInsert(doc.nodes, 'card', { x: 12, y: 0, cols: 6, rows: 4 }, null)).toBe(true)
+    expect(canInsertReason(doc.nodes, 'button', { x: 0, y: 0, cols: 4, rows: 1 }, 'b')).toBe('depth')
+    expect(canInsertReason(doc.nodes, 'card', { x: 12, y: 0, cols: 6, rows: 4 }, null)).toBeNull()
   })
 })
 
@@ -328,7 +329,7 @@ describe('nestLocal + reasonText (drop plumbing)', () => {
 
   it('user scenario: nesting onto occupied card cells reports overlap', () => {
     // Pattern card at root: title (1,1,8,2) covers the drop.
-    let doc = (
+    const doc = (
       insertPattern({ version: 1, nodes: [] }, 'card-content', 'c1', { x: 0, y: 0, cols: 0, rows: 0 }, [
         't1',
         't2',
