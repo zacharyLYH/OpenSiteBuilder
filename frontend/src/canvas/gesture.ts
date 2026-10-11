@@ -16,19 +16,19 @@ import {
  * accepts it, and who flashes red. Hover, drop and commit all read this same
  * answer, so live feedback can never disagree with the final verdict.
  */
-export interface DragPlan {
+type PlanBase = {
   /** What is landing: the gated type, ready for the op that performs it. */
   type: OSBNodeType
   /** Root (null) or the container the landing sits in. */
   parentId: string | null
   /** Routed landing rect; differs from the raw dragged rect when nested. */
   rect: CellRect
-  ok: boolean
-  /** Why the gate refuses — null exactly when `ok`. */
-  reason: RejectReason | null
   /** Nodes that must flash red; always empty when the landing is accepted. */
   conflicts: string[]
 }
+
+/** Discriminated: a refused plan always carries its reason, no `!` needed. */
+export type DragPlan = PlanBase & ({ ok: true; reason: null } | { ok: false; reason: RejectReason })
 
 /**
  * Every transient gesture signal in ONE object — they change together, so
@@ -63,15 +63,8 @@ function subjectOf(nodes: PlacedNode[], drag: DragPayload | null): Subject | nul
 function judge(nodes: PlacedNode[], subject: Subject, parentId: string | null, rect: CellRect): DragPlan {
   const { type, selfId } = subject
   const reason = canInsertReason(nodes, type, rect, parentId, selfId ?? undefined)
-  const ok = reason === null
-  return {
-    type,
-    parentId,
-    rect,
-    ok,
-    reason,
-    conflicts: ok ? [] : conflictIds(nodes, selfId, type, rect, parentId),
-  }
+  if (reason === null) return { type, parentId, rect, ok: true, reason, conflicts: [] }
+  return { type, parentId, rect, ok: false, reason, conflicts: conflictIds(nodes, selfId, type, rect, parentId) }
 }
 
 /** Landing already aimed at a parent we know: container hover and drop. */

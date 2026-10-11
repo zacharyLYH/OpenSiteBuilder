@@ -37,7 +37,12 @@ function waitForOutput(proc: ChildProcess, needle: RegExp, timeoutMs: number): P
   return new Promise((resolve, reject) => {
     let buf = ''
     const timer = setTimeout(() => reject(new Error(`timeout waiting for ${needle}`)), timeoutMs)
-    proc.stdout!.on('data', (c: Buffer) => {
+    if (!proc.stdout) {
+      clearTimeout(timer)
+      reject(new Error('child process has no piped stdout'))
+      return
+    }
+    proc.stdout.on('data', (c: Buffer) => {
       buf += c.toString()
       const m = buf.match(needle)
       if (m) {
@@ -130,7 +135,9 @@ export async function startServers(): Promise<Servers> {
   await waitForOutput(mockProc, /MOCK_READY port=(\d+)/, 15000)
 
   const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
-  const keyPem = privateKey.export({ type: 'pkcs1', format: 'pem' }) as string
+  const exported = privateKey.export({ type: 'pkcs1', format: 'pem' })
+  if (typeof exported !== 'string') throw new Error('key export must be PEM text')
+  const keyPem = exported
   const keyPath = path.join(os.tmpdir(), `osb-test-key-${process.pid}.pem`)
   fs.writeFileSync(keyPath, keyPem, { mode: 0o600 })
 

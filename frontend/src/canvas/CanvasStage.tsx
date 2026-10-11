@@ -6,7 +6,7 @@ import 'react-resizable/css/styles.css'
 import './canvas.css'
 import { OSB_REGISTRY } from '../osb/registry'
 import { containerFloor, type CanvasDoc, type PlacedNode } from './doc'
-import { canvasMetrics, GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, minGridWidth } from './grid'
+import { canvasMetrics, GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, HEADER_PX, minGridWidth } from './grid'
 import type { Feedback } from './gesture'
 import type { PaletteEntry } from './CanvasHeader'
 
@@ -152,7 +152,10 @@ export default function CanvasStage(p: CanvasStageProps) {
         className={`relative h-full w-full${fb.conflicts.includes(parent.id) ? ' drag-conflict' : ''}`}
       >
         {entry.render(parent.config)}
-        <div className={`pointer-events-none absolute inset-0${showBounds ? ' show-child-bounds' : ''}`}>
+        <div
+          data-testid={showBounds ? 'child-bounds' : undefined}
+          className={`pointer-events-none absolute inset-0${showBounds ? ' show-child-bounds' : ''}`}
+        >
           {kids.map((k) => (
             <div
               key={k.id}
@@ -246,7 +249,8 @@ export default function CanvasStage(p: CanvasStageProps) {
     <main
       data-testid="canvas"
       onClick={p.onClearSelection}
-      className={`relative h-[calc(100vh-3.5rem)] overflow-auto${fb.dragging ? ' dragging-on' : ''}${fb.forbidden ? ' drop-forbidden' : ''}`}
+      style={{ height: `calc(100vh - ${HEADER_PX}px)` }}
+      className={`relative overflow-auto${fb.dragging ? ' dragging-on' : ''}${fb.forbidden ? ' drop-forbidden' : ''}`}
     >
       <div ref={containerRef} style={{ minWidth: minGridWidth(), height }} className="relative">
         <div className="canvas-backdrop pointer-events-none absolute inset-0" />

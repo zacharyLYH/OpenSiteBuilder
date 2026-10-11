@@ -25,6 +25,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+function fileContent(files: { path: string; content: string }[], path: string): string {
+  const found = files.find((f) => f.path === path)
+  if (!found) throw new Error(`missing file ${path}`)
+  return found.content
+}
+
 describe('pushDoc (no screenshots — pure wiring)', () => {
   it('posts generated React + valid site.json to the push API', async () => {
     stubFetch(200, { commit: 'abc123', url: 'https://x.github.io/y/' })
@@ -36,12 +42,13 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
     const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/publish')
     expect(opts.method).toBe('POST')
-    const payload = JSON.parse(opts.body as string) as {
+    if (typeof opts.body !== 'string') throw new Error('expected a JSON publish body')
+    const payload = JSON.parse(opts.body) as {
       files: { path: string; content: string }[]
       message: string
     }
     expect(payload.message).toBe('canvas publish')
-    const app = payload.files.find((f) => f.path === 'src/App.jsx')!.content
+    const app = fileContent(payload.files, 'src/App.jsx')
     // Runtime ships every registered component plus shared sources.
     const shipped = new Map(payload.files.map((f) => [f.path, f.content]))
     const expectedPaths = [
@@ -60,7 +67,7 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
     }
     expect(app).toContain('<OSBCard')
     expect(app.indexOf('<OSBCard')).toBeLessThan(app.indexOf('<OSBText'))
-    const site = payload.files.find((f) => f.path === 'site.json')!.content
+    const site = fileContent(payload.files, 'site.json')
     expect(validateSite(JSON.parse(site))).toEqual({ ok: true, errors: [] })
     expect(siteJson(DOC, 'my-shop')).toBe(site)
   })

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { cn } from '../lib/utils'
 import { resolveConfig, type OSBField } from './types'
 
@@ -23,10 +24,23 @@ export interface OSBImageProps {
 
 export default function OSBImage({ config }: OSBImageProps) {
   const c = resolveConfig(OSB_IMAGE_DEFAULTS, config)
+  // A dead link is a user typo, not a missing component: show the same
+  // placeholder as an empty src instead of a broken-image icon. The failed
+  // URL is remembered (not a boolean) so editing the URL heals the render
+  // with no effect; the stored src is untouched throughout.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const broken = failedSrc !== null && failedSrc === c.imageSrc
   // Box is the component: the image (or its placeholder) always fills the
   // grid footprint, so the bounding box never disagrees with the render.
-  if (c.imageSrc !== '') {
-    return <img src={c.imageSrc} alt={c.imageAlt} className="h-full w-full object-cover" />
+  if (c.imageSrc !== '' && !broken) {
+    return (
+      <img
+        src={c.imageSrc}
+        alt={c.imageAlt}
+        className="h-full w-full object-cover"
+        onError={() => setFailedSrc(c.imageSrc)}
+      />
+    )
   }
   return (
     <div

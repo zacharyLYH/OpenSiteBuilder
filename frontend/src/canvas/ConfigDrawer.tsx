@@ -80,7 +80,15 @@ export default function ConfigDrawer({
         if (!o) onClose()
       }}
     >
-      <SheetContent side={side} data-testid="config-drawer" className="overflow-y-auto">
+      {/* The panel never steals focus. Opening it because a node was selected
+          must not move focus into the panel, or the canvas Delete hotkey would
+          stop working the moment you select anything. */}
+      <SheetContent
+        side={side}
+        data-testid="config-drawer"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="overflow-y-auto"
+      >
         <SheetHeader>
           <SheetTitle>{entry.name} settings</SheetTitle>
           <SheetClose asChild>

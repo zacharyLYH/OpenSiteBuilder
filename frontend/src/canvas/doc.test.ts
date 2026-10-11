@@ -329,14 +329,15 @@ describe('nestLocal + reasonText (drop plumbing)', () => {
 
   it('user scenario: nesting onto occupied card cells reports overlap', () => {
     // Pattern card at root: title (1,1,8,2) covers the drop.
-    const doc = (
-      insertPattern({ version: 1, nodes: [] }, 'card-content', 'c1', { x: 0, y: 0, cols: 0, rows: 0 }, [
-        't1',
-        't2',
-        'b1',
-      ]) as { ok: true; doc: CanvasDoc }
-    ).doc
-    const card = doc.nodes.find((n) => n.id === 'c1')!
+    const inserted = insertPattern({ version: 1, nodes: [] }, 'card-content', 'c1', { x: 0, y: 0, cols: 0, rows: 0 }, [
+      't1',
+      't2',
+      'b1',
+    ])
+    if (!inserted.ok) throw new Error(`pattern insert failed in test setup: ${inserted.reason}`)
+    const doc = inserted.doc
+    const card = doc.nodes.find((n) => n.id === 'c1')
+    if (!card) throw new Error('pattern insert landed no card')
     const local = nestLocal(card, { x: 3, y: 3 }, { cols: 4, rows: 1 })
     const r = insertNode(doc, { id: 'x', type: 'button', config: {}, parentId: 'c1', ...local, cols: 4, rows: 1 })
     expect(r.ok).toBe(false)

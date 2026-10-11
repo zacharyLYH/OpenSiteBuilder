@@ -85,8 +85,7 @@ export function installHttp(): void {
   vi.stubGlobal('fetch', wrapped)
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function setScenario(s: Record<string, any>): Promise<void> {
+export async function setScenario(s: Record<string, unknown>): Promise<void> {
   const { mockUrl } = requireServers()
   const r = await fetch(`${mockUrl}/__scenario`, {
     method: 'POST',

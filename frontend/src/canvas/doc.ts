@@ -38,8 +38,8 @@ export function loadDoc(key: string): CanvasDoc {
     return {
       version: 1,
       nodes: known.filter(
-        (n) => n.parentId === null || (roots.has(n.parentId as string) && isAtomType(n.type)),
-      ) as PlacedNode[],
+        (n) => n.parentId === null || (n.parentId !== null && roots.has(n.parentId) && isAtomType(n.type)),
+      ),
     }
   } catch {
     return EMPTY_DOC

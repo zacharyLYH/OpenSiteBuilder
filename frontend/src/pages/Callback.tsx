@@ -1,11 +1,10 @@
 import React from 'react'
 import { ErrorNote } from '../components/Notice'
-import { postExchange, type ExchangePayload } from '../api'
+import { postExchange, strField, type ExchangePayload } from '../api'
 
 interface ExchangeResult {
   owner: string
   slug: string
-  created: boolean
   url: string
 }
 
@@ -34,14 +33,19 @@ export default function Callback() {
     postExchange(payload)
       .then(({ status, body }) => {
         if (status !== 200) {
-          setError(body.error || `exchange failed: ${status}`)
-          if (status === 409 && body.install_url) {
-            setInstallUrl(body.install_url)
+          setError(strField(body, 'error') ?? `exchange failed: ${status}`)
+          const installUrl = strField(body, 'install_url')
+          if (status === 409 && installUrl) {
+            setInstallUrl(installUrl)
             // Publish already consented to this journey; continue automatically.
-            timer = setTimeout(() => { window.location.href = body.install_url }, 1500)
+            timer = setTimeout(() => { window.location.href = installUrl }, 1500)
           }
         } else {
-          setResult(body)
+          const owner = strField(body, 'owner')
+          const slug = strField(body, 'slug')
+          const url = strField(body, 'url')
+          if (owner && slug && url) setResult({ owner, slug, url })
+          else setError('exchange failed: malformed response')
         }
       })
       .catch((e) => setError(String(e)))

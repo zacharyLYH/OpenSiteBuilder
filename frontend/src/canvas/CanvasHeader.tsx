@@ -1,6 +1,7 @@
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import type { DocValidation } from './doc'
+import { HEADER_PX } from './grid'
 
 /** One palette entry: an atom type or a multi-node pattern. */
 export interface PaletteEntry {
@@ -32,55 +33,60 @@ export interface CanvasHeaderProps {
 export default function CanvasHeader(p: CanvasHeaderProps) {
   return (
     <>
-      <header className="flex h-14 items-center gap-2 border-b border-slate-200 px-3">
-        <Badge data-testid="canvas-project" variant="secondary" className="font-mono">
-          {p.project}
-        </Badge>
-        {/* The single way to add content: `pick` arms the drag on pointer-down
-            and on drag-start alike; release hands control back to the canvas. */}
-        {p.palettes.map((entry) => (
-          <Button
-            key={entry.testid}
-            data-testid={entry.testid}
-            variant="outline"
-            size="sm"
-            draggable
-            onPointerDown={entry.pick}
-            onDragStart={(e) => {
-              entry.pick()
-              e.dataTransfer.setData('text/plain', entry.label)
-            }}
-            onDragEnd={p.onEndDrag}
-            className="cursor-grab"
-          >
-            {entry.label}
+      {/* Narrow windows must still reach Push / Exit / Validate: the bar
+          scrolls sideways, and the inner row keeps its natural width instead
+          of squashing its buttons into unreadable stubs. */}
+      <header style={{ height: HEADER_PX }} className="overflow-x-auto border-b border-slate-200">
+        <div className="flex h-full min-w-max items-center gap-2 px-3">
+          <Badge data-testid="canvas-project" variant="secondary" className="font-mono">
+            {p.project}
+          </Badge>
+          {/* The single way to add content: `pick` arms the drag on pointer-down
+              and on drag-start alike; release hands control back to the canvas. */}
+          {p.palettes.map((entry) => (
+            <Button
+              key={entry.testid}
+              data-testid={entry.testid}
+              variant="outline"
+              size="sm"
+              draggable
+              onPointerDown={entry.pick}
+              onDragStart={(e) => {
+                entry.pick()
+                e.dataTransfer.setData('text/plain', entry.label)
+              }}
+              onDragEnd={p.onEndDrag}
+              className="cursor-grab"
+            >
+              {entry.label}
+            </Button>
+          ))}
+          <span className="ml-auto text-xs text-slate-400">Drag onto the canvas · drag to move · corner to resize</span>
+          {p.issues && (
+            <span data-testid="doc-warning" className="text-xs text-amber-600">
+              Pieces must touch — drag them together
+            </span>
+          )}
+          {p.dropMsg && (
+            <span data-testid="drop-message" className="text-xs font-medium text-rose-600">
+              {p.dropMsg}
+            </span>
+          )}
+          {p.pushMsg && (
+            <span data-testid="push-status" className="text-xs text-slate-500">
+              {p.pushMsg}
+            </span>
+          )}
+          <Button variant="outline" size="sm" data-testid="validate" onClick={p.onValidate}>
+            Validate
           </Button>
-        ))}
-        <span className="ml-auto text-xs text-slate-400">Drag onto the canvas · drag to move · corner to resize</span>
-        {p.issues && (
-          <span data-testid="doc-warning" className="text-xs text-amber-600">
-            Pieces must touch — drag them together
-          </span>
-        )}
-        {p.dropMsg && (
-          <span data-testid="drop-message" className="text-xs font-medium text-rose-600">
-            {p.dropMsg}
-          </span>
-        )}
-        {p.pushMsg && (
-          <span data-testid="push-status" className="text-xs text-slate-500">
-            {p.pushMsg}
-          </span>
-        )}
-        <Button variant="outline" size="sm" data-testid="validate" onClick={p.onValidate}>
-          Validate
-        </Button>
-        <Button variant="outline" size="sm" onClick={p.onExit}>
-          Exit project
-        </Button>
-        <Button size="sm" disabled={p.pushing || !p.canPush} onClick={p.onPush}>
-          {p.pushing ? 'Pushing…' : 'Push'}
-        </Button>
+          <Button variant="outline" size="sm" onClick={p.onExit}>
+            Exit project
+          </Button>
+          <Button size="sm" disabled={p.pushing || !p.canPush} onClick={p.onPush}>
+            {p.pushing ? 'Pushing…' : 'Push'}
+          </Button>
+        </div>
       </header>
 
       {p.validation && (

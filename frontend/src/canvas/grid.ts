@@ -25,6 +25,10 @@ export const minGridWidth = (): number =>
  * one pixel-to-cell rule for root-area drops. Containers use `eventCell`
  * (parent fractions); this one uses the grid pitch so it lands exactly where
  * the dot guides say it does.
+ *
+ * Clamped into the grid, because the drop itself is: RGL pulls a released
+ * item back inside the columns. Without the clamp the preview over the edge
+ * cells would call a drop forbidden that then lands anyway.
  */
 export function centeredCell(
   clientX: number,
@@ -33,11 +37,9 @@ export function centeredCell(
   span: { cols: number; rows: number },
   cell: number,
 ): { x: number; y: number; cols: number; rows: number } {
-  return {
-    x: Math.round((clientX - box.left) / (cell + GRID_MARGIN_X) - span.cols / 2),
-    y: Math.round((clientY - box.top) / (cell + GRID_MARGIN_Y) - span.rows / 2),
-    ...span,
-  }
+  const x = Math.round((clientX - box.left) / (cell + GRID_MARGIN_X) - span.cols / 2)
+  const y = Math.round((clientY - box.top) / (cell + GRID_MARGIN_Y) - span.rows / 2)
+  return { x: Math.max(0, Math.min(GRID_COLS - span.cols, x)), y: Math.max(0, y), ...span }
 }
 
 export interface CanvasMetrics {

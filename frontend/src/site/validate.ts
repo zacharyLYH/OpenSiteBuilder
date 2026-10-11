@@ -91,7 +91,8 @@ export function validateSite(doc: unknown): SiteValidation {
     }
     const page = p as Record<string, unknown>
     checkId('page', `pages[${i}]`, page['id'], pageIds)
-    if (typeof page['path'] !== 'string' || !(page['path'] as string).startsWith('/')) {
+    const pagePath = page['path']
+    if (typeof pagePath !== 'string' || !pagePath.startsWith('/')) {
       errors.push(`pages[${i}].path must start with "/"`)
     }
     if (typeof page['title'] !== 'string') {

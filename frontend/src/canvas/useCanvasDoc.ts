@@ -5,9 +5,11 @@ import {
   storageKey,
   validateDoc,
   type CanvasDoc,
-  type PlacedNode,
 } from './doc'
 import { useDebouncedEffect } from './useDebouncedEffect'
+
+/** Long enough to coalesce a drag into one write, short enough to feel safe. */
+const PERSIST_DEBOUNCE_MS = 500
 
 /**
  * The document and everything derived from it: loaded once from the project's
@@ -24,7 +26,7 @@ export function useCanvasDoc(projectName: string | null) {
   // Debounced persist, keyed by the project name from onboarding.
   useDebouncedEffect(() => {
     if (key) localStorage.setItem(key, JSON.stringify(doc))
-  }, [doc, key], 500)
+  }, [doc, key], PERSIST_DEBOUNCE_MS)
   const roots = useMemo(() => doc.nodes.filter((n) => n.parentId === null), [doc])
   // File-level backstop: edit-time gates keep docs connected, but removals can
   // strand islands. Drives both the bar warning and the checks panel.
@@ -34,7 +36,7 @@ export function useCanvasDoc(projectName: string | null) {
   const [epoch, setEpoch] = useState(0)
   return {
     doc,
-    roots: roots as PlacedNode[],
+    roots,
     issues,
     epoch,
     docRef,

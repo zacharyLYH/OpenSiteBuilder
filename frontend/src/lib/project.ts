@@ -1,6 +1,13 @@
 /**
  * Project slug storage, cookie-backed so it survives refresh and tab close.
  * Writers: Home publish and Home "Open editor"; clearer: canvas Exit project.
+ *
+ * This is a UI hint — "which project am I showing" — and never an
+ * authorization input. The server does not read it and cannot be trusted to;
+ * it stays readable by JavaScript on purpose so the canvas can render the
+ * project name without a round trip. That is safe precisely because it grants
+ * nothing: every privileged call is authorized by the backend's own
+ * `HttpOnly; SameSite=Lax` session cookie (see src/api.ts).
  */
 export const PROJECT_COOKIE = 'obs_curr_project_name'
 

@@ -24,8 +24,7 @@ describe('useDebouncedEffect', () => {
     expect(fn).toHaveBeenCalledWith('b')
   })
 
-  it('restarts the clock on every change and cleans up on unmount', () => {
-    vi.useFakeTimers()
+  it('restarts the clock on every change and cleans up on unmount', () => {    vi.useFakeTimers()
     const fn = vi.fn()
     const { rerender, unmount } = renderHook(({ v }: { v: number }) => {
       useDebouncedEffect(() => fn(v), [v], 300)
@@ -39,5 +38,17 @@ describe('useDebouncedEffect', () => {
     unmount()
     vi.advanceTimersByTime(1000)
     expect(fn).not.toHaveBeenCalled()
+  })
+
+  it('fires the latest fn even when deps are unchanged', () => {
+    vi.useFakeTimers()
+    const { rerender } = renderHook(({ fn }: { fn: () => void }) => {
+      useDebouncedEffect(fn, [], 500)
+    }, { initialProps: { fn: () => {} } })
+
+    const latest = vi.fn()
+    rerender({ fn: latest })
+    vi.advanceTimersByTime(500)
+    expect(latest).toHaveBeenCalledTimes(1)
   })
 })

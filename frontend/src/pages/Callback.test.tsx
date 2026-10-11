@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import Callback from './Callback'
-import { getState } from '../api'
+import { getState, strField } from '../api'
 import { getProjectSlug } from '../lib/project'
-import { mockLocation, installHttp, resetScenario, setScenario, mockCalls, useIsolatedServers } from '../test-utils'
+import { mockLocation, installHttp, resetScenario, setScenario, mockCalls, useIsolatedServers, clearCookies } from '../test-utils'
 
 let closeServers: () => Promise<void>
 
@@ -15,13 +15,6 @@ afterAll(async () => {
   await closeServers()
 })
 
-function clearCookies(): void {
-  for (const part of document.cookie.split(';')) {
-    const name = part.split('=', 1)[0]?.trim()
-    if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
-  }
-}
-
 beforeEach(async () => {
   vi.unstubAllGlobals()
   localStorage.clear()
@@ -30,10 +23,16 @@ beforeEach(async () => {
   await resetScenario()
 })
 
+/** The state the /api/state leg issued — or a failure naming it. */
+async function issuedState(slug: string): Promise<string> {
+  const state = strField((await getState(slug)).body, 'state')
+  if (!state) throw new Error('state endpoint issued no state')
+  return state
+}
+
 describe('Callback drives the real exchange', () => {
   it('completes the authorize leg and binds the slug', async () => {
-    const st = await getState('my-shop')
-    mockLocation(`http://localhost/callback?code=c1&state=${st.body.state}`)
+    mockLocation(`http://localhost/callback?code=c1&state=${await issuedState('my-shop')}`)
     // Real backend, mocked GitHub: repo missing so it generates.
     await setScenario({})
     render(<Callback />)
@@ -58,35 +57,31 @@ describe('Callback drives the real exchange', () => {
   })
 
   it('shows failure when the code is already spent', async () => {
-    const st = await getState('my-shop')
     await setScenario({ exchangeFails: true })
-    mockLocation(`http://localhost/callback?code=spent&state=${st.body.state}`)
+    mockLocation(`http://localhost/callback?code=spent&state=${await issuedState('my-shop')}`)
     render(<Callback />)
 
     expect(await screen.findByText(/github authorization failed/i, {}, { timeout: 10000 })).toBeTruthy()
   })
 
   it('shows failure for an installation from another account', async () => {
-    const st = await getState('my-shop')
-    mockLocation(`http://localhost/callback?code=c9&state=${st.body.state}&installation_id=999`)
+    mockLocation(`http://localhost/callback?code=c9&state=${await issuedState('my-shop')}&installation_id=999`)
     render(<Callback />)
 
     expect(await screen.findByText(/installation lookup failed/i, {}, { timeout: 10000 })).toBeTruthy()
   })
 
   it('treats already-enabled pages as success', async () => {
-    const st = await getState('my-shop')
     await setScenario({ pagesStatus: 409 })
-    mockLocation(`http://localhost/callback?code=c4&state=${st.body.state}`)
+    mockLocation(`http://localhost/callback?code=c4&state=${await issuedState('my-shop')}`)
     render(<Callback />)
 
     expect(await screen.findByText(/maya\/my-shop/, {}, { timeout: 10000 })).toBeTruthy()
   })
 
   it('auto-continues to the install page on 409', async () => {
-    const st = await getState('my-shop')
     await setScenario({ installLogin: 'someone-else' })
-    const href = mockLocation(`http://localhost/callback?code=c3&state=${st.body.state}`)
+    const href = mockLocation(`http://localhost/callback?code=c3&state=${await issuedState('my-shop')}`)
     render(<Callback />)
 
     expect(await screen.findByText(/Redirecting to GitHub/, {}, { timeout: 10000 })).toBeTruthy()

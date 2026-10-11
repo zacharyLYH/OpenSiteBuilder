@@ -10,9 +10,10 @@ beforeEach(() => {
   localStorage.clear()
   clearCookies()
   // Publish hits GET /api/state; keep it local so no backend is needed.
+  // The stub mirrors the real contract: client_id + state strings.
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => new Response(JSON.stringify({ state: 's' }), { status: 200 })),
+    vi.fn(async () => new Response(JSON.stringify({ client_id: 'test-client', state: 's' }), { status: 200 })),
   )
 })
 

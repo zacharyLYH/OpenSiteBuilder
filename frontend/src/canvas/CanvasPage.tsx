@@ -26,6 +26,9 @@ import { pushDoc } from './push'
 import { useCanvasDoc } from './useCanvasDoc'
 import { useDragSession } from './useDragSession'
 
+/** How long a rejection stays on screen before it fades out. */
+const DROP_MESSAGE_MS = 2600
+
 /**
  * The controller. It owns the selection and the gesture vocabulary; the
  * document lives in useCanvasDoc, the drag session in useDragSession, every
@@ -69,8 +72,15 @@ export default function CanvasPage() {
   const reject = (reason: RejectReason) => {
     if (dropMsgTimer.current !== null) window.clearTimeout(dropMsgTimer.current)
     setDropMsg(reasonText(reason))
-    dropMsgTimer.current = window.setTimeout(() => setDropMsg(null), 2600)
+    dropMsgTimer.current = window.setTimeout(() => setDropMsg(null), DROP_MESSAGE_MS)
   }
+  // The timer outlives nothing: clear it on unmount so no setState fires late.
+  useEffect(
+    () => () => {
+      if (dropMsgTimer.current !== null) window.clearTimeout(dropMsgTimer.current)
+    },
+    [],
+  )
 
   /** One landing for every op result: apply + select, or bounce with words. */
   const applyResult = (r: DocResult, selectId?: string) => {
@@ -81,7 +91,7 @@ export default function CanvasPage() {
 
   /** One landing for every drop: the gate already ruled, so this only applies. */
   const land = (drag: DragPayload, plan: DragPlan) => {
-    if (!plan.ok) return reject(plan.reason!)
+    if (!plan.ok) return reject(plan.reason)
     const d = docRef.current
     if (drag.kind === 'move') return applyResult(moveNode(d, drag.id, plan.rect, plan.parentId), drag.id)
     const id = crypto.randomUUID()
@@ -126,7 +136,8 @@ export default function CanvasPage() {
     const nodes = docRef.current.nodes
     const moved = movedRoots(next, nodes)[0]
     if (!moved) return
-    const cur = nodes.find((n) => n.id === moved.i)!
+    const cur = nodes.find((n) => n.id === moved.i)
+    if (!cur) return
     const plan = planRoute(nodes, { kind: 'move', id: cur.id }, { x: moved.x, y: moved.y, cols: moved.w, rows: moved.h })
     patch({ check: { id: cur.id, ok: plan?.ok ?? false }, conflicts: plan?.conflicts ?? [] })
   }
@@ -227,6 +238,9 @@ export default function CanvasPage() {
       const el = document.activeElement as HTMLElement | null
       const tag = el?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      // The settings drawer is a form surface: Delete never eats a node while
+      // focus is in it, not even from one of its buttons.
+      if (el?.closest?.('[role="dialog"]')) return
       e.preventDefault()
       removeSelected(selectedId)
     }
@@ -247,7 +261,7 @@ export default function CanvasPage() {
     setPushing(true)
     setPushMsg('Pushing…')
     pushDoc(doc, projectName)
-      .then((r) => setPushMsg(r.ok ? `Pushed ${r.commit!.slice(0, 7)}` : `Push failed: ${r.error}`))
+      .then((r) => setPushMsg(r.ok ? `Pushed ${r.commit.slice(0, 7)}` : `Push failed: ${r.error}`))
       .catch((e) => setPushMsg(`Push failed: ${String(e)}`))
       .finally(() => setPushing(false))
   }

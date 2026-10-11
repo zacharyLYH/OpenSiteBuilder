@@ -5,7 +5,7 @@ import { Card, CardContent } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { ErrorNote } from '../components/Notice'
-import { getState } from '../api'
+import { getState, strField } from '../api'
 import { githubAuthorizeUrl } from '../config'
 import { setProjectSlug } from '../lib/project'
 
@@ -38,10 +38,16 @@ export default function Home() {
     try {
       const { status, body } = await getState(slug)
       if (status !== 200) {
-        setError(body.error || 'state failed')
+        setError(strField(body, 'error') ?? 'state failed')
         return
       }
-      enter(slug, githubAuthorizeUrl(body.client_id, body.state))
+      const clientId = strField(body, 'client_id')
+      const state = strField(body, 'state')
+      if (!clientId || !state) {
+        setError('state failed: malformed response')
+        return
+      }
+      enter(slug, githubAuthorizeUrl(clientId, state))
     } catch (e) {
       setError(String(e))
     } finally {

@@ -1,4 +1,4 @@
-import { publishFiles } from '../api'
+import { publishFiles, strField } from '../api'
 import { generatePage } from './codegen'
 import { validateSite } from '../site/validate'
 import { SITE_SCHEMA_VERSION } from '../site/types'
@@ -6,12 +6,7 @@ import type { CanvasDoc } from './doc'
 import osbTypesSrc from '../osb/types.ts?raw'
 import cnSrc from '../lib/utils.ts?raw'
 
-export interface PushResult {
-  ok: boolean
-  commit?: string
-  url?: string
-  error?: string
-}
+export type PushResult = { ok: true; commit: string; url: string } | { ok: false; error: string }
 
 // Every OSB* component, read as text at build time, so a new node type ships
 // automatically alongside the page that imports it.
@@ -41,9 +36,10 @@ const siteNode = ({ id, type, config }: { id: string; type: string; config: Reco
   config: config ?? {},
 })
 
-export function siteJson(doc: CanvasDoc, slug: string): string {
+/** Canvas doc as a site object (single page v1, children nested). Stringified once by the caller. */
+export function siteObject(doc: CanvasDoc, slug: string): unknown {
   const kidsOf = (id: string) => doc.nodes.filter((k) => k.parentId === id).map(siteNode)
-  return JSON.stringify({
+  return {
     version: SITE_SCHEMA_VERSION,
     site: { name: slug, theme: 'light' },
     pages: [
@@ -59,22 +55,29 @@ export function siteJson(doc: CanvasDoc, slug: string): string {
           }),
       },
     ],
-  })
+  }
+}
+
+export function siteJson(doc: CanvasDoc, slug: string): string {
+  return JSON.stringify(siteObject(doc, slug))
 }
 
 /** Push = generated React + site.json + the OSB runtime through the publish API. */
 export async function pushDoc(doc: CanvasDoc, slug: string): Promise<PushResult> {
-  const site = siteJson(doc, slug)
-  const v = validateSite(JSON.parse(site) as unknown)
+  const obj = siteObject(doc, slug)
+  const v = validateSite(obj)
   if (!v.ok) return { ok: false, error: v.errors.join('; ') }
   const { status, body } = await publishFiles(
     [
       { path: 'src/App.jsx', content: generatePage(doc) },
-      { path: 'site.json', content: site },
+      { path: 'site.json', content: JSON.stringify(obj) },
       ...RUNTIME_FILES,
     ],
     'canvas publish',
   )
-  if (status !== 200) return { ok: false, error: body?.error || `push failed: ${status}` }
-  return { ok: true, commit: body.commit as string, url: body.url as string }
+  if (status !== 200) return { ok: false, error: strField(body, 'error') ?? `push failed: ${status}` }
+  const commit = strField(body, 'commit')
+  const url = strField(body, 'url')
+  if (!commit || !url) return { ok: false, error: 'malformed push response' }
+  return { ok: true, commit, url }
 }
