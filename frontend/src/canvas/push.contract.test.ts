@@ -21,7 +21,7 @@ afterAll(async () => {
 
 const DOC: CanvasDoc = {
   version: 1,
-  nodes: [{ id: 'n1', type: 'card', config: { title: 'Hi' }, x: 0, y: 0, cols: 10, rows: 10 }],
+  nodes: [{ id: 'n1', type: 'card', config: { title: 'Hi' }, parentId: null, x: 0, y: 0, cols: 10, rows: 10 }],
 }
 
 describe('publish path contract (real backend)', () => {

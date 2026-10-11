@@ -8,8 +8,9 @@ import type { CanvasDoc } from './doc'
 const DOC: CanvasDoc = {
   version: 1,
   nodes: [
-    { id: 'h', type: 'hero', config: { title: 'Hi' }, x: 4, y: 0, cols: 16, rows: 6 },
-    { id: 'b', type: 'button', config: { label: 'Go' }, x: 4, y: 7, cols: 4, rows: 1 },
+    { id: 'c', type: 'card', config: {}, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
+    { id: 'b', type: 'button', config: { label: 'Go' }, parentId: 'c', x: 1, y: 1, cols: 4, rows: 1 },
+    { id: 't', type: 'text', config: { text: 'Hi' }, parentId: null, x: 12, y: 0, cols: 8, rows: 2 },
   ],
 }
 
@@ -41,26 +42,24 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
     }
     expect(payload.message).toBe('canvas publish')
     const app = payload.files.find((f) => f.path === 'src/App.jsx')!.content
-    expect(payload.files.map((f) => f.path).sort()).toEqual([
+    // Runtime ships every registered component plus shared sources.
+    const shipped = new Map(payload.files.map((f) => [f.path, f.content]))
+    const expectedPaths = [
       'site.json',
       'src/App.jsx',
       'src/lib/utils.ts',
-      'src/osb/OSBButton.tsx',
-      'src/osb/OSBCard.tsx',
-      'src/osb/OSBFooter.tsx',
-      'src/osb/OSBHero.tsx',
-      'src/osb/OSBNavbar.tsx',
       'src/osb/types.ts',
-    ])
+      ...OSB_NODE_TYPES.map((t) => `src/osb/${tagFor(t)}.tsx`),
+    ].sort()
+    expect(payload.files.map((f) => f.path).sort()).toEqual(expectedPaths)
     // Every registered node type must import a component that actually ships.
-    const shipped = new Map(payload.files.map((f) => [f.path, f.content]))
     for (const type of OSB_NODE_TYPES) {
       const tag = tagFor(type)
       expect(app).toContain(`from './osb/${tag}'`)
       expect(shipped.get(`src/osb/${tag}.tsx`)).toBeTruthy()
     }
-    expect(app).toContain('<OSBHero')
-    expect(app.indexOf('<OSBHero')).toBeLessThan(app.indexOf('<OSBButton'))
+    expect(app).toContain('<OSBCard')
+    expect(app.indexOf('<OSBCard')).toBeLessThan(app.indexOf('<OSBText'))
     const site = payload.files.find((f) => f.path === 'site.json')!.content
     expect(validateSite(JSON.parse(site))).toEqual({ ok: true, errors: [] })
     expect(siteJson(DOC, 'my-shop')).toBe(site)

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import Home from './Home'
-import { getProjectSlug, setProjectSlug, PROJECT_COOKIE } from '../lib/project'
+import { getProjectSlug, PROJECT_COOKIE } from '../lib/project'
 import { mockLocation, installHttp, resetScenario, useIsolatedServers } from '../test-utils'
 
 let closeServers: () => Promise<void>
@@ -66,14 +66,24 @@ describe('Home publish flow originates correct requests', () => {
     expect(getProjectSlug()).toBeNull()
   })
 
-  it('opens the editor without rewriting the project slug', () => {
-    setProjectSlug('my-shop')
+  it('opens the editor with the typed slug so the canvas has a project', () => {
+    const href = mockLocation('http://localhost/')
+    render(<Home />)
+    fireEvent.change(screen.getByLabelText(/site name/i), { target: { value: 'my-shop' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open editor' }))
+
+    // The canvas reads its name from the cookie and has no fallback, so
+    // entering must establish it.
+    expect(getProjectSlug()).toBe('my-shop')
+    expect(href()).toBe('/canvas')
+  })
+
+  it('opens the editor with the default name when the input is empty', () => {
     const href = mockLocation('http://localhost/')
     render(<Home />)
     fireEvent.click(screen.getByRole('button', { name: 'Open editor' }))
 
-    // Single-writer rule: opening never touches storage, only publish does.
-    expect(getProjectSlug()).toBe('my-shop')
+    expect(getProjectSlug()).toBe('my-site')
     expect(href()).toBe('/canvas')
   })
 })

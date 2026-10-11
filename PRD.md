@@ -490,6 +490,21 @@ This separation allows the editor to remain generic while individual components 
 
 Patterns should be compositions of ordinary editable components wherever practical, not opaque special-case widgets.
 
+### Modern and motion components
+
+Modern, visually rich components are first-class citizens alongside the basics. They reuse the same two nesting models — no new engine concepts:
+
+- Marquee (infinite scrolling text/logo strip). Leaf: items are plain strings edited as a repeatable collection in the inspector, not canvas children.
+- Accordion. Fixed slots: list of header/body items, edited in the inspector.
+- Tabs. Fixed slots: one panel per tab, where each panel is a free-form container.
+- Carousel / testimonial slider. Fixed slots: ordered slide list, where each slide is a free-form container.
+- Modal / popover trigger. Leaf plus a link target; dialog content is a free-form container edited in place.
+- Announcement bar. Leaf with text and link fields.
+- Animated counter / stat. Leaf with numeric fields.
+- Before/after image slider. Leaf with two asset references.
+
+Rule of thumb: if children need spatial arrangement, the component is (or contains) a free-form container governed by the allowed-child rules in §10.5. If children are uniform repeated data (marquee items, accordion rows, dropdown options), they are inspector-edited collections, never canvas nodes.
+
 ## 6.3 Property inspector
 
 The inspector is context-sensitive.
@@ -918,6 +933,9 @@ Examples:
 - Stack accepts supported child elements.
 - List accepts List items.
 - Button accepts only the content structures it explicitly supports.
+- Tabs accept tab panels; each panel is a free-form container for layout/content children.
+- Carousel accepts slides; each slide is a free-form container.
+- Marquee, accordion, dropdown, and other collection-backed components do not take canvas children — their items are inspector-edited data (§6.2).
 
 Root-level insertion rules are distinct from rules for nested children.
 

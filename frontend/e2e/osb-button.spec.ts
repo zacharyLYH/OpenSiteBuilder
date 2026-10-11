@@ -7,22 +7,20 @@ interface Case {
   nodes: SiteNode[]
 }
 
-// Every edge case, encoded here — one screenshot per case.
+// Every edge case, encoded here — one screenshot per case. The button fills
+// its grid box (box is the component); size only changes the font scale.
 const CASES: Case[] = [
   { name: 'primary', nodes: [{ id: 'a', type: 'button', config: { label: 'Primary' } }] },
   { name: 'secondary', nodes: [{ id: 'a', type: 'button', config: { label: 'Secondary', variant: 'secondary' } }] },
   { name: 'outline', nodes: [{ id: 'a', type: 'button', config: { label: 'Outline', variant: 'outline' } }] },
   { name: 'sm', nodes: [{ id: 'a', type: 'button', config: { label: 'Small', size: 'sm' } }] },
   { name: 'sm-secondary', nodes: [{ id: 'a', type: 'button', config: { label: 'Small', size: 'sm', variant: 'secondary' } }] },
-  { name: 'disabled', nodes: [{ id: 'a', type: 'button', config: { label: 'Disabled', disabled: true } }] },
-  { name: 'full-width', nodes: [{ id: 'a', type: 'button', config: { label: 'Full width', fullWidth: true } }] },
   { name: 'center', nodes: [{ id: 'a', type: 'button', config: { label: 'Centered', align: 'center' } }] },
   { name: 'long-wrap', nodes: [{ id: 'a', type: 'button', config: { label: LONG_TEXT } }] },
   { name: 'empty-fallback', nodes: [{ id: 'a', type: 'button', config: { label: '' } }] },
   { name: 'dark-primary', nodes: [{ id: 'a', type: 'button', config: { label: 'Primary', theme: 'dark' } }] },
   { name: 'dark-secondary', nodes: [{ id: 'a', type: 'button', config: { label: 'Secondary', variant: 'secondary', theme: 'dark' } }] },
   { name: 'dark-outline', nodes: [{ id: 'a', type: 'button', config: { label: 'Outline', variant: 'outline', theme: 'dark' } }] },
-  { name: 'dark-disabled', nodes: [{ id: 'a', type: 'button', config: { label: 'Disabled', disabled: true, theme: 'dark' } }] },
 ]
 
 for (const c of CASES) {
@@ -34,12 +32,9 @@ for (const c of CASES) {
   })
 }
 
-test('button edge cases: disabled blocks, no overflow at 360px', async ({ page }) => {
-  await mountNodes(page, [
-    { id: 'a', type: 'button', config: { label: 'Disabled', disabled: true } },
-    { id: 'b', type: 'button', config: { label: LONG_TEXT } },
-  ])
-  await expect(page.getByRole('button', { name: 'Disabled' })).toBeDisabled()
+test('button edge cases: long label wraps, no overflow at 360px', async ({ page }) => {
+  await mountNodes(page, [{ id: 'b', type: 'button', config: { label: LONG_TEXT } }])
+  await expect(page.getByRole('button').first()).toBeVisible()
   await page.setViewportSize({ width: 360, height: 800 })
   await noHorizontalOverflow(page)
 })

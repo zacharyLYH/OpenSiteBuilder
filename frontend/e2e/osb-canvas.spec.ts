@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test'
 import { dropToCell } from './helpers'
+import { validateDoc, type CanvasDoc } from '../src/canvas/doc'
 
-// Gate: a left-aligned landing column (hero, card, CTA button), a drag
+// Gate: a pattern drop (card + 3 atoms), a touching text neighbor, an RGL
 // reposition, persistence in localStorage, and one canvas screenshot.
-// All placement goes through real drags + the canPlace gate — exactly the
-// user path — so the shot always shows a sensible, overlap-free page.
+// All placement goes through real drags + the doc gate — exactly the user
+// path — so the shot always shows a sensible, connected page.
 // Cursor math lives in dropToCell; this file only declares cells.
-test('canvas: compose hero+card+button, reposition button, persist, screenshot', async ({
+test('canvas: compose pattern+text, reposition text, persist, screenshot', async ({
   page,
 }) => {
   await page.context().addCookies([
@@ -20,29 +21,46 @@ test('canvas: compose hero+card+button, reposition button, persist, screenshot',
   expect(Math.abs(dot!.width - dot!.height)).toBeLessThan(1)
 
   const grid = page.getByTestId('canvas')
-  await dropToCell(page, page.getByTestId('palette-hero'), grid, { x: 6, y: 0 }, { cols: 20, rows: 8 })
-  await dropToCell(page, page.getByTestId('palette-card'), grid, { x: 6, y: 8 }, { cols: 10, rows: 10 })
-  await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 18, y: 8 }, { cols: 6, rows: 2 })
-  await expect(page.getByTestId('canvas-node')).toHaveCount(3)
+  await dropToCell(page, page.getByTestId('palette-pattern-card-content'), grid, { x: 0, y: 0 }, { cols: 12, rows: 10 })
+  // Pattern lands 4 nodes: 1 shell + 3 connected atoms.
+  await expect(page.getByTestId('canvas-node')).toHaveCount(4)
+  if ((await page.getByTestId('config-drawer').count()) > 0) {
+    await page.getByRole('button', { name: 'Close settings' }).click()
+  }
 
-  // Reposition: slide the button down under the card, still left-aligned.
-  await dropToCell(page, page.getByTestId('canvas-node').last(), grid, { x: 6, y: 18 }, { cols: 6, rows: 2 })
+  // Text touches the shell at x=12.
+  await dropToCell(page, page.getByTestId('palette-text'), grid, { x: 12, y: 0 }, { cols: 8, rows: 2 })
+  await expect(page.getByTestId('canvas-node')).toHaveCount(5)
+  if ((await page.getByTestId('config-drawer').count()) > 0) {
+    await page.getByRole('button', { name: 'Close settings' }).click()
+  }
+
+  // Reposition: slide the text down two rows via RGL; it still touches.
+  const pitch = dot!.width + 8
+  const textNode = page.getByTestId('canvas-node').filter({ hasText: 'Text' }).last()
+  const box = (await textNode.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 2 * pitch, { steps: 10 })
+  await page.mouse.up()
 
   // Persist debounce is 500ms.
   await page.waitForTimeout(900)
   const doc = await page.evaluate(
-    () => JSON.parse(localStorage.getItem('osb.project.e2e-canvas')!) as {
-      nodes: { type: string; x: number; y: number; cols: number; rows: number }[]
-    },
+    () => JSON.parse(localStorage.getItem('osb.project.e2e-canvas')!) as CanvasDoc,
   )
-  expect(doc.nodes.map((n) => n.type).sort()).toEqual(['button', 'card', 'hero'])
-  const at = (t: string) => doc.nodes.find((n) => n.type === t)!
-  expect(at('hero')).toMatchObject({ x: 6, y: 0, cols: 20, rows: 8 })
-  expect(at('card')).toMatchObject({ x: 6, y: 8, cols: 10, rows: 10 })
-  expect(at('button')).toMatchObject({ x: 6, y: 18, cols: 6, rows: 2 })
+  expect(doc.nodes.map((n) => n.type).sort()).toEqual(['button', 'card', 'text', 'text', 'text'])
+  const at = (t: string) => doc.nodes.filter((n) => n.type === t && n.parentId === null)
+  expect(at('card')).toHaveLength(1)
+  expect(at('card')[0]).toMatchObject({ x: 0, y: 0, cols: 12, rows: 10 })
+  expect(at('text')).toHaveLength(1)
+  expect(at('text')[0]).toMatchObject({ x: 12, y: 2, cols: 8, rows: 2 })
+  expect(validateDoc(doc)).toEqual({ ok: true, errors: [] })
 
-  // The drag selected the button and opened its drawer; close it for a clean shot.
-  await page.getByRole('button', { name: 'Close settings' }).click()
+  // The drag selected the text and opened its drawer; close it for a clean shot.
+  if ((await page.getByTestId('config-drawer').count()) > 0) {
+    await page.getByRole('button', { name: 'Close settings' }).click()
+  }
   await expect(page.getByTestId('config-drawer')).toHaveCount(0)
 
   await expect(grid).toHaveScreenshot('osb-canvas.png')

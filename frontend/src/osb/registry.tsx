@@ -1,19 +1,22 @@
 import type { ComponentType, ReactNode } from 'react'
 import OSBButton, { OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS, type OSBButtonConfig } from './OSBButton'
 import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, type OSBCardConfig } from './OSBCard'
-import OSBFooter, { OSB_FOOTER_DEFAULTS, OSB_FOOTER_FIELDS, type OSBFooterConfig } from './OSBFooter'
-import OSBHero, { OSB_HERO_DEFAULTS, OSB_HERO_FIELDS, type OSBHeroConfig } from './OSBHero'
-import OSBNavbar, { OSB_NAVBAR_DEFAULTS, OSB_NAVBAR_FIELDS, type OSBNavbarConfig } from './OSBNavbar'
-import type { OSBField, OSBGridSize } from './types'
+import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } from './OSBImage'
+import OSBText, { OSB_TEXT_DEFAULTS, OSB_TEXT_FIELDS, type OSBTextConfig } from './OSBText'
+import type { OSBField, OSBGridSize, OSBKind } from './types'
 
 export interface OSBEntry {
   /** Human-readable name shown in the palette. */
   name: string
+  /** Atom = visible leaf, container = empty chrome + atom children. */
+  kind: OSBKind
+  /** Dashed empty-state hint shown on the canvas for empty containers. */
+  emptyHint?: string
   defaults: Record<string, unknown>
   fields: OSBField[]
-  /** Footprint in checkerboard cells. w/h = drop size. */
+  /** Footprint in cells. cols/rows = drop size = rendered size. */
   grid: OSBGridSize
-  render: (config: unknown) => ReactNode
+  render: (config: unknown, children?: ReactNode) => ReactNode
 }
 
 function defineEntry<C extends Record<string, unknown>>(
@@ -21,58 +24,59 @@ function defineEntry<C extends Record<string, unknown>>(
   defaults: C,
   fields: OSBField[],
   grid: OSBGridSize,
-  Component: ComponentType<{ config?: Partial<C> }>,
+  Component: ComponentType<{ config?: Partial<C>; children?: ReactNode }>,
+  opts?: { kind?: OSBKind; emptyHint?: string },
 ): OSBEntry {
   return {
     name,
+    kind: opts?.kind ?? 'atom',
+    emptyHint: opts?.emptyHint,
     defaults,
     fields,
     grid,
-    render: (config) => <Component config={config as Partial<C>} />,
+    render: (config, children) => <Component config={config as Partial<C>} children={children} />,
   }
 }
 
 /**
  * THE single record of node types. Each type name ('card', …) is written
  * exactly once, as a key here. OSBNodeType, OSB_NODE_TYPES, defaults, fields,
- * grid sizes, and rendering are all derived below — never re-declared.
- * Key order is the palette order, so it reads like a page: top chrome first.
+ * grid sizes, kinds, and rendering are all derived below — never re-declared.
+ * Key order is the palette order.
+ *
+ * Atoms (text, button, image) are the only visible leaves. Card is the only
+ * container: chrome with no intrinsic content. Named compositions (card with
+ * content, …) are patterns in ./patterns, not types here.
  */
 export const OSB_REGISTRY = {
-  navbar: defineEntry(
-    'Navbar',
-    OSB_NAVBAR_DEFAULTS,
-    OSB_NAVBAR_FIELDS,
-    { minCols: 8, minRows: 2, maxCols: 32, maxRows: 4, cols: 32, rows: 2 },
-    OSBNavbar,
-  ),
-  hero: defineEntry(
-    'Hero',
-    OSB_HERO_DEFAULTS,
-    OSB_HERO_FIELDS,
-    { minCols: 10, minRows: 8, maxCols: 32, maxRows: 24, cols: 20, rows: 8 },
-    OSBHero,
-  ),
   card: defineEntry(
     'Card',
     OSB_CARD_DEFAULTS,
     OSB_CARD_FIELDS,
-    { minCols: 6, minRows: 8, maxCols: 32, maxRows: 24, cols: 10, rows: 10 },
+    { minCols: 6, minRows: 4, maxCols: 32, maxRows: 32, cols: 12, rows: 10 },
     OSBCard,
+    { kind: 'container', emptyHint: 'Drag text, buttons or images here' },
+  ),
+  text: defineEntry(
+    'Text',
+    OSB_TEXT_DEFAULTS,
+    OSB_TEXT_FIELDS,
+    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 12, cols: 8, rows: 2 },
+    OSBText,
   ),
   button: defineEntry(
     'Button',
     OSB_BUTTON_DEFAULTS,
     OSB_BUTTON_FIELDS,
-    { minCols: 4, minRows: 2, maxCols: 32, maxRows: 4, cols: 6, rows: 2 },
+    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 4, cols: 4, rows: 1 },
     OSBButton,
   ),
-  footer: defineEntry(
-    'Footer',
-    OSB_FOOTER_DEFAULTS,
-    OSB_FOOTER_FIELDS,
-    { minCols: 8, minRows: 4, maxCols: 32, maxRows: 12, cols: 32, rows: 6 },
-    OSBFooter,
+  image: defineEntry(
+    'Image',
+    OSB_IMAGE_DEFAULTS,
+    OSB_IMAGE_FIELDS,
+    { minCols: 2, minRows: 2, maxCols: 32, maxRows: 24, cols: 8, rows: 6 },
+    OSBImage,
   ),
 }
 
@@ -80,5 +84,26 @@ export type OSBNodeType = keyof typeof OSB_REGISTRY
 
 export const OSB_NODE_TYPES: OSBNodeType[] = Object.keys(OSB_REGISTRY) as OSBNodeType[]
 
-export type { OSBButtonConfig, OSBCardConfig, OSBFooterConfig, OSBHeroConfig, OSBNavbarConfig }
-export { OSBButton, OSBCard, OSBFooter, OSBHero, OSBNavbar }
+// Palette order: plain atoms only. Cards always enter via the Card pattern
+// (a shell pre-filled with connected atoms); an empty shell is what remains
+// after its children are deleted, never a starting point.
+export const OSB_PALETTE_TYPES: OSBNodeType[] = ['text', 'button', 'image']
+
+export function isAtomType(t: string): boolean {
+  return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'atom'
+}
+
+export function isContainerType(t: string): boolean {
+  return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'container'
+}
+
+/**
+ * The one structural membership rule. A container holds any atom; nothing
+ * else nests anywhere. Default deny: unknown types reject.
+ */
+export function canContain(parentType: string, childType: string): boolean {
+  return isContainerType(parentType) && isAtomType(childType)
+}
+
+export type { OSBButtonConfig, OSBCardConfig, OSBImageConfig, OSBTextConfig }
+export { OSBButton, OSBCard, OSBImage, OSBText }

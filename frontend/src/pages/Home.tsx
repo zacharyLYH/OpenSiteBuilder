@@ -21,6 +21,11 @@ export default function Home() {
   const [busy, setBusy] = React.useState(false)
 
   function openEditor() {
+    // Entering the canvas requires a project cookie (the canvas has no
+    // fallback name). The typed name wins; empty input starts 'my-site',
+    // the same default the input placeholder advertises.
+    const name = slug.trim() === '' ? 'my-site' : slug
+    setProjectSlug(name)
     window.location.href = '/canvas'
   }
 

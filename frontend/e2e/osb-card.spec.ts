@@ -7,23 +7,55 @@ interface Case {
   nodes: SiteNode[]
 }
 
-const IMG = { imageSrc: TEST_IMAGE, imageAlt: 'Test image' }
-
-// Every edge case, encoded here — one screenshot per case.
+// A card is chrome only: variant + theme. All content is real child nodes.
 const CASES: Case[] = [
-  { name: 'full', nodes: [{ id: 'a', type: 'card', config: { ...IMG, title: 'Card title', body: 'Card body copy.', actionLabel: 'Learn more' } }] },
-  { name: 'side-image', nodes: [{ id: 'a', type: 'card', config: { ...IMG, imagePosition: 'side', title: 'Side image', body: 'Image sits beside the copy on wide screens.' } }] },
-  { name: 'no-image', nodes: [{ id: 'a', type: 'card', config: { title: 'No image', body: 'Placeholder block holds the layout.' } }] },
-  { name: 'outlined', nodes: [{ id: 'a', type: 'card', config: { ...IMG, variant: 'outlined', title: 'Outlined' } }] },
-  { name: 'plain', nodes: [{ id: 'a', type: 'card', config: { ...IMG, variant: 'plain', title: 'Plain' } }] },
-  { name: 'center', nodes: [{ id: 'a', type: 'card', config: { ...IMG, align: 'center', title: 'Centered' } }] },
-  { name: 'no-action', nodes: [{ id: 'a', type: 'card', config: { ...IMG, actionLabel: '' } }] },
-  { name: 'title-only', nodes: [{ id: 'a', type: 'card', config: { title: 'Title only', body: '', actionLabel: '' } }] },
-  { name: 'body-only', nodes: [{ id: 'a', type: 'card', config: { title: '', body: 'Body without a title.', actionLabel: '' } }] },
-  { name: 'empty-all', nodes: [{ id: 'a', type: 'card', config: { title: '', body: '', actionLabel: '' } }] },
-  { name: 'long-body', nodes: [{ id: 'a', type: 'card', config: { ...IMG, title: 'Long body', body: LONG_TEXT } }] },
-  { name: 'dark-full', nodes: [{ id: 'a', type: 'card', config: { ...IMG, title: 'Dark card', body: 'Dark body copy.', theme: 'dark' } }] },
-  { name: 'dark-minimal', nodes: [{ id: 'a', type: 'card', config: { title: 'Dark minimal', body: '', actionLabel: '', theme: 'dark' } }] },
+  { name: 'empty', nodes: [{ id: 'a', type: 'card', config: {} }] },
+  { name: 'outlined', nodes: [{ id: 'a', type: 'card', config: { variant: 'outlined' } }] },
+  { name: 'plain', nodes: [{ id: 'a', type: 'card', config: { variant: 'plain' } }] },
+  { name: 'dark', nodes: [{ id: 'a', type: 'card', config: { theme: 'dark' } }] },
+  {
+    name: 'content',
+    nodes: [
+      {
+        id: 'a',
+        type: 'card',
+        config: {},
+        children: [
+          { id: 't1', type: 'text', config: { text: 'Card title' } },
+          { id: 't2', type: 'text', config: { text: 'Card body copy.' } },
+          { id: 'b1', type: 'button', config: { label: 'Learn more' } },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'dark-content',
+    nodes: [
+      {
+        id: 'a',
+        type: 'card',
+        config: { variant: 'outlined', theme: 'dark' },
+        children: [
+          { id: 't1', type: 'text', config: { text: 'Dark card', theme: 'dark' } },
+          { id: 'b1', type: 'button', config: { label: 'Go', theme: 'dark' } },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'with-image',
+    nodes: [
+      {
+        id: 'a',
+        type: 'card',
+        config: {},
+        children: [
+          { id: 'i1', type: 'image', config: { imageSrc: TEST_IMAGE, imageAlt: 'Test image' } },
+          { id: 't1', type: 'text', config: { text: 'Caption' } },
+        ],
+      },
+    ],
+  },
 ]
 
 for (const c of CASES) {
@@ -35,14 +67,23 @@ for (const c of CASES) {
   })
 }
 
-test('card edge cases: action navigates nothing broken, no overflow at 360px', async ({
+test('card edge cases: every visible thing is a real node, no overflow at 360px', async ({
   page,
 }) => {
   await mountNodes(page, [
-    { id: 'a', type: 'card', config: { ...IMG, title: 'T', body: LONG_TEXT, actionLabel: 'Go' } },
-    { id: 'b', type: 'card', config: { imagePosition: 'side', title: 'Side', body: LONG_TEXT } },
+    {
+      id: 'a',
+      type: 'card',
+      config: {},
+      children: [
+        { id: 't', type: 'text', config: { text: LONG_TEXT } },
+        { id: 'b', type: 'button', config: { label: 'Go' } },
+      ],
+    },
   ])
+  // No ghost internals: the only button is the real child node.
   await expect(page.getByRole('button', { name: 'Go' })).toBeVisible()
+  await expect(page.getByTestId('osb-card-children')).toHaveCount(1)
   await page.setViewportSize({ width: 360, height: 800 })
   await noHorizontalOverflow(page)
 })

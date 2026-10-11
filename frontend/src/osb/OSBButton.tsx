@@ -1,5 +1,5 @@
 import { cn } from '../lib/utils'
-import { OSB_ALIGN_CLASSES, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
+import { resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
 
 export type OSBButtonConfig = {
   label: string
@@ -7,8 +7,6 @@ export type OSBButtonConfig = {
   size: 'sm' | 'md'
   align: OSBAlign
   theme: OSBTheme
-  disabled: boolean
-  fullWidth: boolean
 }
 
 export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
@@ -17,8 +15,6 @@ export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
   size: 'md',
   align: 'left',
   theme: 'light',
-  disabled: false,
-  fullWidth: false,
 }
 
 export const OSB_BUTTON_FIELDS: OSBField[] = [
@@ -70,30 +66,35 @@ const VARIANT_CLASSES: Record<OSBButtonConfig['variant'], Record<OSBTheme, strin
   },
 }
 
+// Font scale only: the button fills its grid box (box is the component),
+// so height comes from the footprint, never from a fixed px class.
 const SIZE_CLASSES: Record<OSBButtonConfig['size'], string> = {
-  sm: 'h-8 px-3 text-xs',
-  md: 'h-10 px-5 text-sm',
+  sm: 'px-3 text-xs',
+  md: 'px-5 text-sm',
+}
+
+const ALIGN_JUSTIFY: Record<OSBAlign, string> = {
+  left: 'justify-start',
+  center: 'justify-center',
 }
 
 export interface OSBButtonProps {
   config?: Partial<OSBButtonConfig>
   onClick?: () => void
+  children?: React.ReactNode
 }
 
 export default function OSBButton({ config, onClick }: OSBButtonProps) {
   const c = resolveConfig(OSB_BUTTON_DEFAULTS, config)
   return (
-    <div className={cn('h-full w-full', OSB_ALIGN_CLASSES[c.align])}>
+    <div className={cn('flex h-full w-full', ALIGN_JUSTIFY[c.align])}>
       <button
         type="button"
-        disabled={c.disabled}
         onClick={onClick}
         className={cn(
-          'inline-flex max-w-full items-center justify-center whitespace-normal break-words rounded-md font-medium transition-colors',
-          'disabled:pointer-events-none disabled:opacity-50',
+          'inline-flex h-full w-full max-w-full items-center justify-center whitespace-normal break-words rounded-md font-medium transition-colors',
           VARIANT_CLASSES[c.variant][c.theme],
           SIZE_CLASSES[c.size],
-          c.fullWidth && 'w-full',
         )}
       >
         {c.label.length === 0 ? 'Button' : c.label}

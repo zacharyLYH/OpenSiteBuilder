@@ -15,6 +15,8 @@ export interface SiteNode {
   type: OSBNodeType
   /** Partial per-component config; missing keys fall back to component defaults. */
   config?: Record<string, unknown>
+  /** Nested children (containers only, max depth 1). */
+  children?: SiteNode[]
 }
 
 export interface SitePage {

@@ -1,14 +1,14 @@
 # OSB user components
 
 Components end users put on their sites. All prefixed `OSB` to separate them
-from the builder's own UI (`src/components/`). Higher-order primitives are the
-unit users touch: `OSBNavbar` and `OSBFooter` for page chrome, `OSBHero` and
-`OSBCard` for content blocks, plus `OSBButton` for standalone actions.
-Each component owns its text rendering directly — there are no shared leaf
-primitives and no per-component unit tests; screenshots are the contract.
-Light + dark are the only themes — every config has a `theme` key, rendered
-via explicit class maps (no ambient `.dark` ancestor, no interpolated class
-strings per PRD §6.6).
+from the builder's own UI (`src/components/`). Two kinds only: atoms
+(`OSBText`, `OSBButton`, `OSBImage` — the visible leaves) and one container
+(`OSBCard` — empty chrome with no intrinsic content). Named compositions
+(card with content, …) are patterns in `patterns.ts`: factories that insert
+ordinary nodes, not new types. There are no ghost internals — if the user can
+see it, it is a node. Light + dark are the only themes — every config has a
+`theme` key, rendered via explicit class maps (no ambient `.dark` ancestor,
+no interpolated class strings per PRD §6.6).
 
 ## Config rule
 
@@ -18,10 +18,16 @@ default. To add a knob: interface + defaults + render. Nothing else.
 
 ## Registry
 
-`registry.ts` (`OSB_REGISTRY`) is the single record of node types: each type
+`registry.tsx` (`OSB_REGISTRY`) is the single record of node types: each type
 name is written once as a key. `OSBNodeType`, `OSB_NODE_TYPES`, defaults, and
 rendering all derive from it — nothing is re-declared elsewhere.
 Insert menu / editor / publisher all read it — no per-component branches.
+
+## Sizing rule
+
+The grid box is the component: every atom fills its footprint, so the
+bounding box never disagrees with the render. Footprints are whole cells
+(see `specs/nesting-rules.md`).
 
 ## Screenshots
 

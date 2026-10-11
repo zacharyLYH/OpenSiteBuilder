@@ -1,7 +1,9 @@
 /**
- * Project slug storage. Exactly one writer (Home publish, where the user
- * gives the name) and one clearer (canvas Exit project). Everything else
- * only reads.
+ * Project slug storage. Writers: Home publish (where the user gives the
+ * name) and Home "Open editor" (typed name, or the advertised default when
+ * the input is empty — the canvas itself has no fallback and redirects
+ * home without this cookie). One clearer (canvas Exit project). Everything
+ * else only reads.
  *
  * Cookie-backed (FE-only): survives refresh + tab close until explicitly
  * cleared, and travels automatically on every same-origin navigation.
@@ -45,7 +47,10 @@ function writeCookie(name: string, value: string, maxAge: number): void {
 
 export function getProjectSlug(): string | null {
   try {
-    return readCookie(PROJECT_COOKIE)
+    const v = readCookie(PROJECT_COOKIE)
+    // No fallback: empty/missing cookie means "no project", never a fake name.
+    if (!v || v.trim() === '') return null
+    return v
   } catch {
     return null
   }

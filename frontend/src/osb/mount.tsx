@@ -18,6 +18,16 @@ function isDark(n: SiteNode): boolean {
   return (n.config as { theme?: unknown } | undefined)?.theme === 'dark'
 }
 
+function renderSiteNode(n: SiteNode): React.ReactNode {
+  const kids = Array.isArray(n.children)
+    ? n.children.filter((k) => k && typeof k.type === 'string' && k.type in OSB_REGISTRY)
+    : []
+  return OSB_REGISTRY[n.type].render(
+    n.config,
+    kids.length > 0 ? kids.map((k) => <div key={k.id}>{renderSiteNode(k)}</div>) : undefined,
+  )
+}
+
 /**
  * Generic screenshot mount. Knows NOTHING per-component: it renders whatever
  * node list the spec passes in `#nodes=<json>` through the registry.
@@ -36,7 +46,7 @@ export default function OsbMount() {
           key={typeof n.id === 'string' ? n.id : i}
           className={isDark(n) ? 'bg-slate-950 p-4' : 'bg-white p-4'}
         >
-          {OSB_REGISTRY[n.type].render(n.config)}
+          {renderSiteNode(n)}
         </div>
       ))}
     </div>

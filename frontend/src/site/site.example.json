@@ -9,13 +9,17 @@
       "nodes": [
         {
           "id": "n1",
-          "type": "hero",
-          "config": { "eyebrow": "New", "title": "Welcome to my site", "primaryLabel": "Get started" }
+          "type": "text",
+          "config": { "text": "Welcome to my site" }
         },
         {
           "id": "n2",
           "type": "card",
-          "config": { "title": "Hello", "body": "This card uses all defaults except its title." }
+          "config": {},
+          "children": [
+            { "id": "n2a", "type": "text", "config": { "text": "Hello" } },
+            { "id": "n2b", "type": "button", "config": { "label": "Get started" } }
+          ]
         },
         { "id": "n3", "type": "button", "config": { "label": "Get started" } }
       ]

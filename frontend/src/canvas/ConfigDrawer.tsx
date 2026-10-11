@@ -69,6 +69,9 @@ function FieldControl({
   return <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
 }
 
+// Style-only inspector: text content and chrome (variant, theme, alignment).
+// Structure (add / move / resize / delete) lives on the canvas alone — this
+// drawer never creates, moves, resizes, or deletes nodes.
 export default function ConfigDrawer({
   node,
   side,

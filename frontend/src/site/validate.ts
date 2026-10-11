@@ -1,5 +1,5 @@
-import { OSB_NODE_TYPES } from '../osb/registry'
-import { SITE_SCHEMA_VERSION, type SiteDocument } from './types'
+import { OSB_NODE_TYPES, canContain } from '../osb/registry'
+import { SITE_SCHEMA_VERSION, type SiteDocument, type SiteNode } from './types'
 
 export interface SiteValidation {
   ok: boolean
@@ -62,13 +62,17 @@ export function validateSite(doc: unknown): SiteValidation {
         continue
       }
       for (const [j, n] of (page['nodes'] as unknown[]).entries()) {
+        validateNode(n, `pages[${i}].nodes[${j}]`, null)
+      }
+
+      function validateNode(n: unknown, path: string, parentType: string | null): void {
         if (typeof n !== 'object' || n === null) {
-          errors.push(`pages[${i}].nodes[${j}] must be an object`)
-          continue
+          errors.push(`${path} must be an object`)
+          return
         }
-        const node = n as Record<string, unknown>
+        const node = n as Record<string, unknown> & { children?: unknown }
         if (typeof node['id'] !== 'string' || node['id'].length === 0) {
-          errors.push(`pages[${i}].nodes[${j}].id must be a non-empty string`)
+          errors.push(`${path}.id must be a non-empty string`)
         } else if (nodeIds.has(node['id'])) {
           errors.push(`duplicate node id ${JSON.stringify(node['id'])}`)
         } else {
@@ -79,11 +83,32 @@ export function validateSite(doc: unknown): SiteValidation {
           !(OSB_NODE_TYPES as readonly string[]).includes(node['type'])
         ) {
           errors.push(
-            `pages[${i}].nodes[${j}].type must be one of ${OSB_NODE_TYPES.join(', ')}`,
+            `${path}.type must be one of ${OSB_NODE_TYPES.join(', ')}`,
           )
+          return
         }
         if (node['config'] !== undefined && (typeof node['config'] !== 'object' || node['config'] === null)) {
-          errors.push(`pages[${i}].nodes[${j}].config must be an object when present`)
+          errors.push(`${path}.config must be an object when present`)
+        }
+        const kids = (node as { children?: SiteNode[] }).children
+        if (kids !== undefined) {
+          if (!Array.isArray(kids)) {
+            errors.push(`${path}.children must be an array when present`)
+            return
+          }
+          if (parentType !== null) {
+            errors.push(`${path} nests too deep (max depth 1)`)
+            return
+          }
+          for (const [k, c] of kids.entries()) {
+            const ct = (c as { type?: unknown })?.type
+            if (typeof ct === 'string' && !canContain(node['type'] as string, ct)) {
+              errors.push(`${path}.children[${k}] type ${JSON.stringify(ct)} is not an atom in a container`)
+            }
+            validateNode(c, `${path}.children[${k}]`, node['type'] as string)
+          }
+        } else if (parentType !== null && !canContain(parentType, node['type'] as string)) {
+          errors.push(`${path} type ${JSON.stringify(node['type'])} is not an atom in a container`)
         }
       }
     }

@@ -22,8 +22,16 @@ export function resolveConfig<T extends object>(
   return out
 }
 
+/** Nesting kind. Engine vocabulary: atom = visible leaf with no children,
+ * container = empty chrome + free-form atom children, collection =
+ * inspector-edited data with no canvas children. */
+export type OSBKind = 'atom' | 'container' | 'collection'
+
 /** Shared text alignment knob. */
 export type OSBAlign = 'left' | 'center'
+
+/** Padding (dot squares) kept around children inside a container. */
+export const CONTAINER_PAD = 1
 
 /** Grid footprint in dot squares. cols/rows = drop size. */
 export type OSBGridSize = {

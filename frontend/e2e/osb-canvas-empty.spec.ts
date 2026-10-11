@@ -37,7 +37,7 @@ test('canvas dragging: ghost preview follows the card mid-drag, then it lands', 
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/canvas')
 
-  const palette = page.getByTestId('palette-card')
+  const palette = page.getByTestId('palette-text')
   const grid = page.getByTestId('canvas')
   const from = (await palette.boundingBox())!
   const gridBox = (await grid.boundingBox())!

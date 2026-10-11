@@ -42,6 +42,14 @@
   border-radius: 12px;
 }
 
+/* Bounds on demand: atoms with transparent fills (text) are invisible
+   otherwise. Shown for every child while its container is selected or
+   a drag hovers it. */
+.show-child-bounds > [data-testid='canvas-node'] {
+  outline: 1px dashed rgba(100, 116, 139, 0.6);
+  outline-offset: -1px;
+}
+
 /* Resize polish: glowing borders + bolded resize edge. */
 .react-grid-item.resizing {
   z-index: 20;

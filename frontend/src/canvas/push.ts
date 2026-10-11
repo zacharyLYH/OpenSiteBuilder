@@ -35,8 +35,9 @@ const RUNTIME_FILES = [
   { path: 'src/lib/utils.ts', content: cnSrc },
 ]
 
-/** Canvas doc as a valid site.json (single page v1). */
+/** Canvas doc as a valid site.json (single page v1, children nested). */
 export function siteJson(doc: CanvasDoc, slug: string): string {
+  const roots = doc.nodes.filter((n) => n.parentId === null)
   return JSON.stringify({
     version: SITE_SCHEMA_VERSION,
     site: { name: slug, theme: 'light' },
@@ -45,7 +46,18 @@ export function siteJson(doc: CanvasDoc, slug: string): string {
         id: 'home',
         path: '/',
         title: 'Home',
-        nodes: doc.nodes.map((n) => ({ id: n.id, type: n.type, config: n.config ?? {} })),
+        nodes: roots.map((n) => ({
+          id: n.id,
+          type: n.type,
+          config: n.config ?? {},
+          ...(doc.nodes.some((k) => k.parentId === n.id)
+            ? {
+                children: doc.nodes
+                  .filter((k) => k.parentId === n.id)
+                  .map((k) => ({ id: k.id, type: k.type, config: k.config ?? {} })),
+              }
+            : {}),
+        })),
       },
     ],
   })
