@@ -6,7 +6,7 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { Textarea } from '../components/ui/textarea'
-import type { OSBField } from '../osb/types'
+import { isFieldVisible, type OSBField } from '../osb/types'
 import type { PlacedNode } from './doc'
 
 /** The one control per field kind — the field itself carries its options. */
@@ -92,6 +92,13 @@ export default function ConfigDrawer({
   // Selecting a node never rewrites its stored config — only a real edit does.
   const edit = (key: string, value: string | boolean) => {
     const next = { ...draft, [key]: value }
+    // A field that just hid (e.g. the link was cleared) must not keep a
+    // stale value behind: hidden booleans fall back to their defaults.
+    for (const f of entry.fields) {
+      if (f.visibleWhen && f.kind === 'boolean' && !isFieldVisible(f, next)) {
+        next[f.key] = entry.defaults[f.key]
+      }
+    }
     setDraft(next)
     onApply(node.id, next)
   }
@@ -124,9 +131,16 @@ export default function ConfigDrawer({
         <div className="pointer-events-none overflow-hidden rounded-md border border-slate-200">
           {entry.render(draft)}
         </div>
-        {entry.fields.map((f) => (
+        {entry.fields.filter((f) => isFieldVisible(f, draft)).map((f) => (
           <div key={f.key} className="flex flex-col gap-1">
-            <Label htmlFor={`osb-field-${f.key}`}>{f.label}</Label>
+            <Label htmlFor={`osb-field-${f.key}`}>
+              {f.label}
+              {f.required && (
+                <span aria-hidden="true" className="ml-0.5 text-red-600">
+                  *
+                </span>
+              )}
+            </Label>
             <FieldControl field={f} value={draft[f.key]} onChange={(v) => edit(f.key, v)} />
             {f.hint && <p className="text-xs text-slate-500">{f.hint}</p>}
           </div>

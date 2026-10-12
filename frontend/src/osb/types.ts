@@ -40,10 +40,36 @@ export type OSBGridSize = {
   rows: number
 }
 
-/** One drawer field. kind picks the control; labels are plain-language. */
+/** One drawer field. kind picks the control; labels are plain-language.
+ * `required` marks must-fill fields with a red asterisk. `visibleWhen`
+ * hides a field until another field in the same draft has a real value
+ * (non-blank strings, true booleans) — e.g. "new tab" needs a link first. */
 export type OSBField =
-  | { key: string; label: string; hint?: string; kind: 'text' | 'longtext' | 'theme' | 'boolean' }
-  | { key: string; label: string; hint?: string; kind: 'select'; options: { value: string; label: string }[] }
+  | {
+      key: string
+      label: string
+      hint?: string
+      required?: boolean
+      visibleWhen?: { key: string }
+      kind: 'text' | 'longtext' | 'theme' | 'boolean'
+    }
+  | {
+      key: string
+      label: string
+      hint?: string
+      required?: boolean
+      visibleWhen?: { key: string }
+      kind: 'select'
+      options: { value: string; label: string }[]
+    }
+
+/** A field shows when its `visibleWhen` dependency holds a real value. */
+export function isFieldVisible(field: OSBField, draft: Record<string, unknown>): boolean {
+  const dep = field.visibleWhen?.key
+  if (!dep) return true
+  const v = draft[dep]
+  return typeof v === 'string' ? v.trim().length > 0 : v === true
+}
 
 export const OSB_ALIGN_CLASSES: Record<OSBAlign, string> = {
   left: 'text-left',

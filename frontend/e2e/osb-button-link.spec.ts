@@ -20,7 +20,8 @@ test('button link: user sets a link + new tab from the drawer', async ({ page })
 
   // The drawer offers link controls on the real editing surface.
   await expect(page.getByLabel('Link')).toBeVisible()
-  await expect(page.getByLabel('Open in a new tab')).toBeVisible()
+  // "Open in a new tab" stays hidden until a link is provided.
+  await expect(page.getByLabel('Open in a new tab')).toBeHidden()
   await expect(drawer).toHaveScreenshot('osb-button-link-drawer.png')
 
   // Type a destination and flip "new tab" on, exactly like a user would.

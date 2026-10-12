@@ -130,23 +130,44 @@ describe('ConfigDrawer link controls', () => {
     rows: 1,
   })
 
-  it('shows the Link field and new-tab switch for buttons', () => {
+  it('marks Button text as required with a red asterisk', () => {
     render(<ConfigDrawer node={buttonNode({ label: 'Go' })} side="right" onClose={() => {}} onApply={() => {}} />)
-    expect(screen.getByLabelText('Link')).toBeTruthy()
-    // The switch is labelled by the drawer Label (htmlFor) and reads On/Off.
-    const toggle = screen.getByLabelText('Open in a new tab')
-    expect(toggle.getAttribute('role')).toBe('switch')
-    expect(toggle.getAttribute('aria-checked')).toBe('false')
-    expect(toggle.textContent).toBe('Off')
+    const label = screen.getByText('Button text')
+    expect(label.textContent).toContain('*')
+    expect(label.querySelector('.text-red-600')).not.toBeNull()
   })
 
-  it('toggling the switch applies openInNewTab=true', () => {
+  it('hides the new-tab switch until a link is provided', () => {
+    render(<ConfigDrawer node={buttonNode({ label: 'Go' })} side="right" onClose={() => {}} onApply={() => {}} />)
+    expect(screen.getByLabelText('Link')).toBeTruthy()
+    expect(screen.queryByLabelText('Open in a new tab')).toBeNull()
+  })
+
+  it('shows the switch once a link is typed, and applies the toggle', () => {
     const onApply = vi.fn()
     render(<ConfigDrawer node={buttonNode({ label: 'Go' })} side="right" onClose={() => {}} onApply={onApply} />)
-    fireEvent.click(screen.getByLabelText('Open in a new tab'))
-    expect(onApply).toHaveBeenCalledTimes(1)
-    expect(onApply.mock.calls[0][0]).toBe('b1')
-    expect(onApply.mock.calls[0][1]).toMatchObject({ openInNewTab: true })
+    fireEvent.change(screen.getByLabelText('Link'), { target: { value: 'https://example.com' } })
+    const toggle = screen.getByLabelText('Open in a new tab')
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(toggle.textContent).toBe('Off')
+    fireEvent.click(toggle)
+    expect(onApply).toHaveBeenLastCalledWith('b1', expect.objectContaining({ openInNewTab: true }))
+  })
+
+  it('clearing the link hides the switch and resets it to off', () => {
+    const onApply = vi.fn()
+    render(
+      <ConfigDrawer
+        node={buttonNode({ label: 'Go', href: 'https://example.com', openInNewTab: true })}
+        side="right"
+        onClose={() => {}}
+        onApply={onApply}
+      />,
+    )
+    expect(screen.getByLabelText('Open in a new tab')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Link'), { target: { value: '  ' } })
+    expect(screen.queryByLabelText('Open in a new tab')).toBeNull()
+    expect(onApply).toHaveBeenLastCalledWith('b1', expect.objectContaining({ href: '  ', openInNewTab: false }))
   })
 
   it('typing a link applies href', () => {

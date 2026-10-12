@@ -24,9 +24,9 @@ export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
 }
 
 export const OSB_BUTTON_FIELDS: OSBField[] = [
-  { key: 'label', label: 'Button text', kind: 'text' },
+  { key: 'label', label: 'Button text', kind: 'text', required: true },
   { key: 'href', label: 'Link', hint: 'Where this button goes. Leave empty for no link.', kind: 'text' },
-  { key: 'openInNewTab', label: 'Open in a new tab', kind: 'boolean' },
+  { key: 'openInNewTab', label: 'Open in a new tab', kind: 'boolean', visibleWhen: { key: 'href' } },
   {
     key: 'variant',
     label: 'Style',
