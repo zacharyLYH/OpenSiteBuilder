@@ -21,10 +21,13 @@ const OSB_COMPONENTS = import.meta.glob('../osb/OSB*.{ts,tsx}', {
  * these under ./osb/*, so the FE osb/ sources stay the single source of truth.
  */
 const RUNTIME_FILES = [
-  ...Object.entries(OSB_COMPONENTS).map(([p, content]) => ({
-    path: 'src/' + p.replace('../', ''),
-    content,
-  })),
+  ...Object.entries(OSB_COMPONENTS)
+    // Test co-locates with components (OSBButton.test.tsx): never publish it.
+    .filter(([p]) => !p.includes('.test.'))
+    .map(([p, content]) => ({
+      path: 'src/' + p.replace('../', ''),
+      content,
+    })),
   { path: 'src/osb/types.ts', content: osbTypesSrc },
   { path: 'src/lib/utils.ts', content: cnSrc },
 ]

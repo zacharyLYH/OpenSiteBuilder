@@ -10,13 +10,22 @@ import type { OSBField } from '../osb/types'
 import type { PlacedNode } from './doc'
 
 /** The one control per field kind — the field itself carries its options. */
-function FieldControl({ field, value, onChange }: { field: OSBField; value: string; onChange: (v: string) => void }) {
+function FieldControl({
+  field,
+  value,
+  onChange,
+}: {
+  field: OSBField
+  value: unknown
+  onChange: (v: string | boolean) => void
+}) {
   const id = `osb-field-${field.key}`
+  const text = typeof value === 'string' ? value : (value ?? '').toString()
   if (field.kind === 'longtext')
-    return <Textarea id={id} rows={3} value={value} onChange={(e) => onChange(e.target.value)} />
+    return <Textarea id={id} rows={3} value={text} onChange={(e) => onChange(e.target.value)} />
   if (field.kind === 'select')
     return (
-      <Select value={value} onValueChange={onChange}>
+      <Select value={text} onValueChange={onChange}>
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
@@ -29,6 +38,21 @@ function FieldControl({ field, value, onChange }: { field: OSBField; value: stri
         </SelectContent>
       </Select>
     )
+  if (field.kind === 'boolean')
+    return (
+      <Button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={value === true}
+        variant={value === true ? 'default' : 'outline'}
+        size="sm"
+        onClick={() => onChange(!(value === true))}
+        className="w-20"
+      >
+        {value === true ? 'On' : 'Off'}
+      </Button>
+    )
   if (field.kind === 'theme')
     return (
       <div className="flex gap-1 rounded-md bg-slate-100 p-1">
@@ -36,7 +60,7 @@ function FieldControl({ field, value, onChange }: { field: OSBField; value: stri
           <Button
             key={t}
             type="button"
-            variant={value === t ? 'default' : 'secondary'}
+            variant={text === t ? 'default' : 'secondary'}
             size="sm"
             onClick={() => onChange(t)}
             className="flex-1 capitalize"
@@ -46,7 +70,7 @@ function FieldControl({ field, value, onChange }: { field: OSBField; value: stri
         ))}
       </div>
     )
-  return <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
+  return <Input id={id} value={text} onChange={(e) => onChange(e.target.value)} />
 }
 
 // Style-only inspector: text content and chrome (variant, theme, alignment).
@@ -66,7 +90,7 @@ export default function ConfigDrawer({
   const entry = OSB_REGISTRY[node.type]
   const [draft, setDraft] = useState<Record<string, unknown>>({ ...entry.defaults, ...node.config })
   // Selecting a node never rewrites its stored config — only a real edit does.
-  const edit = (key: string, value: string) => {
+  const edit = (key: string, value: string | boolean) => {
     const next = { ...draft, [key]: value }
     setDraft(next)
     onApply(node.id, next)
@@ -103,7 +127,7 @@ export default function ConfigDrawer({
         {entry.fields.map((f) => (
           <div key={f.key} className="flex flex-col gap-1">
             <Label htmlFor={`osb-field-${f.key}`}>{f.label}</Label>
-            <FieldControl field={f} value={String(draft[f.key] ?? '')} onChange={(v) => edit(f.key, v)} />
+            <FieldControl field={f} value={draft[f.key]} onChange={(v) => edit(f.key, v)} />
             {f.hint && <p className="text-xs text-slate-500">{f.hint}</p>}
           </div>
         ))}

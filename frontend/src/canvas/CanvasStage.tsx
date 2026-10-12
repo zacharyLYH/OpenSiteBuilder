@@ -174,6 +174,8 @@ export default function CanvasStage(p: CanvasStageProps) {
               }}
               onDragEnd={p.onEndDrag}
               onClick={(e) => {
+                // Linked buttons render real <a> tags: stay in the editor.
+                e.preventDefault()
                 e.stopPropagation()
                 p.onSelect(k.id)
               }}
@@ -302,6 +304,8 @@ export default function CanvasStage(p: CanvasStageProps) {
                 data-type={n.type}
                 data-id={n.id}
                 onClick={(e) => {
+                  // Linked buttons render real <a> tags: stay in the editor.
+                  e.preventDefault()
                   e.stopPropagation()
                   p.onSelect(n.id)
                 }}
