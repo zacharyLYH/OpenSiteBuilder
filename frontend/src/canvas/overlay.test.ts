@@ -185,22 +185,6 @@ describe('overlay validation', () => {
     expect(v.errors.join('|')).toContain('undersizes its children')
   })
 
-  it('reads legacy modalId/drawerId triggers and legacy stores', () => {
-    const legacyTrigger = {
-      id: 'trig',
-      type: 'button' as const,
-      config: { label: 'Open', modalId: 'm1' },
-      parentId: null as string | null,
-      x: 0,
-      y: 0,
-      cols: 4,
-      rows: 1,
-    }
-    expect(validateDoc(docWith(SHELL, [legacyTrigger])).ok).toBe(true)
-    const legacyDoc = { version: 1, nodes: [], modals: [SHELL] } as unknown as CanvasDoc
-    expect(overlaysOf(legacyDoc)).toHaveLength(1)
-    expect(validateDoc(legacyDoc).ok).toBe(true)
-  })
 })
 
 describe('overlay persistence', () => {

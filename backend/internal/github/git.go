@@ -5,10 +5,11 @@ import (
 	"net/http"
 )
 
-// FileOp is one path plus content write inside a commit.
+// FileOp is one path plus content write inside a commit — also the wire shape
+// of a publish request entry, so the handler decodes straight into it.
 type FileOp struct {
-	Path    string
-	Content string
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 type treeEntry struct {

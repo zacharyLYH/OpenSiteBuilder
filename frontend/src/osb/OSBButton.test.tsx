@@ -140,13 +140,6 @@ describe('OSBButton shadcn variants', () => {
     expect(cls).toContain('text-slate-900')
   })
 
-  it('normalizes legacy variant/size values so old docs still render styled', () => {
-    render(<OSBButton config={{ label: 'Legacy', variant: 'primary' as never, size: 'md' as never }} />)
-    const cls = screen.getByRole('button', { name: 'Legacy' }).className
-    expect(cls).toContain('bg-slate-900')
-    expect(cls).toContain('text-sm')
-  })
-
   it('derives the Style/Size drawer fields from their option lists (single source)', () => {
     const field = (key: string) => {
       const f = OSB_BUTTON_FIELDS.find((x) => x.key === key)

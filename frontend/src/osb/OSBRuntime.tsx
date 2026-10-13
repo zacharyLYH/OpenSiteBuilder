@@ -1,12 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import type { SiteManifest, SiteNode } from '../site/types'
-import { buttonOverlayTarget } from './OSBButton'
 import OSBDrawer, { type OSBDrawerConfig } from './OSBDrawer'
 import OSBModal, { type OSBModalConfig } from './OSBModal'
 import { OSBOverlayBody } from './OSBOverlay'
 import { OSBThemeProvider } from './OSBTheme'
 import { OSB_REGISTRY, isOverlayType, isTriggerType, type OSBNodeType } from './registry'
-import type { OSBTheme } from './types'
+import { overlayTargetOf, type OSBTheme } from './types'
 
 /**
  * THE engine (codegen v2). The canvas no longer emits `.jsx`: it emits a
@@ -58,12 +57,10 @@ export function OSBNodeView({ node, onOpenOverlay, overlayIds, depth = 0 }: OSBN
       : undefined
   // Only a trigger (button) carries an opener; the target is resolved from the
   // page's overlay ids so a dangling reference stays inert.
+  const target = overlayTargetOf(node.config)
   const onClick =
-    onOpenOverlay && overlayIds && isTriggerType(node.type)
-      ? (() => {
-          const target = buttonOverlayTarget(node.config, overlayIds)
-          return target ? () => onOpenOverlay(target) : undefined
-        })()
+    onOpenOverlay && overlayIds && target && overlayIds.has(target) && isTriggerType(node.type)
+      ? () => onOpenOverlay(target)
       : undefined
   return OSB_REGISTRY[node.type].render(node.config, children, onClick)
 }

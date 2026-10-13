@@ -228,9 +228,6 @@ export function validateSite(doc: unknown): SiteValidation {
     }
     for (const [j, n] of (page['nodes'] as unknown[]).entries()) checkNode(n, `pages[${i}].nodes[${j}]`, null, 0)
     checkOverlays(page['overlays'], `pages[${i}].overlays`)
-    // Legacy readers: pre-unification site.json used modals[]/drawers[].
-    checkOverlays(page['modals'], `pages[${i}].modals`)
-    checkOverlays(page['drawers'], `pages[${i}].drawers`)
   }
 
   return { ok: errors.length === 0, errors }

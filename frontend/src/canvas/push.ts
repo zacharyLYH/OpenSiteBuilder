@@ -1,7 +1,7 @@
 import { publishFiles, strField } from '../api'
 import { validateSite } from '../site/validate'
-import { SITE_SCHEMA_VERSION } from '../site/types'
-import { childrenOf, overlaysOf, themeOf, type CanvasDoc } from './doc'
+import { SITE_SCHEMA_VERSION, type SiteNode } from '../site/types'
+import { childrenOf, overlaysOf, themeOf, type CanvasDoc, type PlacedNode } from './doc'
 import osbTypesSrc from '../osb/types.ts?raw'
 import registrySrc from '../osb/registry.tsx?raw'
 import siteTypesSrc from '../site/types.ts?raw'
@@ -65,20 +65,11 @@ export default function App() {
 /** Cycle breaker for a corrupt doc; the nesting gate already caps real depth. */
 const MAX_NEST_DEPTH = 3
 
-/** Canvas doc as a valid site.json (single page v1, children nested). */
-const siteNode = ({ id, type, config }: { id: string; type: string; config: Record<string, unknown> }) => ({
-  id,
-  type,
-  config: config ?? {},
-})
+/** A placed node as a manifest node — never coordinates (flow layout). */
+const siteNode = (n: PlacedNode): SiteNode => ({ id: n.id, type: n.type, config: n.config })
 
-const siteModalKid = (k: { id: string; type: string; config: Record<string, unknown>; x: number; y: number; cols: number; rows: number }) => ({
-  ...siteNode(k),
-  x: k.x,
-  y: k.y,
-  cols: k.cols,
-  rows: k.rows,
-})
+/** An overlay child keeps its cell footprint (percent boxes in the shell). */
+const siteModalKid = (k: PlacedNode): SiteNode => ({ ...siteNode(k), x: k.x, y: k.y, cols: k.cols, rows: k.rows })
 
 /**
  * Canvas doc as a site object (single page v1, children nested).
@@ -90,13 +81,7 @@ const siteModalKid = (k: { id: string; type: string; config: Record<string, unkn
  * so its kids keep x/y/cols/rows and render as percent boxes.
  */
 export function siteObject(doc: CanvasDoc, slug: string): unknown {
-  interface SiteJsonNode {
-    id: string
-    type: string
-    config: Record<string, unknown>
-    children?: SiteJsonNode[]
-  }
-  const kidsOf = (id: string, ordered: boolean, depth = 0): SiteJsonNode[] => {
+  const kidsOf = (id: string, ordered: boolean, depth = 0): SiteNode[] => {
     if (depth > MAX_NEST_DEPTH) return []
     const kids = childrenOf(doc.nodes, id, ordered).filter((k) => k.id !== id)
     return kids.map((n) => {
@@ -104,10 +89,10 @@ export function siteObject(doc: CanvasDoc, slug: string): unknown {
       return { ...siteNode(n), ...(grandkids.length > 0 ? { children: grandkids } : {}) }
     })
   }
-  const overlays = overlaysOf(doc).map((m) => ({
+  const overlays: SiteNode[] = overlaysOf(doc).map((m) => ({
     id: m.id,
     type: m.overlayType,
-    config: m.config ?? {},
+    config: m.config,
     cols: m.cols,
     rows: m.rows,
     ...(m.children.length > 0 ? { children: m.children.map(siteModalKid) } : {}),

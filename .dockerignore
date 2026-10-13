@@ -1,0 +1,6 @@
+# The frontend image builds from the REPO ROOT so it can also read template/.
+# Keep the context to just the sources each stage copies.
+**/node_modules
+**/dist
+.git
+secrets

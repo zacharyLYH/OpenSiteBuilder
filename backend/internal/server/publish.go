@@ -12,12 +12,6 @@ import (
 	"opensitebuilder-backend/internal/validate"
 )
 
-// publishFile is one validated file in a P1 request.
-type publishFile struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-}
-
 // POST /api/publish {files:[{path,content}], message?} runs P1.
 func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
@@ -29,8 +23,8 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Files   []publishFile `json:"files"`
-		Message string        `json:"message"`
+		Files   []github.FileOp `json:"files"`
+		Message string          `json:"message"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&in); err != nil {
 		fail(w, http.StatusBadRequest, "bad json")
@@ -58,7 +52,7 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, "install token failed")
 		return
 	}
-	commit, err := s.Gh.CommitFiles(token, sess.Owner, sess.Slug, msg, fileOps(in.Files))
+	commit, err := s.Gh.CommitFiles(token, sess.Owner, sess.Slug, msg, in.Files)
 	if err != nil {
 		if strings.Contains(err.Error(), "push conflict") {
 			fail(w, http.StatusConflict, "push conflict, retry")
@@ -75,22 +69,13 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// fileOps converts request files to commit operations.
-func fileOps(files []publishFile) []github.FileOp {
-	ops := make([]github.FileOp, 0, len(files))
-	for _, f := range files {
-		ops = append(ops, github.FileOp{Path: f.Path, Content: f.Content})
-	}
-	return ops
-}
-
 // maxPublishFiles caps one publish. Hydration ships the whole builder-owned
 // src/osb/ runtime folder plus site.json, so the ceiling tracks that folder,
 // not the site's page count.
 const maxPublishFiles = 64
 
 // checkFiles enforces count, allowlist, duplicates, and size caps.
-func checkFiles(files []publishFile) error {
+func checkFiles(files []github.FileOp) error {
 	if len(files) == 0 || len(files) > maxPublishFiles {
 		return fmt.Errorf("files count must be 1..%d", maxPublishFiles)
 	}

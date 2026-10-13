@@ -94,17 +94,6 @@ const DARK_VARIANT_CLASSES: Record<OSBButtonVariant, string> = {
   link: 'text-slate-50',
 }
 
-// Docs saved before the shadcn vocabulary used the old names; normalize on
-// read so nothing stored ever renders an unstyled button.
-const VARIANT_ALIASES: Record<string, OSBButtonVariant> = { primary: 'default' }
-const SIZE_ALIASES: Record<string, OSBButtonSize> = { md: 'default' }
-
-const normalizeVariant = (v: unknown): OSBButtonVariant =>
-  typeof v === 'string' ? (VARIANT_ALIASES[v] ?? (v as OSBButtonVariant)) : 'default'
-
-const normalizeSize = (v: unknown): OSBButtonSize =>
-  typeof v === 'string' ? (SIZE_ALIASES[v] ?? (v as OSBButtonSize)) : 'default'
-
 const ALIGN_JUSTIFY: Record<OSBAlign, string> = {
   left: 'justify-start',
   center: 'justify-center',
@@ -114,24 +103,6 @@ export interface OSBButtonProps {
   config?: Partial<OSBButtonConfig>
   onClick?: () => void
   children?: React.ReactNode
-}
-
-/**
- * THE trigger rule: a button opens at most one overlay by id, from a click —
- * never from a link. An attached overlay wins over `href`. Overlay children
- * never carry one (validated at edit time). Legacy modalId/drawerId read the
- * same way so old docs keep working.
- */
-export function buttonOverlayTarget(
-  config: Record<string, unknown> | undefined,
-  overlayIds: Set<string>,
-): string | null {
-  const cfg = config as { targetId?: unknown; modalId?: unknown; drawerId?: unknown } | undefined
-  for (const key of ['targetId', 'modalId', 'drawerId'] as const) {
-    const v = cfg?.[key]
-    if (typeof v === 'string' && v.length > 0 && overlayIds.has(v)) return v
-  }
-  return null
 }
 
 /**
@@ -151,12 +122,10 @@ export function sanitizeHref(raw: unknown): string {
 
 export default function OSBButton({ config, onClick }: OSBButtonProps) {
   const c = resolveConfig(OSB_BUTTON_DEFAULTS, config)
-  const variant = normalizeVariant(c.variant)
-  const size = normalizeSize(c.size)
   const theme = useOSBTheme()
   const href = sanitizeHref(c.href)
   const label = c.label.length === 0 ? 'Button' : c.label
-  const cls = cn(buttonVariants({ variant, size }), theme === 'dark' && DARK_VARIANT_CLASSES[variant])
+  const cls = cn(buttonVariants({ variant: c.variant, size: c.size }), theme === 'dark' && DARK_VARIANT_CLASSES[c.variant])
   // Linked buttons are real anchors (keyboard + right-click + SEO work);
   // unlinked ones stay <button> so Enter/Space still activate them.
   const inner =

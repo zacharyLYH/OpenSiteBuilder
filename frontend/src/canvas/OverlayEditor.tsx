@@ -11,7 +11,6 @@ import {
   eventCell,
   type CellRect,
   type OverlayDoc,
-  type OverlayType,
   type PlacedNode,
   type RejectReason,
 } from './doc'
@@ -20,9 +19,6 @@ import type { ArmedDrag } from './useDragSession'
 
 /** Preview pitch: the shell renders at a fixed scale, independent of canvas zoom. */
 const CELL = OVERLAY_CELL_PX
-
-/** Legacy alias. New code takes the registry key directly. */
-export type OverlayKind = OverlayType
 
 /** Title + noun from the registry entry — no per-kind map. Modal's entry
  * name is 'Popup', so its title falls back to 'Popup' exactly as before. */

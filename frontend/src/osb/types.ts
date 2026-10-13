@@ -109,3 +109,11 @@ export const OSB_ALIGN_CLASSES: Record<OSBAlign, string> = {
   left: 'text-left',
   center: 'text-center',
 }
+
+/** The overlay id a trigger opens, from `config.targetId` — the ONE key.
+ * Callers check it against the page's overlay ids; an unset/dangling target
+ * returns null so a stale reference stays inert. */
+export function overlayTargetOf(config: Record<string, unknown> | undefined): string | null {
+  const t = (config as { targetId?: unknown } | undefined)?.targetId
+  return typeof t === 'string' && t.length > 0 ? t : null
+}

@@ -10,7 +10,11 @@ services:
       - backend
 
   frontend:
-    build: ./frontend
+    # Root context: the publish payload ships template/package.json (+ lock) as
+    # raw text, so the image needs both frontend/ and template/.
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     expose:
       - "80"
 

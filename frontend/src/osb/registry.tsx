@@ -172,11 +172,6 @@ export function canContain(parentType: string, childType: string): boolean {
   return false
 }
 
-/** Legacy alias: every overlay kind, not just popups. */
-export function isModalType(t: string): boolean {
-  return isOverlayType(t)
-}
-
 /** Every kind the registry marks `overlay` — never a hardcoded key list. */
 export function isOverlayType(t: string): boolean {
   return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'overlay'

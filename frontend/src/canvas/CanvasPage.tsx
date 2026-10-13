@@ -3,6 +3,7 @@ import type { GridLayoutProps, Layout, LayoutItem } from 'react-grid-layout'
 import { OSB_PALETTE_TYPES, OSB_REGISTRY, isOverlayType, isTriggerType, overlayNoun, type OSBNodeType } from '../osb/registry'
 import { OSBThemeProvider } from '../osb/OSBTheme'
 import { OSB_PATTERNS, OSB_PATTERN_IDS } from '../osb/patterns'
+import { overlayTargetOf } from '../osb/types'
 import { clearProjectSlug, getProjectSlug } from '../lib/project'
 import { Button } from '../components/ui/button'
 import { Label } from '../components/ui/label'
@@ -26,9 +27,9 @@ import {
   removeOverlay,
   removeOverlayChild,
   resizeOverlay,
+  updateNodeConfig,
   updateOverlayChildConfig,
   updateOverlayConfig,
-  type CanvasDoc,
   type CellRect,
   type DocResult,
   type DocValidation,
@@ -340,24 +341,13 @@ export default function CanvasPage() {
         rows: k.rows,
       })),
     }
-    setDoc((d) => {
-      const withOverlay: CanvasDoc = { ...d, overlays: [...overlaysOf(d), shell] }
-      return {
-        ...withOverlay,
-        nodes: withOverlay.nodes.map((n) =>
-          n.id === buttonId ? { ...n, config: { ...n.config, targetId: oid } } : n,
-        ),
-      }
-    })
+    setDoc((d) => updateNodeConfig({ ...d, overlays: [...overlaysOf(d), shell] }, buttonId, { targetId: oid }))
     setSelectedId(oid)
     setEditingOverlayId(oid)
   }
 
   const unlinkOverlay = (buttonId: string) => {
-    setDoc((d) => ({
-      ...d,
-      nodes: d.nodes.map((n) => (n.id === buttonId ? { ...n, config: { ...n.config, targetId: '' } } : n)),
-    }))
+    setDoc((d) => updateNodeConfig(d, buttonId, { targetId: '' }))
   }
 
   const removeOverlayFlow = (id: string) => {
@@ -374,7 +364,7 @@ export default function CanvasPage() {
     if (overlay && overlay.children.some((k) => k.id === id)) {
       return void setDoc((d) => updateOverlayChildConfig(d, overlay.id, id, config))
     }
-    setDoc((d) => ({ ...d, nodes: d.nodes.map((n) => (n.id === id ? { ...n, config } : n)) }))
+    setDoc((d) => updateNodeConfig(d, id, config))
   }
 
   // The armed drag's gated type for the overlay editor (patterns land as cards).
@@ -414,14 +404,6 @@ export default function CanvasPage() {
   /** Trigger-only drawer section: attach, open, test, or detach its overlay.
    * A trigger inside an overlay never gets one (no overlay-in-overlay). */
   const inOverlay = !!editingOverlay && editingOverlay.children.some((k) => k.id === selectedId)
-  const overlayTargetOf = (config: Record<string, unknown> | undefined): string | null => {
-    const cfg = config as { targetId?: unknown; modalId?: unknown; drawerId?: unknown } | undefined
-    for (const key of ['targetId', 'modalId', 'drawerId'] as const) {
-      const v = cfg?.[key]
-      if (typeof v === 'string' && v.length > 0) return v
-    }
-    return null
-  }
   const linkedOverlay = drawerNode ? findOverlay(doc, overlayTargetOf(drawerNode.config) ?? '') ?? null : null
   const drawerActions =
     drawerNode && isTriggerType(drawerNode.type) && !inOverlay ? (

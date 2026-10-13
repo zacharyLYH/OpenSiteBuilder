@@ -37,7 +37,8 @@ component for the publish path. Concretely:
   new knob needs no codegen change. Theme is the exception: it is global, so
   it travels as `site.theme` / the `OSBThemeProvider`, never inside a node.
 - Older saved docs keep loading: `resolveConfig` fills missing keys from
-  defaults, and `OSBButton` normalizes the pre-shadcn `primary`/`md` values.
+  defaults. There is no legacy *vocabulary* shim (codegen-v2: break freely) —
+  an unrecognized variant/size renders with the component's base styling.
 
 ### Dependencies in shipped components
 

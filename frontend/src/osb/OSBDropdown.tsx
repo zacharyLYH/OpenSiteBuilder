@@ -112,7 +112,7 @@ export default function OSBDropdown({ config }: OSBDropdownProps) {
   const c = resolveConfig(OSB_DROPDOWN_DEFAULTS, config)
   const theme = useOSBTheme()
   const label = c.label.length === 0 ? 'Menu' : c.label
-  // Legacy/corrupt docs may carry no items array; treat anything else as empty.
+  // A corrupt config may carry no items array; treat anything else as empty.
   const items = Array.isArray(c.items) ? c.items : []
   const triggerRef = useRef<HTMLButtonElement>(null)
   const box = useTriggerBox(triggerRef)

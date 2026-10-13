@@ -1,10 +1,15 @@
+# Build context is the REPO ROOT (see docker-compose.yml), so every COPY path
+# is root-relative.
 FROM node:26.5-alpine AS build
-WORKDIR /app
-COPY package.json ./
+WORKDIR /repo/frontend
+COPY frontend/package.json ./
 RUN npm install
-COPY . .
+COPY frontend/ ./
+# The publish payload ships template/package.json + lock as raw text; place the
+# template beside frontend/ at the same relative depth the import expects.
+COPY template/ /repo/template/
 RUN npm run build
 
 FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /repo/frontend/dist /usr/share/nginx/html
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf

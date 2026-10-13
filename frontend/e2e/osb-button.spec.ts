@@ -24,8 +24,6 @@ const CASES: Case[] = [
   { name: 'center', nodes: [{ id: 'a', type: 'button', config: { label: 'Centered', align: 'center' } }] },
   { name: 'long-wrap', nodes: [{ id: 'a', type: 'button', config: { label: LONG_TEXT } }] },
   { name: 'empty-fallback', nodes: [{ id: 'a', type: 'button', config: { label: '' } }] },
-  // Docs saved before the shadcn vocabulary still render styled.
-  { name: 'legacy-primary', nodes: [{ id: 'a', type: 'button', config: { label: 'Legacy', variant: 'primary', size: 'md' } }] },
   { name: 'dark-default', theme: 'dark', nodes: [{ id: 'a', type: 'button', config: { label: 'Primary' } }] },
   { name: 'dark-secondary', theme: 'dark', nodes: [{ id: 'a', type: 'button', config: { label: 'Secondary', variant: 'secondary' } }] },
   { name: 'dark-outline', theme: 'dark', nodes: [{ id: 'a', type: 'button', config: { label: 'Outline', variant: 'outline' } }] },
@@ -59,14 +57,4 @@ test('button variants land their shadcn colours', async ({ page }) => {
   expect(await bg('Default')).toBe('rgb(15, 23, 42)') // slate-900
   expect(await bg('Danger')).toBe('rgb(220, 38, 38)') // red-600
   expect(await bg('Ghost')).toBe('rgba(0, 0, 0, 0)') // transparent
-})
-
-test('legacy primary/md config still renders as the default variant', async ({ page }) => {
-  await mountNodes(page, [{ id: 'l', type: 'button', config: { label: 'Legacy', variant: 'primary', size: 'md' } }])
-  const style = await page.getByRole('button', { name: 'Legacy' }).evaluate((el) => {
-    const s = getComputedStyle(el)
-    return { bg: s.backgroundColor, size: parseFloat(s.fontSize) }
-  })
-  expect(style.bg).toBe('rgb(15, 23, 42)')
-  expect(style.size).toBe(14) // text-sm / Medium
 })

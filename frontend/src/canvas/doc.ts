@@ -1,6 +1,6 @@
 import { OSB_PATTERNS } from '../osb/patterns'
 import { OSB_REGISTRY, canContain, isAtomType, isContainerType, isOverlayType, isTriggerType, overlayNoun, type OSBNodeType } from '../osb/registry'
-import { CONTAINER_PAD, type OSBTheme } from '../osb/types'
+import { CONTAINER_PAD, overlayTargetOf, type OSBTheme } from '../osb/types'
 import type { SiteMeta } from '../site/types'
 import { GRID_COLS } from './grid'
 
@@ -48,35 +48,20 @@ export interface OverlayDoc {
   children: PlacedNode[]
 }
 
-/** Legacy aliases. Do not use in new code. */
-export type ModalDoc = OverlayDoc
-export type DrawerDoc = OverlayDoc
-export type ModalShell = Pick<OverlayDoc, 'cols' | 'rows' | 'children'>
+/** The shell geometry the overlay gate reads: footprint + atom children. */
+export type OverlayShell = Pick<OverlayDoc, 'cols' | 'rows' | 'children'>
 
 /** A fresh, empty canvas. Docs are never mutated, so sharing is safe. */
 export const EMPTY_DOC: CanvasDoc = { version: 1, nodes: [], overlays: [], theme: 'light' }
 
-/** Overlays, tolerating old docs. Migrates legacy modals[]/drawers[] once. */
-export const overlaysOf = (doc: CanvasDoc): OverlayDoc[] => {
-  if (Array.isArray(doc.overlays)) return doc.overlays
-  const legacy = doc as CanvasDoc & { modals?: OverlayDoc[]; drawers?: OverlayDoc[] }
-  const modals = Array.isArray(legacy.modals)
-    ? legacy.modals.map((m) => ({ ...m, overlayType: 'modal' as const }))
-    : []
-  const drawers = Array.isArray(legacy.drawers)
-    ? legacy.drawers.map((m) => ({ ...m, overlayType: 'drawer' as const }))
-    : []
-  return [...modals, ...drawers]
-}
+/** Every overlay shell on the doc. */
+export const overlaysOf = (doc: CanvasDoc): OverlayDoc[] => doc.overlays ?? []
 
-/** Legacy filtered views. Do not use in new code. */
-export const modalsOf = (doc: CanvasDoc): OverlayDoc[] => overlaysOf(doc).filter((o) => o.overlayType === 'modal')
-export const drawersOf = (doc: CanvasDoc): OverlayDoc[] => overlaysOf(doc).filter((o) => o.overlayType === 'drawer')
-
-/** The site theme, tolerating old docs saved before it was global. */
+/** The site theme (defaults to light). */
 export const themeOf = (doc: CanvasDoc): OSBTheme => (doc.theme === 'dark' ? 'dark' : 'light')
 
-type Rect = { x: number; y: number; cols: number; rows: number }
+/** A rectangle in grid cells: origin + footprint. */
+export type CellRect = { x: number; y: number; cols: number; rows: number }
 
 export const storageKey = (projectName: string): string => `osb.project.${projectName}`
 
@@ -153,18 +138,18 @@ function pruneOverlays(raw: OverlayDoc[]): OverlayDoc[] {
   return out
 }
 
-/** Rect overlap in cells; touching edges is fine. */
-export const collides = (a: Rect, b: Rect): boolean =>
+/** Cell overlap; touching edges is fine. */
+export const collides = (a: CellRect, b: CellRect): boolean =>
   a.x < b.x + b.cols && b.x < a.x + a.cols && a.y < b.y + b.rows && b.y < a.y + a.rows
 
 /** Edge-sharing with positive overlap. Corner-only contact does not count. */
-export const touches = (a: Rect, b: Rect): boolean =>
+export const touches = (a: CellRect, b: CellRect): boolean =>
   ((a.x + a.cols === b.x || b.x + b.cols === a.x) && a.y < b.y + b.rows && b.y < a.y + a.rows) ||
   ((a.y + a.rows === b.y || b.y + b.rows === a.y) && a.x < b.x + b.cols && b.x < a.x + a.cols)
 
 /** A sibling set is valid when it forms one edge-connected patch. Zero or
  * one rect is vacuously connected. */
-export function isContiguous(rects: readonly Rect[]): boolean {
+export function isContiguous(rects: readonly CellRect[]): boolean {
   if (rects.length <= 1) return true
   const seen = new Set([0])
   const queue = [0]
@@ -179,8 +164,6 @@ export function isContiguous(rects: readonly Rect[]): boolean {
   }
   return seen.size === rects.length
 }
-
-export type CellRect = Rect
 
 function isRectOk(rect: CellRect): boolean {
   if (!Number.isInteger(rect.x + rect.y + rect.cols + rect.rows)) return false
@@ -234,7 +217,7 @@ export const reasonText = (reason: RejectReason): string => REASON_TEXT[reason]
 /** Ids of the siblings under `parentId` that collide with `rect` — the one
  * definition of "these fight over the same cells", shared by the gate and by
  * the red-highlight query. */
-function overlapIds(nodes: PlacedNode[], rect: Rect, parentId: string | null, ignoreId?: string | null): string[] {
+function overlapIds(nodes: PlacedNode[], rect: CellRect, parentId: string | null, ignoreId?: string | null): string[] {
   return nodes.filter((n) => n.parentId === parentId && n.id !== ignoreId && collides(rect, n)).map((n) => n.id)
 }
 
@@ -411,6 +394,11 @@ export function insertNode(doc: CanvasDoc, node: PlacedNode): DocResult {
   return { ok: true, doc: { ...doc, nodes: [...doc.nodes, node] } }
 }
 
+/** Shallow-merge one node's config — the one path non-spatial props take. */
+export function updateNodeConfig(doc: CanvasDoc, id: string, patch: Record<string, unknown>): CanvasDoc {
+  return { ...doc, nodes: doc.nodes.map((n) => (n.id === id ? { ...n, config: { ...n.config, ...patch } } : n)) }
+}
+
 export function moveNode(
   doc: CanvasDoc,
   id: string,
@@ -500,7 +488,7 @@ export function removeNode(doc: CanvasDoc, id: string): CanvasDoc {
 /** THE overlay landing rule: atoms only (never overlay-in-overlay), inside
  * the shell, on whole cells, never overlapping a sibling. */
 export function canPlaceOverlayChild(
-  shell: ModalShell,
+  shell: OverlayShell,
   type: string,
   rect: CellRect,
   ignoreId?: string,
@@ -514,10 +502,6 @@ export function canPlaceOverlayChild(
   return hit ? 'overlap' : null
 }
 
-/** Legacy aliases. Do not use in new code. */
-export const canPlaceModalChild = canPlaceOverlayChild
-export const canPlaceDrawerChild = canPlaceOverlayChild
-
 /** One overlay by id — the lookup every overlay op shares. */
 export const findOverlay = (doc: CanvasDoc, id: string): OverlayDoc | undefined =>
   overlaysOf(doc).find((m) => m.id === id)
@@ -529,26 +513,14 @@ const mapOverlay = (doc: CanvasDoc, id: string, fn: (m: OverlayDoc) => OverlayDo
   overlays: overlaysOf(doc).map((m) => (m.id === id ? fn(m) : m)),
 })
 
-/** Legacy aliases. Do not use in new code. */
-export const findModal = findOverlay
-export const findDrawer = findOverlay
-
 /** Append a shell. Children arrive via insertOverlayChild. */
 export function createOverlay(doc: CanvasDoc, overlay: OverlayDoc): CanvasDoc {
   return { ...doc, overlays: [...overlaysOf(doc), overlay] }
 }
 
-/** Legacy aliases. Do not use in new code. */
-export const createModal = createOverlay
-export const createDrawer = createOverlay
-
 export function updateOverlayConfig(doc: CanvasDoc, id: string, config: Record<string, unknown>): CanvasDoc {
   return mapOverlay(doc, id, (m) => ({ ...m, config }))
 }
-
-/** Legacy aliases. Do not use in new code. */
-export const updateModalConfig = updateOverlayConfig
-export const updateDrawerConfig = updateOverlayConfig
 
 /** Resize the shell: same floor rule as containers (never under children).
  * Grid limits come from the registry entry for the shell's own kind. */
@@ -563,19 +535,11 @@ export function resizeOverlay(doc: CanvasDoc, id: string, cols: number, rows: nu
   return { ok: true, doc: mapOverlay(doc, id, (m) => ({ ...m, cols, rows })) }
 }
 
-/** Legacy aliases. Do not use in new code. */
-export const resizeModal = resizeOverlay
-export const resizeDrawer = resizeOverlay
-
 /** Removing an overlay unlinks every button that opened it (canvas + sibling
  * overlay kids, which are scrubbed defensively though validation forbids). */
 export function removeOverlay(doc: CanvasDoc, id: string): CanvasDoc {
   const scrub = (n: PlacedNode): PlacedNode =>
-    (n.config as { targetId?: unknown; modalId?: unknown; drawerId?: unknown } | undefined)?.targetId === id ||
-    (n.config as { modalId?: unknown } | undefined)?.modalId === id ||
-    (n.config as { drawerId?: unknown } | undefined)?.drawerId === id
-      ? { ...n, config: { ...n.config, targetId: '', modalId: '', drawerId: '' } }
-      : n
+    overlayTargetOf(n.config) === id ? { ...n, config: { ...n.config, targetId: '' } } : n
   return {
     ...doc,
     nodes: doc.nodes.map(scrub),
@@ -584,10 +548,6 @@ export function removeOverlay(doc: CanvasDoc, id: string): CanvasDoc {
       .map((m) => ({ ...m, children: m.children.map(scrub) })),
   }
 }
-
-/** Legacy aliases. Do not use in new code. */
-export const removeModal = removeOverlay
-export const removeDrawer = removeOverlay
 
 export function insertOverlayChild(doc: CanvasDoc, overlayId: string, child: PlacedNode): DocResult {
   const shell = findOverlay(doc, overlayId)
@@ -627,16 +587,6 @@ export function updateOverlayChildConfig(
     children: m.children.map((k) => (k.id === id ? { ...k, config } : k)),
   }))
 }
-
-/** Legacy aliases. Do not use in new code. */
-export const insertModalChild = insertOverlayChild
-export const insertDrawerChild = insertOverlayChild
-export const moveModalChild = moveOverlayChild
-export const moveDrawerChild = moveOverlayChild
-export const removeModalChild = removeOverlayChild
-export const removeDrawerChild = removeOverlayChild
-export const updateModalChildConfig = updateOverlayChildConfig
-export const updateDrawerChildConfig = updateOverlayChildConfig
 
 /** Absolute origin of a node in root cells (its parent chain summed).
  * Cycle-safe: null when the chain loops or dangles. */
@@ -839,31 +789,14 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
       errors.push(`${label} ${m.id} undersizes its children`)
     }
   }
-  // Trigger integrity: a trigger opens at most one overlay by id (targetId;
-  // legacy modalId/drawerId read the same way), and triggers inside an
-  // overlay never open another one.
-  const overlayTargetOf = (config: Record<string, unknown> | undefined): string | null => {
-    const cfg = config as { targetId?: unknown; modalId?: unknown; drawerId?: unknown } | undefined
-    for (const key of ['targetId', 'modalId', 'drawerId'] as const) {
-      const v = cfg?.[key]
-      if (typeof v === 'string' && v.length > 0) return v
-    }
-    return null
-  }
+  // Trigger integrity: a trigger opens one overlay by id, and a trigger inside
+  // an overlay never opens another one.
   const overlayKindOf = (id: string): string => {
     const found = overlaysOf(doc).find((o) => o.id === id)
     return found ? overlayNoun(found.overlayType) : 'overlay'
   }
   const checkTrigger = (n: PlacedNode, where: string, inOverlay: boolean) => {
     if (!isTriggerType(n.type)) return
-    const cfg = n.config as { targetId?: unknown; modalId?: unknown; drawerId?: unknown } | undefined
-    const targets = (['targetId', 'modalId', 'drawerId'] as const)
-      .map((k) => cfg?.[k])
-      .filter((v): v is string => typeof v === 'string' && v.length > 0)
-    if (targets.length > 1) {
-      errors.push(`${where} button ${n.id} cannot open two overlays`)
-      return
-    }
     const target = overlayTargetOf(n.config)
     if (!target) return
     if (inOverlay) {
