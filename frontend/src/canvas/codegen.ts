@@ -36,6 +36,7 @@ const NO_OPENER: Set<string> = new Set()
 
 function renderNode(node: PlacedNode, kids: PlacedNode[], overlayIds: Set<string>): string {
   // Kids arrive in flow order (childrenOf(..., true)); no re-sort here.
+  // Containers hold atoms only, so a child is always a leaf.
   if (kids.length === 0) return renderLeaf(node, overlayIds)
   const inner = kids.map((k) => renderLeaf(k, overlayIds)).join('\n')
   return `<${tagFor(node.type)} ${cfgOf(node.config)}>\n${inner.replace(/^/gm, '  ')}\n    </${tagFor(node.type)}>`
@@ -76,10 +77,10 @@ export function generatePage(doc: CanvasDoc): string {
   const overlayIds = new Set(overlays.map((m) => m.id))
   const needState = overlays.length > 0
   const header = needState ? `import { useState } from 'react'\n${baseHeader}` : baseHeader
+  const kidsOf = (id: string): PlacedNode[] => childrenOf(doc.nodes, id, true).filter((k) => k.type in OSB_REGISTRY)
   const body = roots
     .map((n) => {
-      const kids = childrenOf(doc.nodes, n.id, true).filter((k) => k.type in OSB_REGISTRY)
-      return `      ${renderNode(n, kids, overlayIds)}`
+      return `      ${renderNode(n, kidsOf(n.id), overlayIds)}`
     })
     .join('\n')
   const overlayLayer = overlays.map((m) => `      ${renderOverlay(m)}`).join('\n')

@@ -6,13 +6,15 @@ with older code, comments, or docs, this file wins.
 
 ## 1. Model: atoms, containers, patterns
 
-- **Atom** — a visible leaf with no children: text (`p`), button, image.
-  Minimum footprint 1x1. The only things a user can see on the canvas.
+- **Atom** — a visible leaf with no children: text (`p`), button, image,
+  video, dropdown. Minimum footprint 1x1. The only things a user can see on
+  the canvas.
 - **Container** — an empty canvas with chrome only (background, padding,
   radius, shadow). No intrinsic content. The only containers are the
   **page root** and **card**. There is no `section` type (see §8).
 - **Collection-backed** — inspector-edited data with no canvas children
-  (marquee items, accordion rows, dropdown options). Unchanged.
+  (marquee items, accordion rows, dropdown options). The component itself is
+  an atom; its items live in config, never as nodes. Unchanged.
 - **Pattern** — a palette recommendation, not a node type: a factory that
   inserts a container pre-filled with ordinary atoms (e.g. "Card" = card +
   title text + body text + button). After insert, everything is regular
@@ -41,7 +43,10 @@ One predicate owns highlight, drop accept/reject, and file validation.
 No per-component branches. A placement is rejected iff any holds:
 
 - **R1 KIND** — atoms only inside containers; containers only at root;
-  never container-in-container; collection-backed kinds never on canvas.
+  never container-in-container. Collection-backed components are atoms: their
+  items are inspector-edited data, never nodes, so nothing nests inside them
+  (menu items may nest one submenu level as *data*, capped by `MENU_MAX_DEPTH`
+  and enforced by `validateSite`).
 - **R2 CONTAINMENT** — the full child rect sits inside the parent inner
   rect (root: within canvas columns). Sticking out is rejected.
 - **R3 EXCLUSIVITY** — siblings never overlap. Touching edges is fine.

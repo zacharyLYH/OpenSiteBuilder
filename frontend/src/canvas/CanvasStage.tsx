@@ -91,9 +91,12 @@ export default function CanvasStage(p: CanvasStageProps) {
   // True while a child SE-resize is in flight (suppresses HTML5 drag).
   const resizeActive = useRef(false)
 
-  /** SE resize for nested atoms; commits on release through the usual gate. */
+  /** SE resize for nested kids; commits on release through the usual gate.
+   * The box is the nearest container shell. */
   const onChildResize = (e: React.MouseEvent, parent: PlacedNode, kid: PlacedNode) => {
-    const shell = (e.currentTarget as HTMLElement).closest('[data-testid^="container-"]') as HTMLElement | null
+    const shell = (e.currentTarget as HTMLElement).closest(
+      '[data-testid^="container-"]',
+    ) as HTMLElement | null
     if (!shell) return
     startChildResize(e, {
       box: shell.getBoundingClientRect(),
@@ -106,63 +109,74 @@ export default function CanvasStage(p: CanvasStageProps) {
     })
   }
 
+  /** One shell body for any container with children. Chrome, layer, landing
+   * ghost, and the dashed invitation read the same. */
+  const shellDecor = (parent: PlacedNode) => (
+    <>
+      {fb.ghost && fb.ghost.parentId === parent.id && (
+        <div
+          aria-hidden
+          data-testid="drop-ghost"
+          data-ok={fb.ghost.ok}
+          style={overlayChildStyle(parent, fb.ghost)}
+          className={`pointer-events-none absolute rounded-md border-2 border-dashed ${fb.ghost.ok ? 'border-sky-500 bg-sky-500/10' : 'border-rose-500 bg-rose-500/10'
+            }`}
+        />
+      )}
+      {doc.nodes.filter((n) => n.parentId === parent.id).length === 0 && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-3">
+          <div
+            data-testid={`empty-hint-${parent.id}`}
+            className="rounded-lg border-2 border-dashed border-slate-300 bg-white/60 px-4 py-3 text-center text-xs text-slate-400"
+          >
+            {OSB_REGISTRY[parent.type].emptyHint ?? 'Drag content here'}
+          </div>
+        </div>
+      )}
+    </>
+  )
+
+  /** The child layer for a container: its atom kids on the shared surface. */
+  const childLayerFor = (parent: PlacedNode, bounds = false) => (
+    <PlacedChildLayer
+      parent={parent}
+      kids={doc.nodes.filter((n) => n.parentId === parent.id)}
+      selectedId={selectedId}
+      conflicts={fb.conflicts}
+      resizing={resizing}
+      bounds={bounds}
+      ids={{ node: 'canvas-node', resize: (id) => `resize-${id}`, remove: 'remove-node' }}
+      interactive={!preview}
+      onSelect={p.onSelect}
+      onRemove={p.onRemove}
+      onDragStart={(k, e) => {
+        if (resizeActive.current) {
+          e.preventDefault()
+          return
+        }
+        p.onBeginChildDrag(k.id, e)
+      }}
+      onDragEnd={p.onEndDrag}
+      onResize={(e, k) => onChildResize(e, parent, k)}
+    />
+  )
+
   /** A container's whole body: its chrome, its children, the landing ghost,
    * and the dashed invitation when it is empty. */
   const containerBody = (parent: PlacedNode) => {
-    const entry = OSB_REGISTRY[parent.type]
-    const kids = doc.nodes.filter((n) => n.parentId === parent.id)
     // Bounds on demand: transparent atoms (text) are invisible otherwise.
     const showBounds = parent.id === selectedId
     return (
       <div
         data-testid={`container-${parent.id}`}
         data-type={parent.type}
-        onDragOver={(e) => p.onHoverContainer(e, parent)}
-        onDrop={(e) => p.onContainerDrop(e, parent)}
+        onDragOver={preview ? undefined : (e) => p.onHoverContainer(e, parent)}
+        onDrop={preview ? undefined : (e) => p.onContainerDrop(e, parent)}
         className={`relative h-full w-full${fb.conflicts.includes(parent.id) ? ' drag-conflict' : ''}`}
       >
-        {entry.render(parent.config)}
-        <PlacedChildLayer
-          parent={parent}
-          kids={kids}
-          selectedId={selectedId}
-          conflicts={fb.conflicts}
-          resizing={resizing}
-          bounds={showBounds}
-          ids={{ node: 'canvas-node', resize: (id) => `resize-${id}`, remove: 'remove-node' }}
-          onSelect={p.onSelect}
-          onRemove={p.onRemove}
-          onDragStart={(k, e) => {
-            if (resizeActive.current) {
-              e.preventDefault()
-              return
-            }
-            p.onBeginChildDrag(k.id, e)
-          }}
-          onDragEnd={p.onEndDrag}
-          onResize={(e, k) => onChildResize(e, parent, k)}
-        />
-        {fb.ghost && fb.ghost.parentId === parent.id && (
-          <div
-            aria-hidden
-            data-testid="drop-ghost"
-            data-ok={fb.ghost.ok}
-            style={overlayChildStyle(parent, fb.ghost)}
-            className={`pointer-events-none absolute rounded-md border-2 border-dashed ${
-              fb.ghost.ok ? 'border-sky-500 bg-sky-500/10' : 'border-rose-500 bg-rose-500/10'
-            }`}
-          />
-        )}
-        {kids.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-3">
-            <div
-              data-testid={`empty-hint-${parent.id}`}
-              className="rounded-lg border-2 border-dashed border-slate-300 bg-white/60 px-4 py-3 text-center text-xs text-slate-400"
-            >
-              {entry.emptyHint ?? 'Drag content here'}
-            </div>
-          </div>
-        )}
+        {OSB_REGISTRY[parent.type].render(parent.config)}
+        {childLayerFor(parent, showBounds)}
+        {!preview && shellDecor(parent)}
       </div>
     )
   }
@@ -195,9 +209,8 @@ export default function CanvasStage(p: CanvasStageProps) {
       data-preview={preview ? 'true' : 'false'}
       onClick={p.onClearSelection}
       style={{ height: `calc(100vh - ${HEADER_PX}px)` }}
-      className={`relative overflow-auto${theme === 'dark' ? ' bg-slate-950' : preview ? ' bg-white' : ''}${
-        fb.dragging ? ' dragging-on' : ''
-      }${fb.forbidden ? ' drop-forbidden' : ''}`}
+      className={`relative overflow-auto${theme === 'dark' ? ' bg-slate-950' : preview ? ' bg-white' : ''}${fb.dragging ? ' dragging-on' : ''
+        }${fb.forbidden ? ' drop-forbidden' : ''}`}
     >
       <div ref={containerRef} style={{ minWidth: minGridWidth(), height }} className="relative">
         {/* Neon backdrop is editor chrome and light-only; preview hides it. */}
@@ -236,9 +249,9 @@ export default function CanvasStage(p: CanvasStageProps) {
             className="min-h-full"
             gridConfig={{ cols: GRID_COLS, rowHeight: cell, margin: [GRID_MARGIN_X, GRID_MARGIN_Y], containerPadding: [0, 0] }}
             compactor={noOverlap}
-            dropConfig={{ enabled: true, defaultItem: { w: 10, h: 10 } }}
-            dragConfig={{ cancel: '.osb-child' }}
-            resizeConfig={{ handles: ['se'] }}
+            dropConfig={{ enabled: !preview, defaultItem: { w: 10, h: 10 } }}
+            dragConfig={{ cancel: '.osb-child', enabled: !preview }}
+            resizeConfig={{ enabled: !preview, handles: ['se'] }}
             {...p.rgl}
             onDropDragOver={(e) => {
               const box = containerRef.current?.getBoundingClientRect()
@@ -251,16 +264,25 @@ export default function CanvasStage(p: CanvasStageProps) {
                 data-testid="canvas-node"
                 data-type={n.type}
                 data-id={n.id}
-                onClick={(e) => {
-                  // Linked buttons render real <a> tags: stay in the editor.
-                  e.preventDefault()
-                  e.stopPropagation()
-                  p.onSelect(n.id)
-                }}
-                className={`relative ${n.id === selectedId ? 'canvas-selected h-full' : 'h-full'}${fb.check && fb.check.id === n.id && !fb.check.ok ? ' drag-invalid' : ''}${fb.conflicts.includes(n.id) ? ' drag-conflict' : ''}`}
+                onClick={
+                  preview
+                    ? undefined
+                    : (e) => {
+                        // Linked buttons render real <a> tags: stay in the editor.
+                        e.preventDefault()
+                        e.stopPropagation()
+                        p.onSelect(n.id)
+                      }
+                }
+                className={`relative ${!preview && n.id === selectedId ? 'canvas-selected h-full' : 'h-full'}${fb.check && fb.check.id === n.id && !fb.check.ok ? ' drag-invalid' : ''}${fb.conflicts.includes(n.id) ? ' drag-conflict' : ''}`}
               >
-                {OSB_REGISTRY[n.type].kind === 'container' ? containerBody(n) : OSB_REGISTRY[n.type].render(n.config)}
-                {n.id === selectedId && (
+                {(() => {
+                  // Containers own a child layer; leaves (atoms) and overlays
+                  // render bare. New shell kinds need no branch here.
+                  const kind = OSB_REGISTRY[n.type].kind
+                  return kind === 'atom' || kind === 'overlay' ? OSB_REGISTRY[n.type].render(n.config) : containerBody(n)
+                })()}
+                {!preview && n.id === selectedId && (
                   <RemoveButton
                     id={n.id}
                     onRemove={p.onRemove}

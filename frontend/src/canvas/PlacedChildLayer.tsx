@@ -15,6 +15,8 @@ export interface PlacedChildLayerProps {
   ids: { node: string; resize: (id: string) => string; remove: string }
   /** Wrap in the dashed bounds box (canvas container while selected). */
   bounds?: boolean
+  /** Preview mode: no selection, drag, or resize — the real site surface. */
+  interactive?: boolean
   onSelect(id: string): void
   onRemove(id: string): void
   onDragStart(kid: PlacedNode, e: React.DragEvent): void
@@ -29,45 +31,54 @@ export interface PlacedChildLayerProps {
  * the overlay editor — same geometry, same interactions, one markup.
  */
 export default function PlacedChildLayer(p: PlacedChildLayerProps) {
+  // Preview mode renders the real site: kids stay clickable (video controls,
+  // links) but are never selected, dragged, or resized.
+  const interactive = p.interactive !== false
   return (
     <div
       data-testid={p.bounds ? 'child-bounds' : undefined}
       className={`pointer-events-none absolute inset-0${p.bounds ? ' show-child-bounds' : ''}`}
     >
-      {p.kids.map((k) => (
-        <div
-          key={k.id}
-          data-testid={p.ids.node}
-          data-type={k.type}
-          data-id={k.id}
-          data-parent={p.parent.id}
-          draggable
-          onDragStart={(e) => {
-            e.stopPropagation()
-            p.onDragStart(k, e)
-          }}
-          onDragEnd={p.onDragEnd}
-          onClick={(e) => {
-            // Linked buttons render real <a> tags: stay in the editor.
-            e.preventDefault()
-            e.stopPropagation()
-            p.onSelect(k.id)
-          }}
-          style={overlayChildStyle(p.parent, p.resizing?.id === k.id ? { ...k, ...p.resizing } : k)}
-          className={`osb-child pointer-events-auto ${
-            k.id === p.selectedId ? 'canvas-selected overflow-hidden' : 'overflow-hidden'
-          }${p.conflicts?.includes(k.id) ? ' drag-conflict' : ''}`}
-        >
-          {OSB_REGISTRY[k.type].render(k.config)}
-          {k.id === p.selectedId && (
-            <>
-              <div
-                data-testid={p.ids.resize(k.id)}
-                aria-label="Resize element"
-                onMouseDown={(e) => p.onResize(e, k)}
-                className="absolute bottom-0 right-0 z-10 h-4 w-4 cursor-se-resize rounded-tl-md border-l border-t border-sky-500 bg-white/90"
-              />
-              <button
+      {p.kids.map((k) => {
+        const content = OSB_REGISTRY[k.type].render(k.config)
+        return (
+          <div
+            key={k.id}
+            data-testid={p.ids.node}
+            data-type={k.type}
+            data-id={k.id}
+            data-parent={p.parent.id}
+            draggable={interactive}
+            onDragStart={(e) => {
+              e.stopPropagation()
+              p.onDragStart(k, e)
+            }}
+            onDragEnd={p.onDragEnd}
+            onClick={
+              interactive
+                ? (e) => {
+                    // Linked buttons render real <a> tags: stay in the editor.
+                    e.preventDefault()
+                    e.stopPropagation()
+                    p.onSelect(k.id)
+                  }
+                : undefined
+            }
+            style={overlayChildStyle(p.parent, p.resizing?.id === k.id ? { ...k, ...p.resizing } : k)}
+            className={`osb-child pointer-events-auto ${
+              interactive && k.id === p.selectedId ? 'canvas-selected overflow-hidden' : 'overflow-hidden'
+            }${p.conflicts?.includes(k.id) ? ' drag-conflict' : ''}`}
+          >
+            {content}
+            {interactive && k.id === p.selectedId && (
+              <>
+                <div
+                  data-testid={p.ids.resize(k.id)}
+                  aria-label="Resize element"
+                  onMouseDown={(e) => p.onResize(e, k)}
+                  className="absolute bottom-0 right-0 z-10 h-4 w-4 cursor-se-resize rounded-tl-md border-l border-t border-sky-500 bg-white/90"
+                />
+                <button
                 type="button"
                 data-testid={p.ids.remove}
                 aria-label="Remove element"
@@ -82,7 +93,8 @@ export default function PlacedChildLayer(p: PlacedChildLayerProps) {
             </>
           )}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

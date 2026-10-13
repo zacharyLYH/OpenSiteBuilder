@@ -3,6 +3,7 @@ import OSBButton, { OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS, type OSBButtonConfig
 import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, type OSBCardConfig } from './OSBCard'
 import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } from './OSBImage'
 import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, type OSBDrawerConfig } from './OSBDrawer'
+import OSBDropdown, { OSB_DROPDOWN_DEFAULTS, OSB_DROPDOWN_FIELDS, type OSBDropdownConfig } from './OSBDropdown'
 import OSBModal, { OSB_MODAL_DEFAULTS, OSB_MODAL_FIELDS, type OSBModalConfig } from './OSBModal'
 import { OSBOverlayBody } from './OSBOverlay'
 import OSBText, { OSB_TEXT_DEFAULTS, OSB_TEXT_FIELDS, type OSBTextConfig } from './OSBText'
@@ -65,10 +66,12 @@ function defineEntry<C extends Record<string, unknown>>(
  * exactly once, as a key here; types, defaults, fields, grid sizes, kinds and
  * rendering are all derived below. Key order is the palette order.
  *
- * Atoms (text, button, image) are the only visible leaves. Card is the only
- * container. Overlays are shells whose content lives in `overlays[]`, never
- * on the grid — they enter from a trigger drawer, not the palette.
- * Named compositions are patterns in ./patterns, not types here.
+ * Atoms (text, button, image, video, dropdown) are the only visible leaves —
+ * collection-backed atoms like the dropdown keep their items in config, never
+ * as canvas nodes. Card is the only container. Overlays are shells whose
+ * content lives in `overlays[]`, never on the grid — they enter from a trigger
+ * drawer, not the palette. Named compositions are patterns in ./patterns, not
+ * types here.
  */
 export const OSB_REGISTRY = {
   card: defineEntry(
@@ -119,6 +122,15 @@ export const OSB_REGISTRY = {
     OSBDrawer,
     { kind: 'overlay', chrome: 'sheet', emptyHint: 'Drag text, buttons or images here' },
   ),
+  dropdown: defineEntry(
+    'Dropdown',
+    OSB_DROPDOWN_DEFAULTS,
+    OSB_DROPDOWN_FIELDS,
+    // A menu trigger, not a panel: the trigger fills its box, so a dropdown
+    // defaults to button size. The old 6x4 default dropped a dark slab.
+    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 4, cols: 3, rows: 1 },
+    OSBDropdown,
+  ),
   video: defineEntry(
     'Video',
     OSB_VIDEO_DEFAULTS,
@@ -135,7 +147,7 @@ export const OSB_NODE_TYPES: OSBNodeType[] = Object.keys(OSB_REGISTRY) as OSBNod
 // Palette order: plain atoms only. Cards always enter via the Card pattern
 // (a shell pre-filled with connected atoms); an empty shell is what remains
 // after its children are deleted, never a starting point.
-export const OSB_PALETTE_TYPES: OSBNodeType[] = ['text', 'button', 'image', 'video']
+export const OSB_PALETTE_TYPES: OSBNodeType[] = ['text', 'button', 'image', 'video', 'dropdown']
 
 export function isAtomType(t: string): boolean {
   return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'atom'
@@ -146,12 +158,14 @@ export function isContainerType(t: string): boolean {
 }
 
 /**
- * The one structural membership rule. A container holds any atom; an
- * overlay holds any atom; nothing else nests anywhere. Default deny:
- * unknown types reject.
+ * The one structural membership rule. Containers hold atoms; overlays hold
+ * atoms. Collection-backed components (dropdowns, …) are atoms and hold
+ * nothing. Nothing else nests anywhere. Default deny: unknown types reject.
  */
 export function canContain(parentType: string, childType: string): boolean {
-  return (isContainerType(parentType) || isOverlayType(parentType)) && isAtomType(childType)
+  if (isOverlayType(parentType)) return isAtomType(childType)
+  if (isContainerType(parentType)) return isAtomType(childType)
+  return false
 }
 
 /** Legacy alias: every overlay kind, not just popups. */
@@ -215,5 +229,5 @@ export function OSBOverlayTestPreview({
   )
 }
 
-export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig, OSBVideoConfig }
-export { OSBButton, OSBCard, OSBDrawer, OSBImage, OSBModal, OSBText, OSBVideo }
+export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBDropdownConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig, OSBVideoConfig }
+export { OSBButton, OSBCard, OSBDrawer, OSBDropdown, OSBImage, OSBModal, OSBText, OSBVideo }

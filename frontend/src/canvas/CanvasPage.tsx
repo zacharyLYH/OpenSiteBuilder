@@ -448,115 +448,115 @@ export default function CanvasPage() {
 
   return (
     <OSBThemeProvider theme={theme}>
-    <div className="h-screen w-screen overflow-hidden bg-white">
-      <CanvasHeader
-        project={projectName}
-        palettes={palettes}
-        issues={!issues.ok}
-        theme={theme}
-        preview={preview}
-        onTheme={setTheme}
-        onTogglePreview={() => setPreview((v) => !v)}
-        dropMsg={dropMsg}
-        pushMsg={pushMsg}
-        pushing={pushing}
-        canPush={doc.nodes.length > 0}
-        validation={validation}
-        overlayCount={overlaysOf(doc).length}
-        overlays={
-          overlaysOpen
-            ? overlaysOf(doc).map((m) => ({
+      <div className="h-screen w-screen overflow-hidden bg-white">
+        <CanvasHeader
+          project={projectName}
+          palettes={palettes}
+          issues={!issues.ok}
+          theme={theme}
+          preview={preview}
+          onTheme={setTheme}
+          onTogglePreview={() => setPreview((v) => !v)}
+          dropMsg={dropMsg}
+          pushMsg={pushMsg}
+          pushing={pushing}
+          canPush={doc.nodes.length > 0}
+          validation={validation}
+          overlayCount={overlaysOf(doc).length}
+          overlays={
+            overlaysOpen
+              ? overlaysOf(doc).map((m) => ({
                 id: m.id,
                 overlayType: m.overlayType,
                 title: (m.config as { title?: unknown } | undefined)?.title,
               }))
-            : null
-        }
-        onOpenOverlays={() => setOverlaysOpen(true)}
-        onCloseOverlays={() => setOverlaysOpen(false)}
-        onEditOverlay={(id) => {
-          setOverlaysOpen(false)
-          setSelectedId(id)
-          setEditingOverlayId(id)
-        }}
-        onRemoveOverlay={removeOverlayFlow}
-        onEndDrag={clearDrag}
-        onValidate={() => setValidation(issues)}
-        onCloseValidation={() => setValidation(null)}
-        onExit={exitProject}
-        onPush={publish}
-      />
-
-      <CanvasStage
-        doc={doc}
-        roots={roots}
-        selectedId={selectedId}
-        fb={fb}
-        palettes={palettes}
-        preview={preview}
-        epoch={epoch}
-        onRootDragOver={onRootDragOver}
-        rgl={{
-          onDrop,
-          onDrag: onDragCheck,
-          onDragStop: (layout, _old, dragged) => commit(layout, dragged),
-          onResizeStop: (layout, _old, dragged) => commit(layout, dragged),
-        }}
-        onClearSelection={() => setSelectedId(null)}
-        onSelect={(id) => setSelectedId(id)}
-        onRemove={removeSelected}
-        onBeginChildDrag={beginChildDrag}
-        onEndDrag={clearDrag}
-        onResizeKid={resizeKid}
-        onHoverContainer={hoverContainer}
-        onContainerDrop={containerDrop}
-      />
-
-      {drawerNode && (
-        <ConfigDrawer
-          key={drawerNode.id}
-          node={drawerNode}
-          side={side}
-          onClose={() => setSelectedId(null)}
-          onApply={applyConfig}
-          actions={drawerActions}
-        />
-      )}
-
-      {editingOverlay && (
-        <OverlayEditor
-          kind={editingOverlay.overlayType}
-          overlay={editingOverlay}
-          armed={armed}
-          armedType={armedType}
-          selectedId={selectedId}
-          onSelect={(id) => setSelectedId(id)}
-          onClose={() => setEditingOverlayId(null)}
-          onReject={reject}
-          onConsumeDrag={clearDrag}
-          onDropChild={(type, rect) =>
-            applyResult(
-              insertOverlayChild(docRef.current, editingOverlay.id, {
-                id: crypto.randomUUID(),
-                type,
-                config: {},
-                parentId: editingOverlay.id,
-                ...rect,
-              }),
-            )
+              : null
           }
-          onMoveIn={(id, rect) => moveIntoOverlay(editingOverlay.id, id, rect)}
-          onMoveChild={(id, rect) => applyResult(moveOverlayChild(docRef.current, editingOverlay.id, id, rect))}
-          onResizeChild={(id, rect) => applyResult(moveOverlayChild(docRef.current, editingOverlay.id, id, rect))}
-          onResizeShell={(cols, rows) => applyResult(resizeOverlay(docRef.current, editingOverlay.id, cols, rows))}
-          onRemoveChild={(id) => removeSelected(id)}
+          onOpenOverlays={() => setOverlaysOpen(true)}
+          onCloseOverlays={() => setOverlaysOpen(false)}
+          onEditOverlay={(id) => {
+            setOverlaysOpen(false)
+            setSelectedId(id)
+            setEditingOverlayId(id)
+          }}
+          onRemoveOverlay={removeOverlayFlow}
+          onEndDrag={clearDrag}
+          onValidate={() => setValidation(issues)}
+          onCloseValidation={() => setValidation(null)}
+          onExit={exitProject}
+          onPush={publish}
         />
-      )}
 
-      {testingOverlay && (
-        <OverlayTestPreview kind={testingOverlay.overlayType} overlay={testingOverlay} onClose={() => setTestingOverlayId(null)} />
-      )}
-    </div>
+        <CanvasStage
+          doc={doc}
+          roots={roots}
+          selectedId={selectedId}
+          fb={fb}
+          palettes={palettes}
+          preview={preview}
+          epoch={epoch}
+          onRootDragOver={onRootDragOver}
+          rgl={{
+            onDrop,
+            onDrag: onDragCheck,
+            onDragStop: (layout, _old, dragged) => commit(layout, dragged),
+            onResizeStop: (layout, _old, dragged) => commit(layout, dragged),
+          }}
+          onClearSelection={() => setSelectedId(null)}
+          onSelect={(id) => setSelectedId(id)}
+          onRemove={removeSelected}
+          onBeginChildDrag={beginChildDrag}
+          onEndDrag={clearDrag}
+          onResizeKid={resizeKid}
+          onHoverContainer={hoverContainer}
+          onContainerDrop={containerDrop}
+        />
+
+        {drawerNode && (
+          <ConfigDrawer
+            key={drawerNode.id}
+            node={drawerNode}
+            side={side}
+            onClose={() => setSelectedId(null)}
+            onApply={applyConfig}
+            actions={drawerActions}
+          />
+        )}
+
+        {editingOverlay && (
+          <OverlayEditor
+            kind={editingOverlay.overlayType}
+            overlay={editingOverlay}
+            armed={armed}
+            armedType={armedType}
+            selectedId={selectedId}
+            onSelect={(id) => setSelectedId(id)}
+            onClose={() => setEditingOverlayId(null)}
+            onReject={reject}
+            onConsumeDrag={clearDrag}
+            onDropChild={(type, rect) =>
+              applyResult(
+                insertOverlayChild(docRef.current, editingOverlay.id, {
+                  id: crypto.randomUUID(),
+                  type,
+                  config: {},
+                  parentId: editingOverlay.id,
+                  ...rect,
+                }),
+              )
+            }
+            onMoveIn={(id, rect) => moveIntoOverlay(editingOverlay.id, id, rect)}
+            onMoveChild={(id, rect) => applyResult(moveOverlayChild(docRef.current, editingOverlay.id, id, rect))}
+            onResizeChild={(id, rect) => applyResult(moveOverlayChild(docRef.current, editingOverlay.id, id, rect))}
+            onResizeShell={(cols, rows) => applyResult(resizeOverlay(docRef.current, editingOverlay.id, cols, rows))}
+            onRemoveChild={(id) => removeSelected(id)}
+          />
+        )}
+
+        {testingOverlay && (
+          <OverlayTestPreview kind={testingOverlay.overlayType} overlay={testingOverlay} onClose={() => setTestingOverlayId(null)} />
+        )}
+      </div>
     </OSBThemeProvider>
   )
 }

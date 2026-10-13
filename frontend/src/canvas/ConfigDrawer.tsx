@@ -6,8 +6,64 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { Textarea } from '../components/ui/textarea'
-import { isFieldVisible, type OSBField } from '../osb/types'
+import { isFieldVisible, MENU_MAX_DEPTH, type OSBField, type OSBMenuItem } from '../osb/types'
 import type { PlacedNode } from './doc'
+
+/** Repeatable label + link rows (dropdown options, …). Collection-backed data
+ * lives in config, never on the canvas (PRD §6.2). A row may hold one nested
+ * list — its submenu — and MENU_MAX_DEPTH stops the nesting there. */
+function ItemsEditor({
+  items,
+  onChange,
+  depth = 0,
+}: {
+  items: OSBMenuItem[]
+  onChange: (items: OSBMenuItem[]) => void
+  depth?: number
+}) {
+  const set = (i: number, patch: Partial<OSBMenuItem>) =>
+    onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)))
+  return (
+    <div className="flex flex-col gap-2">
+      {items.map((it, i) => (
+        <div key={i} className="flex flex-col gap-2">
+          <div data-testid="osb-item-row" className="flex items-center gap-2">
+            <Input aria-label="Item label" placeholder="Label" value={it.label} onChange={(e) => set(i, { label: e.target.value })} />
+            <Input aria-label="Item link" placeholder="Link" value={it.link} onChange={(e) => set(i, { link: e.target.value })} />
+            {depth + 1 < MENU_MAX_DEPTH && (
+              <Button
+                type="button"
+                aria-label="Add sub-item"
+                variant="outline"
+                size="sm"
+                onClick={() => set(i, { children: [...(it.children ?? []), { label: '', link: '' }] })}
+              >
+                ↳
+              </Button>
+            )}
+            <Button type="button" aria-label="Remove item" variant="outline" size="sm" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+              ✕
+            </Button>
+          </div>
+          {it.children !== undefined && it.children.length > 0 && (
+            <div data-testid="osb-sub-items" className="ml-3 border-l border-slate-200 pl-3">
+              <ItemsEditor items={it.children} onChange={(next) => set(i, { children: next })} depth={depth + 1} />
+            </div>
+          )}
+        </div>
+      ))}
+      <Button
+        type="button"
+        data-testid="osb-add-item"
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...items, { label: '', link: '' }])}
+      >
+        ＋ Add item
+      </Button>
+    </div>
+  )
+}
 
 /** The one control per field kind — the field itself carries its options. */
 function FieldControl({
@@ -17,12 +73,14 @@ function FieldControl({
 }: {
   field: OSBField
   value: unknown
-  onChange: (v: string | boolean) => void
+  onChange: (v: string | boolean | OSBMenuItem[]) => void
 }) {
   const id = `osb-field-${field.key}`
   const text = typeof value === 'string' ? value : (value ?? '').toString()
   if (field.kind === 'longtext')
     return <Textarea id={id} rows={3} value={text} onChange={(e) => onChange(e.target.value)} />
+  if (field.kind === 'items')
+    return <ItemsEditor items={Array.isArray(value) ? (value as OSBMenuItem[]) : []} onChange={onChange} />
   if (field.kind === 'select')
     return (
       <Select value={text} onValueChange={onChange}>
@@ -78,7 +136,7 @@ export default function ConfigDrawer({
   const entry = OSB_REGISTRY[node.type]
   const [draft, setDraft] = useState<Record<string, unknown>>({ ...entry.defaults, ...node.config })
   // Selecting a node never rewrites its stored config — only a real edit does.
-  const edit = (key: string, value: string | boolean) => {
+  const edit = (key: string, value: string | boolean | OSBMenuItem[]) => {
     const next = { ...draft, [key]: value }
     // A field that just hid (e.g. the link was cleared) must not keep a
     // stale value behind: hidden booleans fall back to their defaults.
@@ -108,7 +166,9 @@ export default function ConfigDrawer({
         showOverlay={false}
         showCloseButton={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
-        className="overflow-y-auto"
+        // A settings panel, not an overlay shell: it keeps a fixed width, or a
+        // full-bleed preview (a video's intrinsic width) would swallow the canvas.
+        className="w-full max-w-sm overflow-y-auto"
       >
         <SheetHeader>
           <SheetTitle>{entry.name} settings</SheetTitle>
@@ -118,7 +178,9 @@ export default function ConfigDrawer({
             </Button>
           </SheetClose>
         </SheetHeader>
-        <div className="pointer-events-none overflow-hidden rounded-md border border-slate-200">
+        {/* The preview is a thumbnail: clicks stay in the drawer. Media is the
+            exception — a video's whole job is to play, so it stays clickable. */}
+        <div className="pointer-events-none overflow-hidden rounded-md border border-slate-200 [&_video]:pointer-events-auto">
           {entry.render(draft)}
         </div>
         {entry.fields.filter((f) => isFieldVisible(f, draft)).map((f) => (

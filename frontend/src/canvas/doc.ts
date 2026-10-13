@@ -81,14 +81,37 @@ export function loadDoc(key: string): CanvasDoc {
     const doc = JSON.parse(localStorage.getItem(key) ?? '') as CanvasDoc | null
     if (!doc || doc.version !== 1 || !Array.isArray(doc.nodes)) return EMPTY_DOC
     // Drop unknown types (removed components), then prune orphans: children
-    // whose parent is missing, not a root container, or itself nested.
+    // whose parent is missing, dropped, misplaced, or nested too deep.
+    // Depth follows the gate (root > container > atom); geometry is validated
+    // on demand. Kept parents resolve breadth-first so orphans of dropped
+    // parents never survive.
     const known = doc.nodes.filter((n) => n && typeof n.type === 'string' && n.type in OSB_REGISTRY)
-    const roots = new Set(known.filter((n) => n.parentId === null && isContainerType(n.type)).map((n) => n.id))
+    const kept = new Map<string, PlacedNode>()
+    const keptDepth = new Map<string, number>()
+    for (const n of known) {
+      if (n.parentId === null && !kept.has(n.id)) {
+        kept.set(n.id, n)
+        keptDepth.set(n.id, 0)
+      }
+    }
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const n of known) {
+        if (kept.has(n.id) || n.parentId === null) continue
+        const parent = kept.get(n.parentId)
+        if (!parent || !canContain(parent.type, n.type)) continue
+        const d = keptDepth.get(n.parentId)! + 1
+        if (d > 2) continue
+        if (isContainerType(n.type)) continue
+        kept.set(n.id, n)
+        keptDepth.set(n.id, d)
+        grew = true
+      }
+    }
     return {
       version: 1,
-      nodes: known.filter(
-        (n) => n.parentId === null || (n.parentId !== null && roots.has(n.parentId) && isAtomType(n.type)),
-      ),
+      nodes: known.filter((n) => kept.has(n.id)),
       overlays: pruneOverlays(overlaysOf(doc)),
       theme: themeOf(doc),
     }
@@ -231,8 +254,65 @@ export type RejectReason =
   | 'disconnected'
   | 'undersize'
 
+/** Depth of a node by parent chain (roots are 0). Cycle-safe: -1 when the
+ * chain loops or dangles. Shared by the gate, the loader, and the router so
+ * "nothing nests twice" lives in exactly one place. */
+export function depthOf(nodes: readonly PlacedNode[], id: string | null): number {
+  if (id === null) return -1
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const seen = new Set<string>()
+  let cur = byId.get(id)
+  let d = 0
+  while (cur && cur.parentId !== null) {
+    if (seen.has(cur.parentId)) return -1
+    seen.add(cur.parentId)
+    cur = byId.get(cur.parentId)
+    if (!cur) return -1
+    d += 1
+  }
+  return cur ? d : -1
+}
+
+/** A move's whole subtree still fits the depth rule at its new home: no
+ * cycles, everything at depth ≤ 2 (root > container > atom). */
+function subtreeFits(nodes: PlacedNode[], id: string, parentId: string | null): boolean {
+  if (parentId !== null) {
+    const seen = new Set<string>([id])
+    let cur: PlacedNode | undefined = nodes.find((n) => n.id === parentId)
+    while (cur) {
+      if (seen.has(cur.id)) return false
+      seen.add(cur.id)
+      if (cur.parentId === null) break
+      cur = nodes.find((n) => n.id === cur!.parentId)
+      if (!cur) return false
+    }
+    if (!cur) return false
+  }
+  const base = parentId === null ? 0 : depthOf(nodes, parentId) + 1
+  if (base < 0) return false
+  const kids = new Map<string, PlacedNode[]>()
+  for (const n of nodes) {
+    if (n.parentId === null || n.id === id) continue
+    const list = kids.get(n.parentId) ?? []
+    list.push(n)
+    kids.set(n.parentId, list)
+  }
+  const queue: { pid: string; d: number }[] = [{ pid: id, d: base }]
+  if (base > 2) return false
+  while (queue.length > 0) {
+    const { pid, d } = queue.pop()!
+    for (const k of kids.get(pid) ?? []) {
+      const kd = d + 1
+      if (kd > 2) return false
+      queue.push({ pid: k.id, d: kd })
+    }
+  }
+  return true
+}
+
 /** The single gate for every insert/move (R1–R4). Touch (contiguity) is NOT
  * enforced here — pieces move freely, and Validate checks touch on demand.
+ * Depth is global: atoms live at depth ≤ 2, containers at depth 0.
  * Returns null when valid, else the reason. */
 export function canInsertReason(
   nodes: PlacedNode[],
@@ -251,10 +331,14 @@ export function canInsertReason(
     if (rect.x + rect.cols > GRID_COLS) return 'containment'
   } else {
     const parent = nodes.find((n) => n.id === parentId)
-    // A node with children can never itself nest (depth guard).
-    if (!parent || parent.parentId !== null || !isContainerType(parent.type)) return 'depth'
+    // Atoms and overlays never hold children; containers only at the root.
+    if (!parent || isAtomType(parent.type) || isOverlayType(parent.type)) return 'depth'
+    if (isContainerType(parent.type) && parent.parentId !== null) return 'depth'
     if (!canContain(parent.type, type)) return 'kind'
-    if (ignoreId && !isChildless(nodes, ignoreId)) return 'depth'
+    const childDepth = depthOf(nodes, parent.id) + 1
+    if (childDepth < 0 || childDepth > 2) return 'depth'
+    if (isContainerType(type)) return 'depth'
+    if (ignoreId && !subtreeFits(nodes, ignoreId, parentId)) return 'depth'
     if (rect.x + rect.cols > parent.cols || rect.y + rect.rows > parent.rows) return 'containment'
   }
   return overlapIds(nodes, rect, parentId, ignoreId).length > 0 ? 'overlap' : null
@@ -387,9 +471,17 @@ export function insertPattern(
 
 export function removeNode(doc: CanvasDoc, id: string): CanvasDoc {
   const ids = new Set([id])
-  // Depth-1 cascade: removing a container removes its children.
-  for (const n of doc.nodes) {
-    if (n.parentId && ids.has(n.parentId)) ids.add(n.id)
+  // Transitive cascade: removing a shell removes everything under it, at
+  // any depth.
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const n of doc.nodes) {
+      if (n.parentId && ids.has(n.parentId) && !ids.has(n.id)) {
+        ids.add(n.id)
+        grew = true
+      }
+    }
   }
   return { ...doc, nodes: doc.nodes.filter((n) => !ids.has(n.id)) }
 }
@@ -540,28 +632,53 @@ export const removeDrawerChild = removeOverlayChild
 export const updateModalChildConfig = updateOverlayChildConfig
 export const updateDrawerChildConfig = updateOverlayChildConfig
 
-/** Center-point hit test: at most one container candidate (depth 1). */
+/** Absolute origin of a node in root cells (its parent chain summed).
+ * Cycle-safe: null when the chain loops or dangles. */
+export function absoluteOrigin(nodes: readonly PlacedNode[], id: string): { x: number; y: number } | null {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const seen = new Set<string>()
+  let cur = byId.get(id)
+  let x = 0
+  let y = 0
+  while (cur && cur.parentId !== null) {
+    if (seen.has(cur.parentId)) return null
+    seen.add(cur.parentId)
+    cur = byId.get(cur.parentId)
+    if (!cur) return null
+    x += cur.x
+    y += cur.y
+  }
+  return cur ? { x, y } : null
+}
+
+/** Center-point hit test: the deepest container holding the point.
+ * Roots-only docs behave exactly as before (deepest ties keep doc order). */
 export function nestTargetAt(
   nodes: PlacedNode[],
   point: { x: number; y: number },
 ): PlacedNode | null {
-  const roots = nodes.filter((n) => n.parentId === null)
-  return (
-    roots.find(
-      (n) =>
-        isContainerType(n.type) &&
-        point.x >= n.x &&
-        point.x < n.x + n.cols &&
-        point.y >= n.y &&
-        point.y < n.y + n.rows,
-    ) ?? null
-  )
+  let best: PlacedNode | null = null
+  let bestDepth = -1
+  for (const n of nodes) {
+    if (!isContainerType(n.type)) continue
+    const o = absoluteOrigin(nodes, n.id)
+    if (!o) continue
+    if (point.x >= o.x && point.x < o.x + n.cols && point.y >= o.y && point.y < o.y + n.rows) {
+      const d = depthOf(nodes, n.id)
+      if (d > bestDepth) {
+        best = n
+        bestDepth = d
+      }
+    }
+  }
+  return best
 }
 
 /**
  * Where a dragged rect lands: nested as a child when its center sits in an
- * accepting container, otherwise at root. Pure routing — the caller still
- * runs the result through insertNode/moveNode (the gate).
+ * accepting shell, otherwise at root. Pure routing — the caller still
+ * runs the result through insertNode/moveNode (the gate). Nested shells
+ * route in absolute cells, then convert back to parent-local.
  */
 function resolveLanding(
   nodes: PlacedNode[],
@@ -573,7 +690,8 @@ function resolveLanding(
   const center = { x: rect.x + span.cols / 2, y: rect.y + span.rows / 2 }
   const target = nestTargetAt(nodes, center)
   if (target && target.id !== ignoreId && canContain(target.type, type)) {
-    const local = nestLocal(target, center, span)
+    const o = absoluteOrigin(nodes, target.id) ?? { x: target.x, y: target.y }
+    const local = nestLocal({ ...target, x: o.x, y: o.y }, center, span)
     return { parentId: target.id, rect: { ...local, ...span } }
   }
   return { parentId: null, rect }

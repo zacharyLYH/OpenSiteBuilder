@@ -49,22 +49,46 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
     }
     expect(payload.message).toBe('canvas publish')
     const app = fileContent(payload.files, 'src/App.jsx')
-    // Runtime ships every OSB* component (incl. the shadcn dialog/sheet
-    // bases OSBModal/OSBDrawer import, plus the shared overlay geometry)
-    // plus shared sources.
+    // Runtime ships every OSB* component (incl. the shadcn bases the node
+    // components import) plus shared sources. The expected manifest derives
+    // from the import graph rooted at App + the node components — a new
+    // component or base needs no edits here, and a missing file fails.
     const shipped = new Map(payload.files.map((f) => [f.path, f.content]))
-    const expectedPaths = [
+    const resolveImport = (importer: string, spec: string): string | null => {
+      // Bare packages (react) and anything outside osb/lib ship nothing.
+      const base = spec.startsWith('./osb/')
+        ? `src/${spec.slice(2)}`
+        : importer.startsWith('src/osb/') && spec.startsWith('./')
+          ? `src/osb/${spec.slice(2)}`
+          : importer.startsWith('src/osb/') && spec.startsWith('../lib/')
+            ? `src/${spec.slice(3)}`
+            : null
+      if (!base) return null
+      if (shipped.has(`${base}.tsx`)) return `${base}.tsx`
+      if (shipped.has(`${base}.ts`)) return `${base}.ts`
+      throw new Error(`unresolved import ${spec} from ${importer}`)
+    }
+    const expected = new Set([
       'site.json',
       'src/App.jsx',
-      'src/lib/utils.ts',
-      'src/osb/OSBDialog.tsx',
-      'src/osb/OSBOverlay.tsx',
-      'src/osb/OSBSheet.tsx',
-      'src/osb/OSBTheme.tsx',
       'src/osb/types.ts',
+      'src/osb/OSBTheme.tsx',
       ...OSB_NODE_TYPES.map((t) => `src/osb/${tagFor(t)}.tsx`),
-    ].sort()
-    expect(payload.files.map((f) => f.path).sort()).toEqual(expectedPaths)
+    ])
+    const crawl = (path: string): void => {
+      const content = shipped.get(path)
+      if (!content) throw new Error(`missing file ${path}`)
+      for (const m of content.matchAll(/from '([^']+)'/g)) {
+        const resolved = resolveImport(path, m[1])
+        if (resolved && !expected.has(resolved)) {
+          expected.add(resolved)
+          crawl(resolved)
+        }
+      }
+    }
+    crawl('src/App.jsx')
+    for (const type of OSB_NODE_TYPES) crawl(`src/osb/${tagFor(type)}.tsx`)
+    expect(payload.files.map((f) => f.path).sort()).toEqual([...expected].sort())
     // Every registered node type must import a component that actually ships.
     for (const type of OSB_NODE_TYPES) {
       const tag = tagFor(type)

@@ -18,8 +18,18 @@ export function resolveConfig<T extends object>(defaults: T, provided?: Partial<
 
 /** Nesting kind. Engine vocabulary: atom = visible leaf with no children,
  * container = empty chrome + free-form atom children, overlay = a popup
- * shell (modal content lives in `modals[]`, never on the grid). */
+ * shell (modal content lives in `overlays[]`, never on the grid).
+ * Collection-backed components (dropdown options, …) are atoms too: their
+ * items are inspector-edited data, never canvas nodes (PRD §6.2/§10.5). */
 export type OSBKind = 'atom' | 'container' | 'overlay'
+
+/** One repeatable option row edited in the inspector — e.g. a dropdown
+ * option. Collection-backed data, never a canvas node (PRD §6.2). A row with
+ * `children` renders as a submenu; MENU_MAX_DEPTH stops the nesting there. */
+export type OSBMenuItem = { label: string; link: string; children?: OSBMenuItem[] }
+
+/** How deep collection rows may nest: a submenu of a submenu is not a menu. */
+export const MENU_MAX_DEPTH = 2
 
 /** Shared text alignment knob. */
 export type OSBAlign = 'left' | 'center'
@@ -75,6 +85,16 @@ export type OSBField =
       visibleWhen?: { key: string }
       kind: 'select'
       options: { value: string; label: string }[]
+    }
+  | {
+      /** Repeatable rows of label + link, edited in the inspector (PRD §6.2).
+       * Collection-backed components keep their items here, never on the grid. */
+      key: string
+      label: string
+      hint?: string
+      required?: boolean
+      visibleWhen?: { key: string }
+      kind: 'items'
     }
 
 /** A field shows when its `visibleWhen` dependency holds a real value. */

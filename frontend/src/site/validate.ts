@@ -1,4 +1,5 @@
-import { OSB_NODE_TYPES, canContain, isOverlayType } from '../osb/registry'
+import { OSB_NODE_TYPES, OSB_REGISTRY, canContain, isOverlayType, type OSBNodeType } from '../osb/registry'
+import { MENU_MAX_DEPTH } from '../osb/types'
 import { SITE_SCHEMA_VERSION, type SiteNode } from './types'
 
 export interface SiteValidation {
@@ -49,7 +50,44 @@ export function validateSite(doc: unknown): SiteValidation {
     else seen.add(id)
   }
 
-  function checkNode(n: unknown, path: string, parentType: string | null): void {
+  /** Menu rows (dropdown options, …) nest at most MENU_MAX_DEPTH deep — a
+   * submenu of a submenu is a hand-edited doc, not a builder one. */
+  function checkItems(rows: unknown, path: string, depth = 1): void {
+    if (!Array.isArray(rows)) {
+      errors.push(`${path} must be an array`)
+      return
+    }
+    for (const [i, r] of rows.entries()) {
+      if (typeof r !== 'object' || r === null) {
+        errors.push(`${path}[${i}] must be an object`)
+        continue
+      }
+      const row = r as Record<string, unknown>
+      for (const key of ['label', 'link'] as const) {
+        if (row[key] !== undefined && typeof row[key] !== 'string') {
+          errors.push(`${path}[${i}].${key} must be a string when present`)
+        }
+      }
+      if (row['children'] === undefined) continue
+      if (depth >= MENU_MAX_DEPTH) {
+        errors.push(`${path}[${i}] nests too deep`)
+        continue
+      }
+      checkItems(row['children'], `${path}[${i}].children`, depth + 1)
+    }
+  }
+
+  /** Every `items` field the type declares is collection data in config; the
+   * walker reads the registry, so a new collection kind needs no code here. */
+  function checkConfigItems(type: string, config: Record<string, unknown>, path: string): void {
+    for (const f of OSB_REGISTRY[type as OSBNodeType].fields) {
+      if (f.kind === 'items' && config[f.key] !== undefined) {
+        checkItems(config[f.key], `${path}.config.${f.key}`)
+      }
+    }
+  }
+
+  function checkNode(n: unknown, path: string, parentType: string | null, depth: number): void {
     const node = n as (Record<string, unknown> & { children?: SiteNode[] }) | null
     if (typeof node !== 'object' || node === null) {
       errors.push(`${path} must be an object`)
@@ -61,8 +99,11 @@ export function validateSite(doc: unknown): SiteValidation {
       errors.push(`${path}.type must be one of ${OSB_NODE_TYPES.join(', ')}`)
       return
     }
-    if (node['config'] !== undefined && (typeof node['config'] !== 'object' || node['config'] === null)) {
+    const config = node['config']
+    if (config !== undefined && (typeof config !== 'object' || config === null)) {
       errors.push(`${path}.config must be an object when present`)
+    } else if (typeof config === 'object' && config !== null) {
+      checkConfigItems(type, config as Record<string, unknown>, path)
     }
     const kids = node.children
     if (kids === undefined) {
@@ -75,13 +116,21 @@ export function validateSite(doc: unknown): SiteValidation {
       errors.push(`${path}.children must be an array when present`)
       return
     }
-    if (parentType !== null) {
-      errors.push(`${path} nests too deep (max depth 1)`)
+    // Kids nest at most once (root > container > atom). canContain owns
+    // membership; depth owns levels — a new nestable kind touches those two,
+    // never this walker.
+    if (depth >= 2) {
+      errors.push(`${path} nests too deep`)
       return
     }
-    // Recursion re-checks every child against this container type, so the
-    // atom-only rule lives in exactly one place below.
-    for (const [k, c] of kids.entries()) checkNode(c, `${path}.children[${k}]`, type)
+    for (const [k, c] of kids.entries()) {
+      const kidType = (c as { type?: unknown } | null)?.type
+      if (typeof kidType === 'string' && !canContain(type, kidType)) {
+        errors.push(`${path}.children[${k}] type ${JSON.stringify(kidType)} is not an atom in a container`)
+      } else {
+        checkNode(c, `${path}.children[${k}]`, type, depth + 1)
+      }
+    }
   }
 
   /** Overlay footprint + kid boxes travel as plain numbers; present means
@@ -163,7 +212,7 @@ export function validateSite(doc: unknown): SiteValidation {
       errors.push(`pages[${i}].nodes must be an array`)
       continue
     }
-    for (const [j, n] of (page['nodes'] as unknown[]).entries()) checkNode(n, `pages[${i}].nodes[${j}]`, null)
+    for (const [j, n] of (page['nodes'] as unknown[]).entries()) checkNode(n, `pages[${i}].nodes[${j}]`, null, 0)
     checkOverlays(page['overlays'], `pages[${i}].overlays`)
     // Legacy readers: pre-unification site.json used modals[]/drawers[].
     checkOverlays(page['modals'], `pages[${i}].modals`)

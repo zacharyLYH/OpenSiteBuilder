@@ -47,9 +47,23 @@ const siteModalKid = (k: { id: string; type: string; config: Record<string, unkn
   rows: k.rows,
 })
 
-/** Canvas doc as a site object (single page v1, children nested). Stringified once by the caller. */
+/** Canvas doc as a site object (single page v1, children nested).
+ * Containers keep doc order; kids nest one level (root > container > atom). */
 export function siteObject(doc: CanvasDoc, slug: string): unknown {
-  const kidsOf = (id: string) => childrenOf(doc.nodes, id).map(siteNode)
+  interface SiteJsonNode {
+    id: string
+    type: string
+    config: Record<string, unknown>
+    children?: SiteJsonNode[]
+  }
+  const kidsOf = (id: string, ordered: boolean, depth = 0): SiteJsonNode[] => {
+    if (depth > 3) return []
+    const kids = childrenOf(doc.nodes, id, ordered).filter((k) => k.id !== id)
+    return kids.map((n) => {
+      const grandkids = kidsOf(n.id, true, depth + 1)
+      return { ...siteNode(n), ...(grandkids.length > 0 ? { children: grandkids } : {}) }
+    })
+  }
   const overlays = overlaysOf(doc).map((m) => ({
     id: m.id,
     type: m.overlayType,
@@ -69,7 +83,7 @@ export function siteObject(doc: CanvasDoc, slug: string): unknown {
         nodes: doc.nodes
           .filter((n) => n.parentId === null)
           .map((n) => {
-            const children = kidsOf(n.id)
+            const children = kidsOf(n.id, false)
             return { ...siteNode(n), ...(children.length > 0 ? { children } : {}) }
           }),
         ...(overlays.length > 0 ? { overlays } : {}),

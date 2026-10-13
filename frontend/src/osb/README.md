@@ -1,9 +1,13 @@
 # OSB user components
 
 Components end users put on their sites. All prefixed `OSB` to separate them
-from the builder's own UI (`src/components/`). Two kinds only: atoms
-(`OSBText`, `OSBButton`, `OSBImage` — the visible leaves) and one container
-(`OSBCard` — empty chrome with no intrinsic content). Named compositions
+from the builder's own UI (`src/components/`). Three kinds: atoms
+(`OSBText`, `OSBButton`, `OSBImage`, `OSBVideo`, `OSBDropdown` — the visible
+leaves; collection-backed components like the dropdown keep their items in
+config, never as canvas nodes), containers (`OSBCard` — empty chrome with no
+intrinsic content), and overlays
+(`OSBModal`, `OSBDrawer` — shells in `overlays[]`, opened from triggers).
+Named compositions
 (card with content, …) are patterns in `patterns.ts`: factories that insert
 ordinary nodes, not new types. There are no ghost internals — if the user can
 see it, it is a node. Light + dark are the only themes, and theme is GLOBAL:
@@ -64,6 +68,15 @@ adaptations are always the same: (1) shadcn CSS-var tokens → explicit slate +
 - **Dialog / Popup** — shadcn `dialog.tsx` vendored in `OSBDialog.tsx`
   (Radix wiring, overlay, focus trap, animations, close); `OSBModal` adds the
   OSB axes (variant/theme/showClose, resizable footprint).
+- **Dropdown / Menu** — shadcn `dropdown-menu.tsx` vendored in
+  `OSBDropdownMenu.tsx`. Options are inspector-edited config data
+  (`config.items`), never canvas nodes: a row with `children` is a submenu
+  (one level, `MENU_MAX_DEPTH`), and the "Opens" field picks the preferred
+  side — Radix still flips the panel rather than let it run off screen. The
+  trigger fills its grid box like a button (so a dropdown defaults to button
+  size), and because the panel is portaled outside that box it follows the
+  trigger's rendered size instead — resizing the node resizes its items too,
+  capped at 2x.
 - **Text** — shadcn typography scale for H1–H6, plus bold/italic, font family
   (`font-sans`/`serif`/`mono`) and a `bg-clip-text` gradient tone.
 
