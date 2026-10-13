@@ -84,6 +84,65 @@ export function validateSite(doc: unknown): SiteValidation {
     for (const [k, c] of kids.entries()) checkNode(c, `${path}.children[${k}]`, type)
   }
 
+  /** Popup footprint + kid boxes travel as plain numbers; present means integer. */
+  function checkModals(modals: unknown, path: string): void {
+    if (modals === undefined) return
+    if (!Array.isArray(modals)) {
+      errors.push(`${path} must be an array when present`)
+      return
+    }
+    for (const [i, m] of (modals as unknown[]).entries()) {
+      if (typeof m !== 'object' || m === null) {
+        errors.push(`${path}[${i}] must be an object`)
+        continue
+      }
+      const modal = m as Record<string, unknown>
+      checkId('modal', `${path}[${i}]`, modal['id'], nodeIds)
+      const type = modal['type']
+      if (type !== 'modal') {
+        errors.push(`${path}[${i}].type must be "modal"`)
+        continue
+      }
+      if (modal['config'] !== undefined && (typeof modal['config'] !== 'object' || modal['config'] === null)) {
+        errors.push(`${path}[${i}].config must be an object when present`)
+      }
+      for (const key of ['cols', 'rows'] as const) {
+        const v = modal[key]
+        if (v !== undefined && !(typeof v === 'number' && Number.isInteger(v))) {
+          errors.push(`${path}[${i}].${key} must be an integer when present`)
+        }
+      }
+      const kids = modal['children']
+      if (kids === undefined) continue
+      if (!Array.isArray(kids)) {
+        errors.push(`${path}[${i}].children must be an array when present`)
+        continue
+      }
+      for (const [k, c] of (kids as unknown[]).entries()) {
+        if (typeof c !== 'object' || c === null) {
+          errors.push(`${path}[${i}].children[${k}] must be an object`)
+          continue
+        }
+        const kid = c as Record<string, unknown>
+        checkId('node', `${path}[${i}].children[${k}]`, kid['id'], nodeIds)
+        const kidType = kid['type']
+        if (typeof kidType !== 'string' || !canContain('modal', kidType)) {
+          errors.push(`${path}[${i}].children[${k}] type ${JSON.stringify(kidType)} is not an atom in a popup`)
+          continue
+        }
+        if (kid['config'] !== undefined && (typeof kid['config'] !== 'object' || kid['config'] === null)) {
+          errors.push(`${path}[${i}].children[${k}].config must be an object when present`)
+        }
+        for (const key of ['x', 'y', 'cols', 'rows'] as const) {
+          const v = kid[key]
+          if (v !== undefined && !(typeof v === 'number' && Number.isInteger(v))) {
+            errors.push(`${path}[${i}].children[${k}].${key} must be an integer when present`)
+          }
+        }
+      }
+    }
+  }
+
   for (const [i, p] of pages.entries()) {
     if (typeof p !== 'object' || p === null) {
       errors.push(`pages[${i}] must be an object`)
@@ -103,6 +162,7 @@ export function validateSite(doc: unknown): SiteValidation {
       continue
     }
     for (const [j, n] of (page['nodes'] as unknown[]).entries()) checkNode(n, `pages[${i}].nodes[${j}]`, null)
+    checkModals(page['modals'], `pages[${i}].modals`)
   }
 
   return { ok: errors.length === 0, errors }

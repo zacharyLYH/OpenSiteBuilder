@@ -15,8 +15,9 @@ export function resolveConfig<T extends object>(defaults: T, provided?: Partial<
 }
 
 /** Nesting kind. Engine vocabulary: atom = visible leaf with no children,
- * container = empty chrome + free-form atom children. */
-export type OSBKind = 'atom' | 'container'
+ * container = empty chrome + free-form atom children, overlay = a popup
+ * shell (modal content lives in `modals[]`, never on the grid). */
+export type OSBKind = 'atom' | 'container' | 'overlay'
 
 /** Shared text alignment knob. */
 export type OSBAlign = 'left' | 'center'

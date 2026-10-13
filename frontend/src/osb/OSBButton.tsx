@@ -7,10 +7,12 @@ export type OSBButtonConfig = {
   size: 'sm' | 'md'
   align: OSBAlign
   theme: OSBTheme
-  /** Destination URL. Empty = plain button (future: modal trigger). */
+  /** Destination URL. Empty = plain button (unless a popup is attached). */
   href: string
   /** Open the destination in a new tab. Ignored when href is empty. */
   openInNewTab: boolean
+  /** Attached popup id. Empty = none. Opening the popup wins over the link. */
+  modalId: string
 }
 
 export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
@@ -21,6 +23,7 @@ export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
   theme: 'light',
   href: '',
   openInNewTab: false,
+  modalId: '',
 }
 
 export const OSB_BUTTON_FIELDS: OSBField[] = [

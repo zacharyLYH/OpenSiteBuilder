@@ -2,7 +2,7 @@ import { publishFiles, strField } from '../api'
 import { generatePage } from './codegen'
 import { validateSite } from '../site/validate'
 import { SITE_SCHEMA_VERSION } from '../site/types'
-import type { CanvasDoc } from './doc'
+import { modalsOf, type CanvasDoc } from './doc'
 import osbTypesSrc from '../osb/types.ts?raw'
 import cnSrc from '../lib/utils.ts?raw'
 
@@ -39,9 +39,25 @@ const siteNode = ({ id, type, config }: { id: string; type: string; config: Reco
   config: config ?? {},
 })
 
+const siteModalKid = (k: { id: string; type: string; config: Record<string, unknown>; x: number; y: number; cols: number; rows: number }) => ({
+  ...siteNode(k),
+  x: k.x,
+  y: k.y,
+  cols: k.cols,
+  rows: k.rows,
+})
+
 /** Canvas doc as a site object (single page v1, children nested). Stringified once by the caller. */
 export function siteObject(doc: CanvasDoc, slug: string): unknown {
   const kidsOf = (id: string) => doc.nodes.filter((k) => k.parentId === id).map(siteNode)
+  const modals = modalsOf(doc).map((m) => ({
+    id: m.id,
+    type: 'modal',
+    config: m.config ?? {},
+    cols: m.cols,
+    rows: m.rows,
+    ...(m.children.length > 0 ? { children: m.children.map(siteModalKid) } : {}),
+  }))
   return {
     version: SITE_SCHEMA_VERSION,
     site: { name: slug, theme: 'light' },
@@ -56,6 +72,7 @@ export function siteObject(doc: CanvasDoc, slug: string): unknown {
             const children = kidsOf(n.id)
             return { ...siteNode(n), ...(children.length > 0 ? { children } : {}) }
           }),
+        ...(modals.length > 0 ? { modals } : {}),
       },
     ],
   }

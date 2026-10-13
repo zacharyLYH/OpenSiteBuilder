@@ -21,6 +21,14 @@ export interface CanvasHeaderProps {
   canPush: boolean
   /** On-demand check results; null while the panel is closed. */
   validation: DocValidation | null
+  /** Popup count for the tray button. */
+  modalCount: number
+  /** Open tray rows (id + raw title); null while the tray is closed. */
+  popups: { id: string; title: unknown }[] | null
+  onOpenPopups(): void
+  onClosePopups(): void
+  onEditModal(id: string): void
+  onRemoveModal(id: string): void
   onEndDrag(): void
   onValidate(): void
   onCloseValidation(): void
@@ -80,6 +88,9 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
           <Button variant="outline" size="sm" data-testid="validate" onClick={p.onValidate}>
             Validate
           </Button>
+          <Button variant="outline" size="sm" data-testid="popups" onClick={p.onOpenPopups}>
+            Popups{p.modalCount > 0 ? ` (${p.modalCount})` : ''}
+          </Button>
           <Button variant="outline" size="sm" onClick={p.onExit}>
             Exit project
           </Button>
@@ -106,6 +117,38 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
               {p.validation.errors.map((e, i) => (
                 <li key={i} data-testid="validate-issue" className="text-xs text-rose-700">
                   {e}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {p.popups && (
+        <div data-testid="popups-panel" className="fixed right-3 top-16 z-50 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">Popups</p>
+            <Button type="button" aria-label="Close popups" variant="outline" size="sm" onClick={p.onClosePopups}>
+              ✕
+            </Button>
+          </div>
+          {p.popups.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-500">No popups yet — select a button to attach one.</p>
+          ) : (
+            <ul className="mt-2 flex flex-col gap-2">
+              {p.popups.map((m) => (
+                <li key={m.id} data-testid="popup-row" data-id={m.id} className="flex items-center justify-between gap-2">
+                  <span className="truncate text-xs text-slate-700">
+                    {typeof m.title === 'string' && m.title.length > 0 ? m.title : 'Popup'}
+                  </span>
+                  <span className="flex gap-1">
+                    <Button type="button" data-testid="popup-edit" variant="outline" size="sm" onClick={() => p.onEditModal(m.id)}>
+                      Edit
+                    </Button>
+                    <Button type="button" data-testid="popup-remove" variant="outline" size="sm" onClick={() => p.onRemoveModal(m.id)}>
+                      Remove
+                    </Button>
+                  </span>
                 </li>
               ))}
             </ul>

@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 import OSBButton, { OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS, type OSBButtonConfig } from './OSBButton'
 import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, type OSBCardConfig } from './OSBCard'
 import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } from './OSBImage'
+import OSBModal, { OSB_MODAL_DEFAULTS, OSB_MODAL_FIELDS, type OSBModalConfig } from './OSBModal'
 import OSBText, { OSB_TEXT_DEFAULTS, OSB_TEXT_FIELDS, type OSBTextConfig } from './OSBText'
 import type { OSBField, OSBGridSize, OSBKind } from './types'
 
@@ -44,7 +45,9 @@ function defineEntry<C extends Record<string, unknown>>(
  * rendering are all derived below. Key order is the palette order.
  *
  * Atoms (text, button, image) are the only visible leaves. Card is the only
- * container. Named compositions are patterns in ./patterns, not types here.
+ * container. Popup is an overlay shell whose content lives in `modals[]`,
+ * never on the grid — it enters from a button drawer, not the palette.
+ * Named compositions are patterns in ./patterns, not types here.
  */
 export const OSB_REGISTRY = {
   card: defineEntry(
@@ -76,6 +79,14 @@ export const OSB_REGISTRY = {
     { minCols: 2, minRows: 2, maxCols: 32, maxRows: 24, cols: 8, rows: 6 },
     OSBImage,
   ),
+  modal: defineEntry(
+    'Popup',
+    OSB_MODAL_DEFAULTS,
+    OSB_MODAL_FIELDS,
+    { minCols: 6, minRows: 4, maxCols: 24, maxRows: 24, cols: 12, rows: 10 },
+    OSBModal,
+    { kind: 'overlay', emptyHint: 'Drag text, buttons or images here' },
+  ),
 }
 
 export type OSBNodeType = keyof typeof OSB_REGISTRY
@@ -96,12 +107,17 @@ export function isContainerType(t: string): boolean {
 }
 
 /**
- * The one structural membership rule. A container holds any atom; nothing
- * else nests anywhere. Default deny: unknown types reject.
+ * The one structural membership rule. A container holds any atom; a popup
+ * holds any atom; nothing else nests anywhere. Default deny: unknown types
+ * reject.
  */
 export function canContain(parentType: string, childType: string): boolean {
-  return isContainerType(parentType) && isAtomType(childType)
+  return (isContainerType(parentType) || parentType === 'modal') && isAtomType(childType)
 }
 
-export type { OSBButtonConfig, OSBCardConfig, OSBImageConfig, OSBTextConfig }
-export { OSBButton, OSBCard, OSBImage, OSBText }
+export function isModalType(t: string): boolean {
+  return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'overlay'
+}
+
+export type { OSBButtonConfig, OSBCardConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig }
+export { OSBButton, OSBCard, OSBImage, OSBModal, OSBText }

@@ -19,10 +19,26 @@ export interface PlacedNode {
 export interface CanvasDoc {
   version: 1
   nodes: PlacedNode[]
+  /** Popups live beside the grid, never in it: no overlap, contiguity, or
+   * RGL layout ever sees them. Old docs load without the key (see loadDoc). */
+  modals?: ModalDoc[]
+}
+
+/** A popup shell: card-like footprint plus free-form atom children. */
+export interface ModalDoc {
+  id: string
+  config: Record<string, unknown>
+  cols: number
+  rows: number
+  /** parentId of every child is this modal's id. Atoms only — never modals. */
+  children: PlacedNode[]
 }
 
 /** A fresh, empty canvas. Docs are never mutated, so sharing is safe. */
-export const EMPTY_DOC: CanvasDoc = { version: 1, nodes: [] }
+export const EMPTY_DOC: CanvasDoc = { version: 1, nodes: [], modals: [] }
+
+/** Modals, tolerating old docs saved before popups existed. */
+export const modalsOf = (doc: CanvasDoc): ModalDoc[] => doc.modals ?? []
 
 type Rect = { x: number; y: number; cols: number; rows: number }
 
@@ -40,10 +56,35 @@ export function loadDoc(key: string): CanvasDoc {
       nodes: known.filter(
         (n) => n.parentId === null || (n.parentId !== null && roots.has(n.parentId) && isAtomType(n.type)),
       ),
+      modals: pruneModals(Array.isArray(doc.modals) ? doc.modals : []),
     }
   } catch {
     return EMPTY_DOC
   }
+}
+
+/** Keep well-formed popups: string ids (first wins), atom children that
+ * belong to their own shell. Geometry is validated on demand, not dropped. */
+function pruneModals(raw: ModalDoc[]): ModalDoc[] {
+  const seen = new Set<string>()
+  const out: ModalDoc[] = []
+  for (const m of raw) {
+    if (!m || typeof m.id !== 'string' || m.id.length === 0 || seen.has(m.id)) continue
+    seen.add(m.id)
+    const children = Array.isArray(m.children)
+      ? m.children.filter(
+          (k) => k && typeof k.type === 'string' && k.type in OSB_REGISTRY && isAtomType(k.type) && k.parentId === m.id,
+        )
+      : []
+    out.push({
+      id: m.id,
+      config: m.config && typeof m.config === 'object' ? m.config : {},
+      cols: m.cols,
+      rows: m.rows,
+      children,
+    })
+  }
+  return out
 }
 
 /** Rect overlap in cells; touching edges is fine. */
@@ -156,6 +197,8 @@ export function canInsertReason(
   ignoreId?: string,
 ): RejectReason | null {
   if (!(type in OSB_REGISTRY)) return 'unknown-type'
+  // Popups never enter through node ops — only createModal makes one.
+  if (type === 'modal') return 'kind'
   if (!isRectOk(rect)) return 'integrity'
   if (!footprintOk(type, rect)) return 'footprint'
   if (parentId === null) {
@@ -306,6 +349,119 @@ export function removeNode(doc: CanvasDoc, id: string): CanvasDoc {
   return { ...doc, nodes: doc.nodes.filter((n) => !ids.has(n.id)) }
 }
 
+// ---------------------------------------------------------------------------
+// Popups. Same vocabulary as nodes (one gate, atomic ops, plain-language
+// reasons) but a separate store, so grid rules never see popup content.
+// ---------------------------------------------------------------------------
+
+export type ModalShell = Pick<ModalDoc, 'cols' | 'rows' | 'children'>
+
+/** THE popup landing rule: atoms only (never a popup-in-popup), inside the
+ * shell, on whole cells, never overlapping a sibling. */
+export function canPlaceModalChild(
+  modal: ModalShell,
+  type: string,
+  rect: CellRect,
+  ignoreId?: string,
+): RejectReason | null {
+  if (!(type in OSB_REGISTRY)) return 'unknown-type'
+  if (!isAtomType(type)) return 'kind'
+  if (!isRectOk(rect)) return 'integrity'
+  const g = OSB_REGISTRY[type as OSBNodeType].grid
+  if (rect.cols < g.minCols || rect.rows < g.minRows || rect.cols > g.maxCols || rect.rows > g.maxRows) {
+    return 'footprint'
+  }
+  if (rect.x + rect.cols > modal.cols || rect.y + rect.rows > modal.rows) return 'containment'
+  const hit = modal.children.some((k) => k.id !== ignoreId && collides(rect, k))
+  return hit ? 'overlap' : null
+}
+
+/** Append a popup shell. Children arrive via insertModalChild. */
+export function createModal(doc: CanvasDoc, modal: ModalDoc): CanvasDoc {
+  return { ...doc, modals: [...modalsOf(doc), modal] }
+}
+
+export function updateModalConfig(doc: CanvasDoc, id: string, config: Record<string, unknown>): CanvasDoc {
+  return { ...doc, modals: modalsOf(doc).map((m) => (m.id === id ? { ...m, config } : m)) }
+}
+
+/** Resize the shell: same floor rule as containers (never under children). */
+export function resizeModal(doc: CanvasDoc, id: string, cols: number, rows: number): DocResult {
+  const modal = modalsOf(doc).find((m) => m.id === id)
+  if (!modal) return { ok: false, reason: 'unknown-type' }
+  const g = OSB_REGISTRY.modal.grid
+  if (!Number.isInteger(cols + rows) || cols < g.minCols || rows < g.minRows || cols > g.maxCols || rows > g.maxRows) {
+    return { ok: false, reason: 'footprint' }
+  }
+  if (!containerFitsKids(modal.children, { id, cols, rows })) return { ok: false, reason: 'undersize' }
+  return { ok: true, doc: { ...doc, modals: modalsOf(doc).map((m) => (m.id === id ? { ...m, cols, rows } : m)) } }
+}
+
+/** Removing a popup unlinks every button that opened it (canvas + popups). */
+export function removeModal(doc: CanvasDoc, id: string): CanvasDoc {
+  const scrub = (n: PlacedNode): PlacedNode =>
+    (n.config as { modalId?: unknown } | undefined)?.modalId === id
+      ? { ...n, config: { ...n.config, modalId: '' } }
+      : n
+  return {
+    ...doc,
+    nodes: doc.nodes.map(scrub),
+    modals: modalsOf(doc)
+      .filter((m) => m.id !== id)
+      .map((m) => ({ ...m, children: m.children.map(scrub) })),
+  }
+}
+
+export function insertModalChild(doc: CanvasDoc, modalId: string, child: PlacedNode): DocResult {
+  const modal = modalsOf(doc).find((m) => m.id === modalId)
+  if (!modal) return { ok: false, reason: 'unknown-type' }
+  const reason = canPlaceModalChild(modal, child.type, child, undefined)
+  if (reason) return { ok: false, reason }
+  return {
+    ok: true,
+    doc: { ...doc, modals: modalsOf(doc).map((m) => (m.id === modalId ? { ...m, children: [...m.children, child] } : m)) },
+  }
+}
+
+export function moveModalChild(doc: CanvasDoc, modalId: string, id: string, rect: CellRect): DocResult {
+  const modal = modalsOf(doc).find((m) => m.id === modalId)
+  if (!modal) return { ok: false, reason: 'unknown-type' }
+  const child = modal.children.find((k) => k.id === id)
+  if (!child) return { ok: false, reason: 'unknown-type' }
+  const reason = canPlaceModalChild(modal, child.type, rect, id)
+  if (reason) return { ok: false, reason }
+  return {
+    ok: true,
+    doc: {
+      ...doc,
+      modals: modalsOf(doc).map((m) =>
+        m.id === modalId ? { ...m, children: m.children.map((k) => (k.id === id ? { ...k, ...rect } : k)) } : m,
+      ),
+    },
+  }
+}
+
+export function removeModalChild(doc: CanvasDoc, modalId: string, id: string): CanvasDoc {
+  return {
+    ...doc,
+    modals: modalsOf(doc).map((m) => (m.id === modalId ? { ...m, children: m.children.filter((k) => k.id !== id) } : m)),
+  }
+}
+
+export function updateModalChildConfig(
+  doc: CanvasDoc,
+  modalId: string,
+  id: string,
+  config: Record<string, unknown>,
+): CanvasDoc {
+  return {
+    ...doc,
+    modals: modalsOf(doc).map((m) =>
+      m.id === modalId ? { ...m, children: m.children.map((k) => (k.id === id ? { ...k, config } : k)) } : m,
+    ),
+  }
+}
+
 /** Center-point hit test: at most one container candidate (depth 1). */
 export function nestTargetAt(
   nodes: PlacedNode[],
@@ -443,5 +599,50 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
       errors.push(`container ${parentId} undersizes its children`)
     }
   }
+  // Popups: same whole-document backstop as nodes — shell footprint, child
+  // gates, pairwise overlaps, one connected patch, and trigger integrity.
+  const modalIds = new Set<string>()
+  for (const m of modalsOf(doc)) {
+    if (typeof m.id !== 'string' || m.id.length === 0 || modalIds.has(m.id)) {
+      errors.push(`popup ${JSON.stringify((m as { id: unknown } | null)?.id)} has a bad or duplicate id`)
+      continue
+    }
+    modalIds.add(m.id)
+    const g = OSB_REGISTRY.modal.grid
+    if (!Number.isInteger(m.cols + m.rows) || m.cols < g.minCols || m.rows < g.minRows || m.cols > g.maxCols || m.rows > g.maxRows) {
+      errors.push(`popup ${m.id}: that size isn't allowed`)
+    }
+    const kids = Array.isArray(m.children) ? m.children : []
+    for (const k of kids) {
+      if (!(k.type in OSB_REGISTRY) || !isAtomType(k.type)) {
+        errors.push(`popup ${m.id} child ${k.id}: that can't go there`)
+        continue
+      }
+      if (k.parentId !== m.id) errors.push(`popup ${m.id} child ${k.id}: missing parent`)
+      const reason = canPlaceModalChild({ cols: m.cols, rows: m.rows, children: kids }, k.type, k, k.id)
+      if (reason && reason !== 'overlap') errors.push(`popup ${m.id} child ${k.id}: ${reasonText(reason).toLowerCase()}`)
+    }
+    for (let i = 0; i < kids.length; i++)
+      for (let j = i + 1; j < kids.length; j++)
+        if (collides(kids[i], kids[j])) errors.push(`popup ${m.id} children ${kids[i].id} and ${kids[j].id} overlap`)
+    if (!isContiguous(kids)) errors.push(`children of popup ${m.id} are scattered (must touch)`)
+    if (!containerFitsKids(kids, { id: m.id, cols: m.cols, rows: m.rows })) {
+      errors.push(`popup ${m.id} undersizes its children`)
+    }
+  }
+  // Trigger integrity: buttons open existing popups, and buttons inside a
+  // popup never open another one.
+  const checkTrigger = (n: PlacedNode, where: string, inModal: boolean) => {
+    if (n.type !== 'button') return
+    const target = (n.config as { modalId?: unknown } | undefined)?.modalId
+    if (typeof target !== 'string' || target.length === 0) return
+    if (inModal) {
+      errors.push(`${where} button ${n.id} inside a popup cannot open another popup`)
+      return
+    }
+    if (!modalIds.has(target)) errors.push(`${where} button ${n.id} opens a missing popup`)
+  }
+  for (const n of doc.nodes) checkTrigger(n, 'node', false)
+  for (const m of modalsOf(doc)) for (const k of m.children) checkTrigger(k, `popup ${m.id} child`, true)
   return { ok: errors.length === 0, errors }
 }

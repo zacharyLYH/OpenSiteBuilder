@@ -13,6 +13,11 @@ export interface SiteNode {
   config?: Record<string, unknown>
   /** Nested children (containers only, max depth 1). */
   children?: SiteNode[]
+  /** Popup-shell footprint + child footprints in cells (modals only). */
+  cols?: number
+  rows?: number
+  x?: number
+  y?: number
 }
 
 export const SITE_SCHEMA_VERSION = '0.1' as const

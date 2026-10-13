@@ -75,17 +75,21 @@ function FieldControl({
 
 // Style-only inspector: text content and chrome (variant, theme, alignment).
 // Structure (add / move / resize / delete) lives on the canvas alone — this
-// drawer never creates, moves, resizes, or deletes nodes.
+// drawer never creates, moves, resizes, or deletes nodes. The optional
+// `actions` slot lets the controller append node-type-specific intents
+// (e.g. a button's popup attach) without branching the generic editor.
 export default function ConfigDrawer({
   node,
   side,
   onClose,
   onApply,
+  actions,
 }: {
   node: PlacedNode
   side: 'left' | 'right'
   onClose: () => void
   onApply: (id: string, config: Record<string, unknown>) => void
+  actions?: React.ReactNode
 }) {
   const entry = OSB_REGISTRY[node.type]
   const [draft, setDraft] = useState<Record<string, unknown>>({ ...entry.defaults, ...node.config })
@@ -145,6 +149,7 @@ export default function ConfigDrawer({
             {f.hint && <p className="text-xs text-slate-500">{f.hint}</p>}
           </div>
         ))}
+        {actions}
       </SheetContent>
     </Sheet>
   )

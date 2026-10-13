@@ -4,5 +4,7 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [],
+  // shadcn dialog animations (animate-in, fade-in-0, zoom-in-95, ...) used
+  // by the shipped OSBModal runtime.
+  plugins: [require('tailwindcss-animate')],
 }
