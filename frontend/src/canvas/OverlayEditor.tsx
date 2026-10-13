@@ -1,8 +1,6 @@
 import { useRef, useState } from 'react'
-import { OSBDrawerTestPreview } from '../osb/OSBDrawer'
-import { OSBModalTestPreview } from '../osb/OSBModal'
 import { OVERLAY_CELL_PX, overlayChildStyle } from '../osb/OSBOverlay'
-import { OSB_REGISTRY, type OSBNodeType } from '../osb/registry'
+import { OSB_REGISTRY, OSBOverlayTestPreview, overlayNoun, type OSBNodeType } from '../osb/registry'
 import { Button } from '../components/ui/button'
 import { startChildResize } from './childResize'
 import PlacedChildLayer from './PlacedChildLayer'
@@ -11,7 +9,8 @@ import {
   containerFloor,
   eventCell,
   type CellRect,
-  type ModalDoc,
+  type OverlayDoc,
+  type OverlayType,
   type PlacedNode,
   type RejectReason,
 } from './doc'
@@ -21,16 +20,22 @@ import type { ArmedDrag } from './useDragSession'
 /** Preview pitch: the shell renders at a fixed scale, independent of canvas zoom. */
 const CELL = OVERLAY_CELL_PX
 
-export type OverlayKind = 'modal' | 'drawer'
+/** Legacy alias. New code takes the registry key directly. */
+export type OverlayKind = OverlayType
 
-const KIND_WORD: Record<OverlayKind, { Title: string; noun: string }> = {
-  modal: { Title: 'Popup', noun: 'popup' },
-  drawer: { Title: 'Drawer', noun: 'drawer' },
+/** Title + noun from the registry entry — no per-kind map. Modal's entry
+ * name is 'Popup', so its title falls back to 'Popup' exactly as before. */
+const wordsFor = (kind: string): { Title: string; noun: string } => {
+  const noun = overlayNoun(kind)
+  const entry = kind in OSB_REGISTRY ? OSB_REGISTRY[kind as OSBNodeType] : null
+  const fallback = (entry?.defaults as { title?: unknown } | undefined)?.title
+  const Title = typeof fallback === 'string' && fallback.length > 0 ? fallback : noun[0].toUpperCase() + noun.slice(1)
+  return { Title, noun }
 }
 
 export interface OverlayEditorProps {
-  kind: OverlayKind
-  overlay: ModalDoc
+  kind: string
+  overlay: OverlayDoc
   /** The canvas-wide armed drag (palette only lands here). */
   armed: ArmedDrag | null
   /** Resolved dragged type for move/pattern payloads (null = unknown). */
@@ -59,7 +64,7 @@ export interface OverlayEditorProps {
  */
 export default function OverlayEditor(p: OverlayEditorProps) {
   const { kind, overlay: modal } = p
-  const word = KIND_WORD[kind]
+  const word = wordsFor(kind)
   const shellRef = useRef<HTMLDivElement>(null)
   // HTML5 move of one of our own children (the canvas session is untouched).
   const [dragId, setDragId] = useState<string | null>(null)
@@ -160,7 +165,7 @@ export default function OverlayEditor(p: OverlayEditorProps) {
     e.preventDefault()
     const box = shellBox()
     if (!box) return
-    const g = OSB_REGISTRY[kind].grid
+    const g = OSB_REGISTRY[kind as OSBNodeType].grid
     const { clientX: startX, clientY: startY } = e
     const pitchX = box.width / modal.cols
     const pitchY = box.height / modal.rows
@@ -245,7 +250,7 @@ export default function OverlayEditor(p: OverlayEditorProps) {
                 data-testid={`${kind}-empty-hint`}
                 className="rounded-lg border-2 border-dashed border-slate-300 bg-white/60 px-4 py-3 text-center text-xs text-slate-400"
               >
-                {OSB_REGISTRY[kind].emptyHint ?? 'Drag content here'}
+                {OSB_REGISTRY[kind as OSBNodeType].emptyHint ?? 'Drag content here'}
               </div>
             </div>
           )}
@@ -256,7 +261,7 @@ export default function OverlayEditor(p: OverlayEditorProps) {
             className="absolute bottom-1 right-1 z-10 h-5 w-5 cursor-se-resize rounded-tl-md border-l-2 border-t-2 border-slate-400 bg-white/90"
           />
         </div>
-        <p className="text-xs text-white/80">Drag text, buttons or images into the {word.noun} · corner to resize · Test {word.noun} tries the real {kind === 'modal' ? 'dialog' : 'sheet'}</p>
+        <p className="text-xs text-white/80">Drag text, buttons or images into the {word.noun} · corner to resize · Test {word.noun} tries the real {OSB_REGISTRY[kind as OSBNodeType]?.chrome === 'sheet' ? 'sheet' : 'dialog'}</p>
       </div>
 
       {testing && <OverlayTestPreview kind={kind} overlay={modal} onClose={() => setTesting(false)} />}
@@ -266,35 +271,20 @@ export default function OverlayEditor(p: OverlayEditorProps) {
 
 /** The real dialog/sheet from anywhere (editor Test, drawer Test): overlays
  * the editor, and X, outside press, and Escape all close. Absolute kids, so
- * it matches the editor grid exactly. */
-export function OverlayTestPreview({ kind, overlay, onClose }: { kind: OverlayKind; overlay: ModalDoc; onClose: () => void }) {
+ * it matches the editor grid exactly. Chrome comes from the registry. */
+export function OverlayTestPreview({ kind, overlay, onClose }: { kind: string; overlay: OverlayDoc; onClose: () => void }) {
   const byId = new Map(overlay.children.map((k) => [k.id, k]))
-  const renderKid = (id: string) => {
-    const k = byId.get(id)
-    return k ? OSB_REGISTRY[k.type].render(k.config) : null
-  }
-  if (kind === 'drawer') {
-    return (
-      <OSBDrawerTestPreview
-        config={overlay.config}
-        cols={overlay.cols}
-        rows={overlay.rows}
-        kids={overlay.children}
-        renderKid={renderKid}
-        open
-        onOpenChange={(o) => {
-          if (!o) onClose()
-        }}
-      />
-    )
-  }
   return (
-    <OSBModalTestPreview
+    <OSBOverlayTestPreview
+      overlayType={kind}
       config={overlay.config}
       cols={overlay.cols}
       rows={overlay.rows}
       kids={overlay.children}
-      renderKid={renderKid}
+      renderKid={(id) => {
+        const k = byId.get(id)
+        return k ? OSB_REGISTRY[k.type].render(k.config) : null
+      }}
       open
       onOpenChange={(o) => {
         if (!o) onClose()

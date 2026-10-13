@@ -1,13 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import OSBDrawer, {
-  OSB_DRAWER_DEFAULTS,
-  OSB_DRAWER_FIELDS,
-  OSB_DRAWER_SIDES,
-  drawerHeightPx,
-  drawerWidthPx,
-} from './OSBDrawer'
-import { OSBOverlayBody, overlayChildStyle } from './OSBOverlay'
+import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, OSB_DRAWER_SIDES } from './OSBDrawer'
+import { OSBOverlayBody, overlayChildStyle, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
 
 const openDrawer = (config: Record<string, unknown> = {}, onOpenChange = () => {}) =>
   render(
@@ -40,8 +34,8 @@ describe('OSBDrawer static shell (open undefined)', () => {
   it('sizes from the shell footprint (shared overlay pitch)', () => {
     // One 28px pitch everywhere: editor shell, sheet, and published agree —
     // the same numbers as the modal.
-    expect(drawerWidthPx(10)).toBe('min(92vw, 280px)')
-    expect(drawerHeightPx(10)).toBe('280px')
+    expect(overlayWidthPx(10)).toBe('min(92vw, 280px)')
+    expect(overlayHeightPx(10)).toBe('280px')
     // A 4-wide button at x=1 in a 10-wide shell keeps its box anywhere.
     expect(overlayChildStyle({ cols: 10, rows: 10 }, { x: 1, y: 6, cols: 4, rows: 1 })).toMatchObject({
       position: 'absolute',

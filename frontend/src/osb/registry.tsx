@@ -4,21 +4,38 @@ import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, type OSBCardConfig } from 
 import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } from './OSBImage'
 import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, type OSBDrawerConfig } from './OSBDrawer'
 import OSBModal, { OSB_MODAL_DEFAULTS, OSB_MODAL_FIELDS, type OSBModalConfig } from './OSBModal'
+import { OSBOverlayBody } from './OSBOverlay'
 import OSBText, { OSB_TEXT_DEFAULTS, OSB_TEXT_FIELDS, type OSBTextConfig } from './OSBText'
 import type { OSBField, OSBGridSize, OSBKind } from './types'
 
+/** shadcn portal an overlay shell opens in. Declared per overlay kind so the
+ * shared overlay chrome never switches on type names. */
+export type OSBChrome = 'dialog' | 'sheet'
+
 export interface OSBEntry {
-  /** Human-readable name shown in the palette. */
+  /** Human-readable name shown in the palette. Lowercased, it is the noun
+   * every overlay label, testid, and message derives from. */
   name: string
   /** Atom = visible leaf, container = empty chrome + atom children. */
   kind: OSBKind
   /** Dashed empty-state hint shown on the canvas for empty containers. */
   emptyHint?: string
+  /** This type opens overlays from a click (buttons). The trigger rule —
+   * codegen openers, validation, the canvas attach slot — reads this, never
+   * a hardcoded type name. */
+  trigger?: boolean
+  /** Overlay kinds only: which portal the live shell opens in. */
+  chrome?: OSBChrome
   defaults: Record<string, unknown>
   fields: OSBField[]
   /** Footprint in cells. cols/rows = drop size = rendered size. */
   grid: OSBGridSize
   render: (config: unknown, children?: ReactNode) => ReactNode
+}
+
+/** Lowercase registry name: the noun behind labels, testids, and messages. */
+export function overlayNoun(type: string): string {
+  return type in OSB_REGISTRY ? OSB_REGISTRY[type as OSBNodeType].name.toLowerCase() : 'overlay'
 }
 
 function defineEntry<C extends Record<string, unknown>>(
@@ -27,12 +44,14 @@ function defineEntry<C extends Record<string, unknown>>(
   fields: OSBField[],
   grid: OSBGridSize,
   Component: ComponentType<{ config?: Partial<C>; children?: ReactNode }>,
-  opts?: { kind?: OSBKind; emptyHint?: string },
+  opts?: { kind?: OSBKind; emptyHint?: string; trigger?: boolean; chrome?: OSBChrome },
 ): OSBEntry {
   return {
     name,
     kind: opts?.kind ?? 'atom',
     emptyHint: opts?.emptyHint,
+    trigger: opts?.trigger,
+    chrome: opts?.chrome,
     defaults,
     fields,
     grid,
@@ -46,9 +65,8 @@ function defineEntry<C extends Record<string, unknown>>(
  * rendering are all derived below. Key order is the palette order.
  *
  * Atoms (text, button, image) are the only visible leaves. Card is the only
- * container. Popup + drawer are overlay shells whose content lives in
- * `modals[]` / `drawers[]`, never on the grid — they enter from a button
- * drawer, not the palette.
+ * container. Overlays are shells whose content lives in `overlays[]`, never
+ * on the grid — they enter from a trigger drawer, not the palette.
  * Named compositions are patterns in ./patterns, not types here.
  */
 export const OSB_REGISTRY = {
@@ -75,6 +93,7 @@ export const OSB_REGISTRY = {
     OSB_BUTTON_FIELDS,
     { minCols: 2, minRows: 1, maxCols: 32, maxRows: 4, cols: 3, rows: 1 },
     OSBButton,
+    { trigger: true },
   ),
   image: defineEntry(
     'Image',
@@ -89,7 +108,7 @@ export const OSB_REGISTRY = {
     OSB_MODAL_FIELDS,
     { minCols: 6, minRows: 4, maxCols: 24, maxRows: 24, cols: 12, rows: 10 },
     OSBModal,
-    { kind: 'overlay', emptyHint: 'Drag text, buttons or images here' },
+    { kind: 'overlay', chrome: 'dialog', emptyHint: 'Drag text, buttons or images here' },
   ),
   drawer: defineEntry(
     'Drawer',
@@ -97,7 +116,7 @@ export const OSB_REGISTRY = {
     OSB_DRAWER_FIELDS,
     { minCols: 6, minRows: 4, maxCols: 24, maxRows: 24, cols: 10, rows: 10 },
     OSBDrawer,
-    { kind: 'overlay', emptyHint: 'Drag text, buttons or images here' },
+    { kind: 'overlay', chrome: 'sheet', emptyHint: 'Drag text, buttons or images here' },
   ),
 }
 
@@ -119,21 +138,73 @@ export function isContainerType(t: string): boolean {
 }
 
 /**
- * The one structural membership rule. A container holds any atom; a popup
- * or drawer holds any atom; nothing else nests anywhere. Default deny:
+ * The one structural membership rule. A container holds any atom; an
+ * overlay holds any atom; nothing else nests anywhere. Default deny:
  * unknown types reject.
  */
 export function canContain(parentType: string, childType: string): boolean {
-  return (isContainerType(parentType) || parentType === 'modal' || parentType === 'drawer') && isAtomType(childType)
+  return (isContainerType(parentType) || isOverlayType(parentType)) && isAtomType(childType)
 }
 
+/** Legacy alias: every overlay kind, not just popups. */
 export function isModalType(t: string): boolean {
+  return isOverlayType(t)
+}
+
+/** Every kind the registry marks `overlay` — never a hardcoded key list. */
+export function isOverlayType(t: string): boolean {
   return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'overlay'
 }
 
-/** Both overlay kinds share one structural rule — modal + drawer alike. */
-export function isOverlayType(t: string): boolean {
-  return t === 'modal' || t === 'drawer'
+/** Every type that opens overlays from a click — never a hardcoded name. */
+export function isTriggerType(t: string): boolean {
+  return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].trigger === true
+}
+
+/**
+ * THE live overlay preview (editor Test, drawer Test, screenshot mount).
+ * Chrome comes from the entry — a new overlay kind renders with zero edits
+ * here. X, outside press, and Escape all close; absolute kids match the
+ * editor grid exactly.
+ */
+export function OSBOverlayTestPreview({
+  overlayType,
+  config,
+  cols,
+  rows,
+  kids,
+  renderKid,
+  open,
+  onOpenChange,
+}: {
+  overlayType: string
+  config?: Record<string, unknown>
+  cols: number
+  rows: number
+  kids: { id: string; x: number; y: number; cols: number; rows: number }[]
+  renderKid: (id: string) => ReactNode
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}): ReactNode {
+  const body = <OSBOverlayBody cols={cols} rows={rows} kids={kids} renderKid={renderKid} />
+  if ((overlayType in OSB_REGISTRY ? OSB_REGISTRY[overlayType as OSBNodeType].chrome : undefined) === 'sheet') {
+    return (
+      <OSBDrawer
+        config={config as Partial<OSBDrawerConfig>}
+        cols={cols}
+        rows={rows}
+        open={open}
+        onOpenChange={onOpenChange}
+      >
+        {body}
+      </OSBDrawer>
+    )
+  }
+  return (
+    <OSBModal config={config as Partial<OSBModalConfig>} cols={cols} rows={rows} open={open} onOpenChange={onOpenChange}>
+      {body}
+    </OSBModal>
+  )
 }
 
 export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig }

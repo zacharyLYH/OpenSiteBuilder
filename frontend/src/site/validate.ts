@@ -1,4 +1,4 @@
-import { OSB_NODE_TYPES, canContain } from '../osb/registry'
+import { OSB_NODE_TYPES, canContain, isOverlayType } from '../osb/registry'
 import { SITE_SCHEMA_VERSION, type SiteNode } from './types'
 
 export interface SiteValidation {
@@ -84,9 +84,10 @@ export function validateSite(doc: unknown): SiteValidation {
     for (const [k, c] of kids.entries()) checkNode(c, `${path}.children[${k}]`, type)
   }
 
-  /** Overlay footprint + kid boxes travel as plain numbers; present means integer.
-   * One checker for popups (`modals`) + drawers — only the type word differs. */
-  function checkOverlays(overlays: unknown, path: string, type: 'modal' | 'drawer'): void {
+  /** Overlay footprint + kid boxes travel as plain numbers; present means
+   * integer. One checker for every overlay kind — the type word comes from
+   * the registry, never a per-kind branch. */
+  function checkOverlays(overlays: unknown, path: string): void {
     if (overlays === undefined) return
     if (!Array.isArray(overlays)) {
       errors.push(`${path} must be an array when present`)
@@ -98,12 +99,12 @@ export function validateSite(doc: unknown): SiteValidation {
         continue
       }
       const overlay = m as Record<string, unknown>
-      checkId(type, `${path}[${i}]`, overlay['id'], nodeIds)
       const overlayType = overlay['type']
-      if (overlayType !== type) {
-        errors.push(`${path}[${i}].type must be ${JSON.stringify(type)}`)
+      if (typeof overlayType !== 'string' || !(OSB_NODE_TYPES as readonly string[]).includes(overlayType) || !isOverlayType(overlayType)) {
+        errors.push(`${path}[${i}].type must be an overlay type`)
         continue
       }
+      checkId('overlay', `${path}[${i}]`, overlay['id'], nodeIds)
       if (overlay['config'] !== undefined && (typeof overlay['config'] !== 'object' || overlay['config'] === null)) {
         errors.push(`${path}[${i}].config must be an object when present`)
       }
@@ -127,8 +128,8 @@ export function validateSite(doc: unknown): SiteValidation {
         const kid = c as Record<string, unknown>
         checkId('node', `${path}[${i}].children[${k}]`, kid['id'], nodeIds)
         const kidType = kid['type']
-        if (typeof kidType !== 'string' || !canContain(type, kidType)) {
-          errors.push(`${path}[${i}].children[${k}] type ${JSON.stringify(kidType)} is not an atom in a ${type === 'modal' ? 'popup' : 'drawer'}`)
+        if (typeof kidType !== 'string' || !canContain(overlayType as string, kidType)) {
+          errors.push(`${path}[${i}].children[${k}] type ${JSON.stringify(kidType)} is not an atom in an overlay`)
           continue
         }
         if (kid['config'] !== undefined && (typeof kid['config'] !== 'object' || kid['config'] === null)) {
@@ -163,8 +164,10 @@ export function validateSite(doc: unknown): SiteValidation {
       continue
     }
     for (const [j, n] of (page['nodes'] as unknown[]).entries()) checkNode(n, `pages[${i}].nodes[${j}]`, null)
-    checkOverlays(page['modals'], `pages[${i}].modals`, 'modal')
-    checkOverlays(page['drawers'], `pages[${i}].drawers`, 'drawer')
+    checkOverlays(page['overlays'], `pages[${i}].overlays`)
+    // Legacy readers: pre-unification site.json used modals[]/drawers[].
+    checkOverlays(page['modals'], `pages[${i}].modals`)
+    checkOverlays(page['drawers'], `pages[${i}].drawers`)
   }
 
   return { ok: errors.length === 0, errors }

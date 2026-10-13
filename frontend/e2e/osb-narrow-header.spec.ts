@@ -9,7 +9,8 @@ import { openCanvas } from './helpers'
 // buttons stay readable instead of squashing.
 const inViewport = async (locator: Locator, width: number): Promise<boolean> => {
   const box = await locator.boundingBox()
-  return !!box && box.x >= 0 && box.x + box.width <= width
+  // 1px slack for sub-pixel rounding — still fully tappable by a human.
+  return !!box && box.x >= -1 && box.x + box.width <= width + 1
 }
 
 test('narrow window: Validate, Exit and Push stay reachable', async ({ page }) => {

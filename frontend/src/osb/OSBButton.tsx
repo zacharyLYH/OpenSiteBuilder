@@ -11,14 +11,12 @@ export type OSBButtonConfig = {
   variant: OSBButtonVariant
   size: OSBButtonSize
   align: OSBAlign
-  /** Destination URL. Empty = plain button (unless a popup is attached). */
+  /** Destination URL. Empty = plain button (unless an overlay is attached). */
   href: string
   /** Open the destination in a new tab. Ignored when href is empty. */
   openInNewTab: boolean
-  /** Attached popup id. Empty = none. Opening the popup wins over the link. */
-  modalId: string
-  /** Attached drawer id. Empty = none. At most one overlay per button. */
-  drawerId: string
+  /** Attached overlay id (any kind). Empty = none. Wins over the link. */
+  targetId: string
 }
 
 export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
@@ -28,8 +26,7 @@ export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
   align: 'left',
   href: '',
   openInNewTab: false,
-  modalId: '',
-  drawerId: '',
+  targetId: '',
 }
 
 // The one option list behind the "Style" drawer field and the render. Values
@@ -120,24 +117,19 @@ export interface OSBButtonProps {
 }
 
 /**
- * THE trigger rule: a button opens at most one overlay, from a click —
- * never from a link. An attached overlay wins over `href`; a drawer id and
- * a popup id together is a doc error (validated), resolved here as popup
- * first so old docs never strand both. Overlay children never carry one
- * (validated at edit time).
+ * THE trigger rule: a button opens at most one overlay by id, from a click —
+ * never from a link. An attached overlay wins over `href`. Overlay children
+ * never carry one (validated at edit time). Legacy modalId/drawerId read the
+ * same way so old docs keep working.
  */
 export function buttonOverlayTarget(
   config: Record<string, unknown> | undefined,
-  modalIds: Set<string>,
-  drawerIds: Set<string>,
-): { kind: 'modal' | 'drawer'; id: string } | null {
-  const modalId = (config as { modalId?: unknown } | undefined)?.modalId
-  if (typeof modalId === 'string' && modalId.length > 0 && modalIds.has(modalId)) {
-    return { kind: 'modal', id: modalId }
-  }
-  const drawerId = (config as { drawerId?: unknown } | undefined)?.drawerId
-  if (typeof drawerId === 'string' && drawerId.length > 0 && drawerIds.has(drawerId)) {
-    return { kind: 'drawer', id: drawerId }
+  overlayIds: Set<string>,
+): string | null {
+  const cfg = config as { targetId?: unknown; modalId?: unknown; drawerId?: unknown } | undefined
+  for (const key of ['targetId', 'modalId', 'drawerId'] as const) {
+    const v = cfg?.[key]
+    if (typeof v === 'string' && v.length > 0 && overlayIds.has(v)) return v
   }
   return null
 }

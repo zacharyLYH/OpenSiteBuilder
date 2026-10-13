@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
-import { cn } from '../lib/utils'
 import { Sheet, SheetContent, SheetTitle } from './OSBSheet'
-import { OSBOverlayBody, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
+import { OSBOverlayBody, OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
 import { useOSBTheme } from './OSBTheme'
-import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface, type OSBTheme } from './types'
+import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface } from './types'
 
 export type OSBDrawerSide = 'left' | 'right'
 
@@ -44,33 +43,9 @@ export const OSB_DRAWER_FIELDS: OSBField[] = [
 ]
 
 // Drawer chrome on top of the shadcn sheet base (which owns edge docking,
-// overlay, focus, and slide animation). Complete static classes (PRD §6.6);
-// color overrides merge over the sheet's neutral slate base — the same map
-// shape as the modal, so the two surfaces never drift in wording.
-const SHELL_CLASSES: Record<OSBDrawerConfig['variant'], Record<OSBTheme, string>> = {
-  elevated: {
-    light: 'bg-white shadow-2xl',
-    dark: 'border-slate-700 bg-slate-900 shadow-2xl',
-  },
-  outlined: {
-    light: 'bg-white',
-    dark: 'border-slate-700 bg-slate-900',
-  },
-  plain: {
-    light: 'border-transparent bg-transparent shadow-none',
-    dark: 'border-transparent bg-transparent shadow-none',
-  },
-}
-
-/** Panel width from the shell footprint, capped at 92vw (small viewports). */
-export function drawerWidthPx(cols: number): string {
-  return overlayWidthPx(cols)
-}
-
-/** Panel body height from the shell footprint. Rows resize stays visible. */
-export function drawerHeightPx(rows: number): string {
-  return overlayHeightPx(rows)
-}
+// overlay, focus, and slide animation). Surface + static shell are shared
+// with modals (OSBOverlay) — only the scroll bound differs per chrome.
+const SCROLL = 'max-h-full overflow-y-auto'
 
 /**
  * The live sheet over the editor AND the drawer Test button: X, outside
@@ -123,31 +98,26 @@ export default function OSBDrawer({ config, cols = 10, rows = 10, open, onOpenCh
   // cols, height from rows) inside that padding, so Test matches edit while
   // the transplanted sheet contract (outside press, Escape, X) stays whole.
   // The sheet base docks full-height; the panel width comes from the shell.
-  const shell = cn('max-h-full overflow-y-auto', SHELL_CLASSES[c.variant][theme])
+  const shell = overlayChromeShell(c.variant, theme, SCROLL)
   const title = c.title.length === 0 ? 'Panel' : c.title
   const body = (
-    <div style={{ height: drawerHeightPx(rows) }} className="relative w-full overflow-hidden">
+    <div style={{ height: overlayHeightPx(rows) }} className="relative w-full overflow-hidden">
       {children}
     </div>
   )
 
-  // Static shell: no portal, no focus trap — pure preview chrome that
-  // mirrors the sheet's footprint and colors.
   if (open === undefined) {
     return (
-      <div
-        role="dialog"
-        aria-label={title}
-        style={{ width: drawerWidthPx(cols) }}
-        className={cn('relative max-w-full border border-slate-200 bg-white p-4 shadow-xl', shell)}
+      <OSBOverlayStaticShell
+        title={title}
+        width={overlayWidthPx(cols)}
+        bodyHeight={overlayHeightPx(rows)}
+        showClose={c.showClose}
+        className="border border-slate-200 bg-white p-4 shadow-xl"
+        shellClass={shell}
       >
-        {body}
-        {c.showClose && (
-          <span className="absolute right-4 top-4 rounded-sm opacity-70" aria-hidden="true">
-            ✕
-          </span>
-        )}
-      </div>
+        {children}
+      </OSBOverlayStaticShell>
     )
   }
 
@@ -159,7 +129,7 @@ export default function OSBDrawer({ config, cols = 10, rows = 10, open, onOpenCh
       <SheetContent
         side={c.side}
         data-testid="osb-drawer-content"
-        style={{ width: drawerWidthPx(cols) }}
+        style={{ width: overlayWidthPx(cols) }}
         className={shell}
         showCloseButton={c.showClose}
       >

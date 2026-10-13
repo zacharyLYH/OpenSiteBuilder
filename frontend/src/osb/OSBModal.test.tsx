@@ -1,13 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import OSBModal, {
-  OSB_MODAL_DEFAULTS,
-  OSB_MODAL_FIELDS,
-  OSBModalBody,
-  modalChildStyle,
-  modalHeightPx,
-  modalWidthPx,
-} from './OSBModal'
+import OSBModal, { OSB_MODAL_DEFAULTS, OSB_MODAL_FIELDS } from './OSBModal'
+import { OSBOverlayBody, overlayChildStyle, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
 
 const openModal = (config: Record<string, unknown> = {}, onOpenChange = () => {}) =>
   render(
@@ -39,11 +33,11 @@ describe('OSBModal static shell (open undefined)', () => {
 
   it('sizes from the shell footprint', () => {
     // One 28px pitch everywhere: editor shell, dialog, and published agree.
-    expect(modalWidthPx(12)).toBe('min(92vw, 336px)')
-    expect(modalWidthPx(6)).toBe('min(92vw, 168px)')
-    expect(modalHeightPx(10)).toBe('280px')
+    expect(overlayWidthPx(12)).toBe('min(92vw, 336px)')
+    expect(overlayWidthPx(6)).toBe('min(92vw, 168px)')
+    expect(overlayHeightPx(10)).toBe('280px')
     // A 4-wide button at x=1 in a 12-wide shell keeps a 1/3 box anywhere.
-    expect(modalChildStyle({ cols: 12, rows: 10 }, { x: 1, y: 6, cols: 4, rows: 1 })).toMatchObject({
+    expect(overlayChildStyle({ cols: 12, rows: 10 }, { x: 1, y: 6, cols: 4, rows: 1 })).toMatchObject({
       position: 'absolute',
       left: `${(1 / 12) * 100}%`,
       width: `${(4 / 12) * 100}%`,
@@ -53,7 +47,7 @@ describe('OSBModal static shell (open undefined)', () => {
   it('keeps an atom at its grid footprint inside the shared body', () => {
     render(
       <OSBModal config={{ title: 'Offer' }} cols={12} rows={10}>
-        <OSBModalBody
+        <OSBOverlayBody
           cols={12}
           rows={10}
           kids={[{ id: 'b1', x: 1, y: 6, cols: 4, rows: 1 }]}

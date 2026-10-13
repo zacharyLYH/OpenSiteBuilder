@@ -21,7 +21,7 @@ test('recovery: corrupt storage boots an empty canvas instead of crashing', asyn
   await expect(page.getByTestId('canvas-node')).toHaveCount(0)
   // Usable again, and the first save overwrites the damaged entry.
   await page.waitForTimeout(900)
-  expect(await persistedDoc(page, slug)).toEqual({ version: 1, nodes: [], modals: [], theme: 'light' })
+  expect(await persistedDoc(page, slug)).toEqual({ version: 1, nodes: [], overlays: [], theme: 'light' })
 })
 
 test('recovery: unknown types, orphans and broken nesting are pruned and persisted', async ({ page }) => {

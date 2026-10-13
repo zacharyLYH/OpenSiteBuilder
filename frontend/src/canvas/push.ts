@@ -2,7 +2,7 @@ import { publishFiles, strField } from '../api'
 import { generatePage } from './codegen'
 import { validateSite } from '../site/validate'
 import { SITE_SCHEMA_VERSION } from '../site/types'
-import { childrenOf, drawersOf, modalsOf, themeOf, type CanvasDoc } from './doc'
+import { childrenOf, overlaysOf, themeOf, type CanvasDoc } from './doc'
 import osbTypesSrc from '../osb/types.ts?raw'
 import cnSrc from '../lib/utils.ts?raw'
 
@@ -50,16 +50,14 @@ const siteModalKid = (k: { id: string; type: string; config: Record<string, unkn
 /** Canvas doc as a site object (single page v1, children nested). Stringified once by the caller. */
 export function siteObject(doc: CanvasDoc, slug: string): unknown {
   const kidsOf = (id: string) => childrenOf(doc.nodes, id).map(siteNode)
-  const overlayOf = (type: 'modal' | 'drawer') => (m: { id: string; config: Record<string, unknown>; cols: number; rows: number; children: { id: string; type: string; config: Record<string, unknown>; x: number; y: number; cols: number; rows: number }[] }) => ({
+  const overlays = overlaysOf(doc).map((m) => ({
     id: m.id,
-    type,
+    type: m.overlayType,
     config: m.config ?? {},
     cols: m.cols,
     rows: m.rows,
     ...(m.children.length > 0 ? { children: m.children.map(siteModalKid) } : {}),
-  })
-  const modals = modalsOf(doc).map(overlayOf('modal'))
-  const drawers = drawersOf(doc).map(overlayOf('drawer'))
+  }))
   return {
     version: SITE_SCHEMA_VERSION,
     site: { name: slug, theme: themeOf(doc) },
@@ -74,8 +72,7 @@ export function siteObject(doc: CanvasDoc, slug: string): unknown {
             const children = kidsOf(n.id)
             return { ...siteNode(n), ...(children.length > 0 ? { children } : {}) }
           }),
-        ...(modals.length > 0 ? { modals } : {}),
-        ...(drawers.length > 0 ? { drawers } : {}),
+        ...(overlays.length > 0 ? { overlays } : {}),
       },
     ],
   }

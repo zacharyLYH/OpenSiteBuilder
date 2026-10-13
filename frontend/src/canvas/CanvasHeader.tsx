@@ -29,22 +29,14 @@ export interface CanvasHeaderProps {
   onTogglePreview(): void
   /** On-demand check results; null while the panel is closed. */
   validation: DocValidation | null
-  /** Popup count for the tray button. */
-  modalCount: number
-  /** Drawer count for the tray button. */
-  drawerCount: number
-  /** Open tray rows (id + raw title); null while the tray is closed. */
-  popups: { id: string; title: unknown }[] | null
-  /** Open drawer tray rows; null while the tray is closed. */
-  drawers: { id: string; title: unknown }[] | null
-  onOpenPopups(): void
-  onClosePopups(): void
-  onOpenDrawers(): void
-  onCloseDrawers(): void
-  onEditModal(id: string): void
-  onRemoveModal(id: string): void
-  onEditDrawer(id: string): void
-  onRemoveDrawer(id: string): void
+  /** Overlay count for the tray button. */
+  overlayCount: number
+  /** Open tray rows (id + kind + raw title); null while the tray is closed. */
+  overlays: { id: string; overlayType: string; title: unknown }[] | null
+  onOpenOverlays(): void
+  onCloseOverlays(): void
+  onEditOverlay(id: string): void
+  onRemoveOverlay(id: string): void
   onEndDrag(): void
   onValidate(): void
   onCloseValidation(): void
@@ -156,11 +148,8 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
           <Button variant="outline" size="sm" data-testid="validate" onClick={p.onValidate}>
             Validate
           </Button>
-          <Button variant="outline" size="sm" data-testid="popups" onClick={p.onOpenPopups}>
-            Popups{p.modalCount > 0 ? ` (${p.modalCount})` : ''}
-          </Button>
-          <Button variant="outline" size="sm" data-testid="drawers" onClick={p.onOpenDrawers}>
-            Drawers{p.drawerCount > 0 ? ` (${p.drawerCount})` : ''}
+          <Button variant="outline" size="sm" data-testid="overlays" onClick={p.onOpenOverlays}>
+            Overlays{p.overlayCount > 0 ? ` (${p.overlayCount})` : ''}
           </Button>
           <Button variant="outline" size="sm" onClick={p.onExit}>
             Exit project
@@ -189,48 +178,22 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
         </FloatingPanel>
       )}
 
-      {p.popups && (
-        <FloatingPanel testid="popups-panel" title="Popups" closeLabel="Close popups" onClose={p.onClosePopups}>
-          {p.popups.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">No popups yet — select a button to attach one.</p>
+      {p.overlays && (
+        <FloatingPanel testid="overlays-panel" title="Overlays" closeLabel="Close overlays" onClose={p.onCloseOverlays}>
+          {p.overlays.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-500">No overlays yet — select a button to attach one.</p>
           ) : (
             <ul className="mt-2 flex flex-col gap-2">
-              {p.popups.map((m) => (
-                <li key={m.id} data-testid="popup-row" data-id={m.id} className="flex items-center justify-between gap-2">
+              {p.overlays.map((m) => (
+                <li key={m.id} data-testid="overlay-row" data-id={m.id} data-kind={m.overlayType} className="flex items-center justify-between gap-2">
                   <span className="truncate text-xs text-slate-700">
-                    {typeof m.title === 'string' && m.title.length > 0 ? m.title : 'Popup'}
+                    {typeof m.title === 'string' && m.title.length > 0 ? m.title : m.overlayType === 'modal' ? 'Popup' : 'Panel'}
                   </span>
                   <span className="flex gap-1">
-                    <Button type="button" data-testid="popup-edit" variant="outline" size="sm" onClick={() => p.onEditModal(m.id)}>
+                    <Button type="button" data-testid="overlay-edit" variant="outline" size="sm" onClick={() => p.onEditOverlay(m.id)}>
                       Edit
                     </Button>
-                    <Button type="button" data-testid="popup-remove" variant="outline" size="sm" onClick={() => p.onRemoveModal(m.id)}>
-                      Remove
-                    </Button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </FloatingPanel>
-      )}
-
-      {p.drawers && (
-        <FloatingPanel testid="drawers-panel" title="Drawers" closeLabel="Close drawers" onClose={p.onCloseDrawers}>
-          {p.drawers.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">No drawers yet — select a button to attach one.</p>
-          ) : (
-            <ul className="mt-2 flex flex-col gap-2">
-              {p.drawers.map((m) => (
-                <li key={m.id} data-testid="drawer-row" data-id={m.id} className="flex items-center justify-between gap-2">
-                  <span className="truncate text-xs text-slate-700">
-                    {typeof m.title === 'string' && m.title.length > 0 ? m.title : 'Panel'}
-                  </span>
-                  <span className="flex gap-1">
-                    <Button type="button" data-testid="drawer-edit" variant="outline" size="sm" onClick={() => p.onEditDrawer(m.id)}>
-                      Edit
-                    </Button>
-                    <Button type="button" data-testid="drawer-remove" variant="outline" size="sm" onClick={() => p.onRemoveDrawer(m.id)}>
+                    <Button type="button" data-testid="overlay-remove" variant="outline" size="sm" onClick={() => p.onRemoveOverlay(m.id)}>
                       Remove
                     </Button>
                   </span>

@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { SiteNode } from '../site/types'
-import { OSBModalTestPreview } from './OSBModal'
-import { OSBDrawerTestPreview } from './OSBDrawer'
 import { OSBThemeProvider } from './OSBTheme'
-import { OSB_REGISTRY } from './registry'
+import { OSB_REGISTRY, OSBOverlayTestPreview, isOverlayType } from './registry'
 import type { OSBTheme } from './types'
 
 interface MountSpec {
@@ -33,19 +31,15 @@ function renderSiteNode(n: SiteNode): React.ReactNode {
     ? n.children.filter((k) => k && typeof k.type === 'string' && k.type in OSB_REGISTRY)
     : []
   const renderedKids = kids.length > 0 ? kids.map((k) => <div key={k.id}>{renderSiteNode(k)}</div>) : undefined
-  // Overlays mount open: screenshots capture the dialog/sheet, not an page.
-  if (n.type === 'modal') return <ModalPreview node={n} />
-  if (n.type === 'drawer') return <DrawerPreview node={n} />
+  // Overlays mount open: screenshots capture the dialog/sheet, not a page.
+  if (isOverlayType(n.type)) return <OverlayPreview node={n} />
   return OSB_REGISTRY[n.type].render(n.config, renderedKids)
 }
 
-/** One overlay preview: local open state, shared geometry, real portal. */
-function OverlayKids(node: SiteNode): {
-  kids: { id: string; x: number; y: number; cols: number; rows: number }[]
-  renderKid: (id: string) => React.ReactNode
-  cols: number
-  rows: number
-} {
+/** One overlay preview: local open state, shared geometry, real portal.
+// Chrome comes from the node type — a new kind needs no new code here. */
+function OverlayPreview({ node }: { node: SiteNode }) {
+  const [open, setOpen] = useState(true)
   const kids = Array.isArray(node.children)
     ? node.children.filter((k) => k && typeof k.type === 'string' && k.type in OSB_REGISTRY)
     : []
@@ -58,45 +52,17 @@ function OverlayKids(node: SiteNode): {
     cols: num(k.cols, 4),
     rows: num(k.rows, 1),
   })
-  return {
-    kids: kids.map(geom),
-    renderKid: (id) => {
-      const k = byId.get(id)
-      return k ? OSB_REGISTRY[k.type].render(k.config) : null
-    },
-    cols: num(node.cols, node.type === 'drawer' ? 10 : 12),
-    rows: num(node.rows, 10),
-  }
-}
-
-/** A popup with local open state, so specs can exercise the real dialog. */
-function ModalPreview({ node }: { node: SiteNode }) {
-  const [open, setOpen] = useState(true)
-  const { kids, renderKid, cols, rows } = OverlayKids(node)
   return (
-    <OSBModalTestPreview
+    <OSBOverlayTestPreview
+      overlayType={node.type}
       config={node.config as Record<string, unknown>}
-      cols={cols}
-      rows={rows}
-      kids={kids}
-      renderKid={renderKid}
-      open={open}
-      onOpenChange={setOpen}
-    />
-  )
-}
-
-/** A drawer with local open state, so specs can exercise the real sheet. */
-function DrawerPreview({ node }: { node: SiteNode }) {
-  const [open, setOpen] = useState(true)
-  const { kids, renderKid, cols, rows } = OverlayKids(node)
-  return (
-    <OSBDrawerTestPreview
-      config={node.config as Record<string, unknown>}
-      cols={cols}
-      rows={rows}
-      kids={kids}
-      renderKid={renderKid}
+      cols={num(node.cols, OSB_REGISTRY[node.type].grid.cols)}
+      rows={num(node.rows, OSB_REGISTRY[node.type].grid.rows)}
+      kids={kids.map(geom)}
+      renderKid={(id) => {
+        const k = byId.get(id)
+        return k ? OSB_REGISTRY[k.type].render(k.config) : null
+      }}
       open={open}
       onOpenChange={setOpen}
     />

@@ -17,7 +17,7 @@ test('drag states: kind reject, nest highlight, reposition', async ({ page }) =>
       { id: 'card1', type: 'card', config: {}, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
       { id: 't1', type: 'text', config: { text: 'Beside' }, parentId: null, x: 12, y: 0, cols: 8, rows: 2 },
     ],
-    modals: [],
+    overlays: [],
     theme: 'light',
   })
   const container = page.getByTestId('container-card1')
@@ -115,7 +115,7 @@ test('drag states: kind reject, nest highlight, reposition', async ({ page }) =>
   await page.waitForTimeout(900)
   const afterDoc = await persistedDoc(page, SLUG)
   expect(afterDoc.nodes).toHaveLength(moved.length)
-  expect(afterDoc).toEqual({ version: 1, nodes: moved, modals: [], theme: 'light' })
+  expect(afterDoc).toEqual({ version: 1, nodes: moved, overlays: [], theme: 'light' })
   await expect(page.getByTestId('drop-message')).toContainText('That spot is taken')
   await closeDrawerIfOpen(page)
 })

@@ -5,7 +5,7 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './canvas.css'
 import { OSB_REGISTRY } from '../osb/registry'
-import { modalChildStyle } from '../osb/OSBModal'
+import { overlayChildStyle } from '../osb/OSBOverlay'
 import { useOSBTheme } from '../osb/OSBTheme'
 import { startChildResize } from './childResize'
 import { containerFloor, type CanvasDoc, type PlacedNode } from './doc'
@@ -147,7 +147,7 @@ export default function CanvasStage(p: CanvasStageProps) {
             aria-hidden
             data-testid="drop-ghost"
             data-ok={fb.ghost.ok}
-            style={modalChildStyle(parent, fb.ghost)}
+            style={overlayChildStyle(parent, fb.ghost)}
             className={`pointer-events-none absolute rounded-md border-2 border-dashed ${
               fb.ghost.ok ? 'border-sky-500 bg-sky-500/10' : 'border-rose-500 bg-rose-500/10'
             }`}

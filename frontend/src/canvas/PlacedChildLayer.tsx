@@ -1,4 +1,4 @@
-import { modalChildStyle } from '../osb/OSBModal'
+import { overlayChildStyle } from '../osb/OSBOverlay'
 import { OSB_REGISTRY } from '../osb/registry'
 import type { PlacedNode } from './doc'
 
@@ -11,7 +11,7 @@ export interface PlacedChildLayerProps {
   conflicts?: readonly string[]
   /** Live resize preview for exactly one kid, if any. */
   resizing: { id: string; cols: number; rows: number } | null
-  /** Testid vocabulary: the canvas and the popup editor name their own. */
+  /** Testid vocabulary: the canvas and the overlay editor name their own. */
   ids: { node: string; resize: (id: string) => string; remove: string }
   /** Wrap in the dashed bounds box (canvas container while selected). */
   bounds?: boolean
@@ -26,7 +26,7 @@ export interface PlacedChildLayerProps {
  * THE absolutely-positioned child layer: percent boxes inside a parent's cell
  * rectangle, each child draggable/selectable and, when selected, carrying the
  * SE resize handle and remove control. Shared by canvas container bodies and
- * the popup editor — same geometry, same interactions, one markup.
+ * the overlay editor — same geometry, same interactions, one markup.
  */
 export default function PlacedChildLayer(p: PlacedChildLayerProps) {
   return (
@@ -53,7 +53,7 @@ export default function PlacedChildLayer(p: PlacedChildLayerProps) {
             e.stopPropagation()
             p.onSelect(k.id)
           }}
-          style={modalChildStyle(p.parent, p.resizing?.id === k.id ? { ...k, ...p.resizing } : k)}
+          style={overlayChildStyle(p.parent, p.resizing?.id === k.id ? { ...k, ...p.resizing } : k)}
           className={`osb-child pointer-events-auto ${
             k.id === p.selectedId ? 'canvas-selected overflow-hidden' : 'overflow-hidden'
           }${p.conflicts?.includes(k.id) ? ' drag-conflict' : ''}`}

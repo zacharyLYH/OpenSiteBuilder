@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { cn } from '../lib/utils'
+import type { OSBSurface, OSBTheme } from './types'
 
 /**
  * THE shared overlay geometry. Modals (centered dialog) and drawers (side
@@ -35,6 +37,68 @@ export function overlayChildStyle(
 }
 
 export type OverlayKid = { id: string; x: number; y: number; cols: number; rows: number }
+
+/**
+ * THE one surface map for every overlay shell. Cards keep their own (they
+ * add radius/shadow/padding axes); popups and drawers share this, so the
+ * two overlay surfaces never drift in value or wording.
+ */
+export const OVERLAY_SURFACE_CLASSES: Record<OSBSurface, Record<OSBTheme, string>> = {
+  elevated: {
+    light: 'bg-white shadow-2xl ring-1 ring-slate-900/10',
+    dark: 'border-slate-700 bg-slate-900 shadow-2xl ring-1 ring-white/10',
+  },
+  outlined: {
+    light: 'bg-white ring-1 ring-slate-300',
+    dark: 'border-slate-700 bg-slate-900 ring-1 ring-slate-700',
+  },
+  plain: {
+    light: 'border-transparent bg-transparent shadow-none',
+    dark: 'border-transparent bg-transparent shadow-none',
+  },
+}
+
+/** Scroll wrapper + shared surface: the one live-shell line per chrome. */
+export function overlayChromeShell(variant: OSBSurface, theme: OSBTheme, scroll: string): string {
+  return cn(scroll, OVERLAY_SURFACE_CLASSES[variant][theme])
+}
+
+/**
+ * Static shell (open undefined): no portal, no focus trap — pure preview
+ * chrome that mirrors the live footprint and colors. Structure is shared;
+ * the base decoration stays per-kind (it mirrors the differing shadcn
+ * bases: dialog rounding vs sheet border/padding).
+ */
+export function OSBOverlayStaticShell({
+  title,
+  width,
+  bodyHeight,
+  showClose,
+  className,
+  shellClass,
+  children,
+}: {
+  title: string
+  width: string
+  bodyHeight: string
+  showClose: boolean
+  className?: string
+  shellClass?: string
+  children?: ReactNode
+}): ReactNode {
+  return (
+    <div role="dialog" aria-label={title} style={{ width }} className={cn('relative max-w-full', className, shellClass)}>
+      <div style={{ height: bodyHeight }} className="relative w-full overflow-hidden">
+        {children}
+      </div>
+      {showClose && (
+        <span className="absolute right-4 top-4 rounded-sm opacity-70" aria-hidden="true">
+          ✕
+        </span>
+      )}
+    </div>
+  )
+}
 
 /**
  * Absolutely-positioned kids for inside an overlay body — shared by the
