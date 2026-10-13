@@ -51,7 +51,8 @@ type Rect = { x: number; y: number; cols: number; rows: number }
 export const storageKey = (projectName: string): string => `osb.project.${projectName}`
 
 export function loadDoc(key: string): CanvasDoc {
-  try {	const doc = JSON.parse(localStorage.getItem(key) ?? '') as CanvasDoc | null
+  try {
+    const doc = JSON.parse(localStorage.getItem(key) ?? '') as CanvasDoc | null
     if (!doc || doc.version !== 1 || !Array.isArray(doc.nodes)) return EMPTY_DOC
     // Drop unknown types (removed components), then prune orphans: children
     // whose parent is missing, not a root container, or itself nested.
@@ -177,6 +178,14 @@ export const reasonText = (reason: RejectReason): string => REASON_TEXT[reason]
  * the red-highlight query. */
 function overlapIds(nodes: PlacedNode[], rect: Rect, parentId: string | null, ignoreId?: string | null): string[] {
   return nodes.filter((n) => n.parentId === parentId && n.id !== ignoreId && collides(rect, n)).map((n) => n.id)
+}
+
+/** Direct children of `parentId` in a node list. `ordered` sorts them into
+ * flow order (top→bottom, left→right). THE answer to "what sits inside this
+ * node", shared by the published site object and the generated page. */
+export function childrenOf(nodes: readonly PlacedNode[], parentId: string, ordered = false): PlacedNode[] {
+  const kids = nodes.filter((n) => n.parentId === parentId)
+  return ordered ? [...kids].sort((a, b) => a.y - b.y || a.x - b.x) : kids
 }
 
 /** A node with children can never itself nest elsewhere (depth guard). */
@@ -363,6 +372,16 @@ export function removeNode(doc: CanvasDoc, id: string): CanvasDoc {
 
 export type ModalShell = Pick<ModalDoc, 'cols' | 'rows' | 'children'>
 
+/** One popup by id — the lookup every popup op shares. */
+const findModal = (doc: CanvasDoc, id: string): ModalDoc | undefined => modalsOf(doc).find((m) => m.id === id)
+
+/** Every popup mutation funnels here: replace one shell by id, untouched
+ * siblings preserved. Keeps the "map over modals" boilerplate in one place. */
+const mapModal = (doc: CanvasDoc, id: string, fn: (m: ModalDoc) => ModalDoc): CanvasDoc => ({
+  ...doc,
+  modals: modalsOf(doc).map((m) => (m.id === id ? fn(m) : m)),
+})
+
 /** THE popup landing rule: atoms only (never a popup-in-popup), inside the
  * shell, on whole cells, never overlapping a sibling. */
 export function canPlaceModalChild(
@@ -374,10 +393,7 @@ export function canPlaceModalChild(
   if (!(type in OSB_REGISTRY)) return 'unknown-type'
   if (!isAtomType(type)) return 'kind'
   if (!isRectOk(rect)) return 'integrity'
-  const g = OSB_REGISTRY[type as OSBNodeType].grid
-  if (rect.cols < g.minCols || rect.rows < g.minRows || rect.cols > g.maxCols || rect.rows > g.maxRows) {
-    return 'footprint'
-  }
+  if (!footprintOk(type as OSBNodeType, rect)) return 'footprint'
   if (rect.x + rect.cols > modal.cols || rect.y + rect.rows > modal.rows) return 'containment'
   const hit = modal.children.some((k) => k.id !== ignoreId && collides(rect, k))
   return hit ? 'overlap' : null
@@ -389,19 +405,19 @@ export function createModal(doc: CanvasDoc, modal: ModalDoc): CanvasDoc {
 }
 
 export function updateModalConfig(doc: CanvasDoc, id: string, config: Record<string, unknown>): CanvasDoc {
-  return { ...doc, modals: modalsOf(doc).map((m) => (m.id === id ? { ...m, config } : m)) }
+  return mapModal(doc, id, (m) => ({ ...m, config }))
 }
 
 /** Resize the shell: same floor rule as containers (never under children). */
 export function resizeModal(doc: CanvasDoc, id: string, cols: number, rows: number): DocResult {
-  const modal = modalsOf(doc).find((m) => m.id === id)
+  const modal = findModal(doc, id)
   if (!modal) return { ok: false, reason: 'unknown-type' }
   const g = OSB_REGISTRY.modal.grid
   if (!Number.isInteger(cols + rows) || cols < g.minCols || rows < g.minRows || cols > g.maxCols || rows > g.maxRows) {
     return { ok: false, reason: 'footprint' }
   }
   if (!containerFitsKids(modal.children, { id, cols, rows })) return { ok: false, reason: 'undersize' }
-  return { ok: true, doc: { ...doc, modals: modalsOf(doc).map((m) => (m.id === id ? { ...m, cols, rows } : m)) } }
+  return { ok: true, doc: mapModal(doc, id, (m) => ({ ...m, cols, rows })) }
 }
 
 /** Removing a popup unlinks every button that opened it (canvas + popups). */
@@ -420,39 +436,27 @@ export function removeModal(doc: CanvasDoc, id: string): CanvasDoc {
 }
 
 export function insertModalChild(doc: CanvasDoc, modalId: string, child: PlacedNode): DocResult {
-  const modal = modalsOf(doc).find((m) => m.id === modalId)
+  const modal = findModal(doc, modalId)
   if (!modal) return { ok: false, reason: 'unknown-type' }
-  const reason = canPlaceModalChild(modal, child.type, child, undefined)
+  const reason = canPlaceModalChild(modal, child.type, child)
   if (reason) return { ok: false, reason }
-  return {
-    ok: true,
-    doc: { ...doc, modals: modalsOf(doc).map((m) => (m.id === modalId ? { ...m, children: [...m.children, child] } : m)) },
-  }
+  return { ok: true, doc: mapModal(doc, modalId, (m) => ({ ...m, children: [...m.children, child] })) }
 }
 
 export function moveModalChild(doc: CanvasDoc, modalId: string, id: string, rect: CellRect): DocResult {
-  const modal = modalsOf(doc).find((m) => m.id === modalId)
-  if (!modal) return { ok: false, reason: 'unknown-type' }
-  const child = modal.children.find((k) => k.id === id)
-  if (!child) return { ok: false, reason: 'unknown-type' }
+  const modal = findModal(doc, modalId)
+  const child = modal?.children.find((k) => k.id === id)
+  if (!modal || !child) return { ok: false, reason: 'unknown-type' }
   const reason = canPlaceModalChild(modal, child.type, rect, id)
   if (reason) return { ok: false, reason }
   return {
     ok: true,
-    doc: {
-      ...doc,
-      modals: modalsOf(doc).map((m) =>
-        m.id === modalId ? { ...m, children: m.children.map((k) => (k.id === id ? { ...k, ...rect } : k)) } : m,
-      ),
-    },
+    doc: mapModal(doc, modalId, (m) => ({ ...m, children: m.children.map((k) => (k.id === id ? { ...k, ...rect } : k)) })),
   }
 }
 
 export function removeModalChild(doc: CanvasDoc, modalId: string, id: string): CanvasDoc {
-  return {
-    ...doc,
-    modals: modalsOf(doc).map((m) => (m.id === modalId ? { ...m, children: m.children.filter((k) => k.id !== id) } : m)),
-  }
+  return mapModal(doc, modalId, (m) => ({ ...m, children: m.children.filter((k) => k.id !== id) }))
 }
 
 export function updateModalChildConfig(
@@ -461,12 +465,10 @@ export function updateModalChildConfig(
   id: string,
   config: Record<string, unknown>,
 ): CanvasDoc {
-  return {
-    ...doc,
-    modals: modalsOf(doc).map((m) =>
-      m.id === modalId ? { ...m, children: m.children.map((k) => (k.id === id ? { ...k, config } : k)) } : m,
-    ),
-  }
+  return mapModal(doc, modalId, (m) => ({
+    ...m,
+    children: m.children.map((k) => (k.id === id ? { ...k, config } : k)),
+  }))
 }
 
 /** Center-point hit test: at most one container candidate (depth 1). */

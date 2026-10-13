@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { OSBModalTestPreview, MODAL_CELL_PX, modalChildStyle } from '../osb/OSBModal'
 import { OSB_REGISTRY, type OSBNodeType } from '../osb/registry'
 import { Button } from '../components/ui/button'
+import { startChildResize } from './childResize'
+import PlacedChildLayer from './PlacedChildLayer'
 import {
   canPlaceModalChild,
   containerFloor,
@@ -16,14 +18,6 @@ import type { ArmedDrag } from './useDragSession'
 
 /** Preview pitch: the shell renders at a fixed scale, independent of canvas zoom. */
 const CELL = MODAL_CELL_PX
-
-/** Percent box for a footprint inside the shell's cell rectangle. */
-function childPos(
-  parent: { cols: number; rows: number },
-  kid: { x: number; y: number; cols: number; rows: number },
-): React.CSSProperties {
-  return modalChildStyle(parent, kid)
-}
 
 export interface ModalEditorProps {
   modal: ModalDoc
@@ -63,7 +57,6 @@ export default function ModalEditor(p: ModalEditorProps) {
   const [shellPreview, setShellPreview] = useState<{ cols: number; rows: number } | null>(null)
   const [testing, setTesting] = useState(false)
   const resizeActive = useRef(false)
-  const resizeDims = useRef<{ cols: number; rows: number } | null>(null)
 
   const shell = shellPreview ?? { cols: modal.cols, rows: modal.rows }
   const floor = containerFloor(modal.children, modal.id)
@@ -135,38 +128,18 @@ export default function ModalEditor(p: ModalEditorProps) {
   }
 
   /** SE resize for a child in place; commits on release through the gate. */
-  const startChildResize = (e: React.MouseEvent, kid: PlacedNode) => {
-    e.stopPropagation()
-    e.preventDefault()
+  const onChildResize = (e: React.MouseEvent, kid: PlacedNode) => {
     const box = shellBox()
     if (!box) return
-    const g = OSB_REGISTRY[kid.type].grid
-    const { clientX: startX, clientY: startY } = e
-    const pitchX = box.width / modal.cols
-    const pitchY = box.height / modal.rows
-    const dimsAt = (dx: number, dy: number) => ({
-      cols: Math.max(g.minCols, Math.min(g.maxCols, Math.min(modal.cols - kid.x, kid.cols + Math.round(dx / pitchX)))),
-      rows: Math.max(g.minRows, Math.min(g.maxRows, Math.min(modal.rows - kid.y, kid.rows + Math.round(dy / pitchY)))),
+    startChildResize(e, {
+      box,
+      parent: modal,
+      kid,
+      grid: OSB_REGISTRY[kid.type].grid,
+      onActive: (a) => (resizeActive.current = a),
+      onPreview: (dims) => setResizing(dims ? { id: kid.id, ...dims } : null),
+      onCommit: (dims) => p.onResizeChild(kid.id, { x: kid.x, y: kid.y, ...dims }),
     })
-    resizeActive.current = true
-    resizeDims.current = { cols: kid.cols, rows: kid.rows }
-    const onMove = (ev: MouseEvent) => {
-      const dims = dimsAt(ev.clientX - startX, ev.clientY - startY)
-      resizeDims.current = dims
-      setResizing((r) => (r && r.id === kid.id && r.cols === dims.cols && r.rows === dims.rows ? r : { id: kid.id, ...dims }))
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      resizeActive.current = false
-      const dims = resizeDims.current
-      resizeDims.current = null
-      setResizing(null)
-      if (!dims || (dims.cols === kid.cols && dims.rows === kid.rows)) return
-      p.onResizeChild(kid.id, { x: kid.x, y: kid.y, ...dims })
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
   }
 
   /** SE resize for the shell itself; never under its children. */
@@ -221,67 +194,34 @@ export default function ModalEditor(p: ModalEditorProps) {
           style={{ width: shell.cols * CELL, height: shell.rows * CELL }}
           className="relative rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/10"
         >
-          <div className="pointer-events-none absolute inset-0">
-            {modal.children.map((k) => (
-              <div
-                key={k.id}
-                data-testid="modal-child"
-                data-type={k.type}
-                data-id={k.id}
-                draggable
-                onDragStart={(e) => {
-                  e.stopPropagation()
-                  if (resizeActive.current) {
-                    e.preventDefault()
-                    return
-                  }
-                  setDragId(k.id)
-                  e.dataTransfer.setData('text/plain', k.id)
-                }}
-                onDragEnd={() => {
-                  setDragId(null)
-                  setGhost(null)
-                }}
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  p.onSelect(k.id)
-                }}
-                style={childPos(shell, resizing?.id === k.id ? { ...k, ...resizing } : k)}
-                className={`osb-child pointer-events-auto ${k.id === p.selectedId ? 'canvas-selected overflow-hidden' : 'overflow-hidden'}`}
-              >
-                {OSB_REGISTRY[k.type].render(k.config)}
-                {k.id === p.selectedId && (
-                  <>
-                    <div
-                      data-testid={`modal-resize-${k.id}`}
-                      aria-label="Resize element"
-                      onMouseDown={(e) => startChildResize(e, k)}
-                      className="absolute bottom-0 right-0 z-10 h-4 w-4 cursor-se-resize rounded-tl-md border-l border-t border-sky-500 bg-white/90"
-                    />
-                    <button
-                      type="button"
-                      data-testid="modal-remove-child"
-                      aria-label="Remove element"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        p.onRemoveChild(k.id)
-                      }}
-                      className="absolute right-0 top-0 z-10 rounded-bl-md bg-white px-1.5 py-0.5 text-[10px] text-slate-600 shadow-sm hover:bg-slate-100"
-                    >
-                      Remove
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
+          <PlacedChildLayer
+            parent={modal}
+            kids={modal.children}
+            selectedId={p.selectedId}
+            resizing={resizing}
+            ids={{ node: 'modal-child', resize: (id) => `modal-resize-${id}`, remove: 'modal-remove-child' }}
+            onSelect={p.onSelect}
+            onRemove={p.onRemoveChild}
+            onDragStart={(k, e) => {
+              if (resizeActive.current) {
+                e.preventDefault()
+                return
+              }
+              setDragId(k.id)
+              e.dataTransfer.setData('text/plain', k.id)
+            }}
+            onDragEnd={() => {
+              setDragId(null)
+              setGhost(null)
+            }}
+            onResize={(e, k) => onChildResize(e, k)}
+          />
           {ghost && (
             <div
               aria-hidden
               data-testid="modal-ghost"
               data-ok={ghost.ok}
-              style={childPos(shell, ghost)}
+              style={modalChildStyle(shell, ghost)}
               className={`pointer-events-none absolute rounded-md border-2 border-dashed ${
                 ghost.ok ? 'border-sky-500 bg-sky-500/10' : 'border-rose-500 bg-rose-500/10'
               }`}
@@ -307,18 +247,15 @@ export default function ModalEditor(p: ModalEditorProps) {
         <p className="text-xs text-white/80">Drag text, buttons or images into the popup · corner to resize · Test popup tries the real dialog</p>
       </div>
 
-      {testing && (
-        <TestPreview
-          modal={modal}
-          onClose={() => setTesting(false)}
-        />
-      )}
+      {testing && <ModalTestPreview modal={modal} onClose={() => setTesting(false)} />}
     </div>
   )
 }
 
-/** The real dialog over the editor: X, outside press, and Escape all close. */
-function TestPreview({ modal, onClose }: { modal: ModalDoc; onClose: () => void }) {
+/** The real dialog from anywhere (editor Test, drawer Test): overlays the
+ * editor, and X, outside press, and Escape all close. Absolute kids, so it
+ * matches the editor grid exactly. */
+export function ModalTestPreview({ modal, onClose }: { modal: ModalDoc; onClose: () => void }) {
   const byId = new Map(modal.children.map((k) => [k.id, k]))
   return (
     <OSBModalTestPreview

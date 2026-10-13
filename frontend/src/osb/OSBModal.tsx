@@ -2,12 +2,13 @@ import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { Dialog, DialogContent, DialogTitle } from './OSBDialog'
 import { useOSBTheme } from './OSBTheme'
-import { resolveConfig, type OSBField, type OSBTheme } from './types'
+import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface, type OSBTheme } from './types'
 
 export type OSBModalConfig = {
   /** Internal name + accessible title. Read aloud on open, never shown. */
   title: string
-  variant: 'elevated' | 'outlined' | 'plain'
+  /** Surface emphasis, shared with cards (osb/types). */
+  variant: OSBSurface
   /** Every popup keeps an X — shadcn parity, touch users need a target. */
   showClose: boolean
 }
@@ -26,16 +27,7 @@ export const OSB_MODAL_FIELDS: OSBField[] = [
     kind: 'text',
     required: true,
   },
-  {
-    key: 'variant',
-    label: 'Popup style',
-    kind: 'select',
-    options: [
-      { value: 'elevated', label: 'Raised' },
-      { value: 'outlined', label: 'Outline' },
-      { value: 'plain', label: 'Plain' },
-    ],
-  },
+  { key: 'variant', label: 'Popup style', kind: 'select', options: SURFACE_OPTIONS },
   { key: 'showClose', label: 'Show close button', kind: 'boolean' },
 ]
 

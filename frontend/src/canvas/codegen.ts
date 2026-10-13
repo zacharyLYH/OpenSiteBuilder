@@ -1,5 +1,5 @@
 import { OSB_NODE_TYPES, OSB_REGISTRY } from '../osb/registry'
-import { modalsOf, themeOf, type CanvasDoc, type ModalDoc, type PlacedNode } from './doc'
+import { childrenOf, modalsOf, themeOf, type CanvasDoc, type ModalDoc, type PlacedNode } from './doc'
 
 /** Registry key -> published component tag/file ('card' -> 'OSBCard'). */
 export const tagFor = (type: string): string => `OSB${type[0].toUpperCase()}${type.slice(1)}`
@@ -16,28 +16,26 @@ const byFlow = (a: PlacedNode, b: PlacedNode) => a.y - b.y || a.x - b.x
 /** Configs embed via JSON so text can never break out into markup. */
 const cfgOf = (config: Record<string, unknown> | undefined): string => `config={${JSON.stringify(config ?? {})}}`
 
-/** A trigger button opens its popup through page state; any other button
- * renders exactly as before (link, new-tab, or plain). */
-function renderButton(node: PlacedNode, modalIds: Set<string>): string {
-  const modalId = (node.config as { modalId?: unknown } | undefined)?.modalId
+/** A leaf tag. Only a trigger button (its id is a live popup) carries an
+ * opener; every other node — link, new-tab, plain, or popup child — renders
+ * config alone. One rule for root, child, and popup-kid leaves. */
+const renderLeaf = (n: PlacedNode, modalIds: Set<string>): string => {
+  const modalId = (n.config as { modalId?: unknown } | undefined)?.modalId
   const opener =
-    typeof modalId === 'string' && modalIds.has(modalId) ? ` onClick={() => setOpenModal(${JSON.stringify(modalId)})}` : ''
-  return `<${tagFor(node.type)} ${cfgOf(node.config)}${opener} />`
+    n.type === 'button' && typeof modalId === 'string' && modalIds.has(modalId)
+      ? ` onClick={() => setOpenModal(${JSON.stringify(modalId)})}`
+      : ''
+  return `<${tagFor(n.type)} ${cfgOf(n.config)}${opener} />`
 }
 
+/** Popup children never open another popup (validated at edit time), so they
+ * render with no modal ids in scope. */
+const NO_OPENER: Set<string> = new Set()
+
 function renderNode(node: PlacedNode, kids: PlacedNode[], modalIds: Set<string>): string {
-  if (kids.length === 0) {
-    if (node.type === 'button') return renderButton(node, modalIds)
-    return `<${tagFor(node.type)} ${cfgOf(node.config)} />`
-  }
-  const inner = kids
-    .sort(byFlow)
-    .map((k) =>
-      k.type === 'button'
-        ? renderButton(k, modalIds)
-        : `<${tagFor(k.type)} ${cfgOf(k.config)} />`,
-    )
-    .join('\n')
+  // Kids arrive in flow order (childrenOf(..., true)); no re-sort here.
+  if (kids.length === 0) return renderLeaf(node, modalIds)
+  const inner = kids.map((k) => renderLeaf(k, modalIds)).join('\n')
   return `<${tagFor(node.type)} ${cfgOf(node.config)}>\n${inner.replace(/^/gm, '  ')}\n    </${tagFor(node.type)}>`
 }
 
@@ -45,8 +43,6 @@ function renderNode(node: PlacedNode, kids: PlacedNode[], modalIds: Set<string>)
  * kids (shared OSBModalBody) so published matches the editor grid exactly. */
 function renderModal(modal: ModalDoc): string {
   const kids = [...modal.children].sort(byFlow)
-  // Buttons inside a popup never open another one (validated at edit time),
-  // so nested configs render plain here — no opener is ever emitted.
   const geom = (k: PlacedNode): string =>
     `{ id: ${JSON.stringify(k.id)}, x: ${k.x}, y: ${k.y}, cols: ${k.cols}, rows: ${k.rows} }`
   const open = `openModal === ${JSON.stringify(modal.id)}`
@@ -54,7 +50,7 @@ function renderModal(modal: ModalDoc): string {
   const shell = `<OSBModal ${cfgOf(modal.config)} cols={${modal.cols}} rows={${modal.rows}} open={${open}} ${change}`
   if (kids.length === 0) return `${shell} />`
   const rendered = kids
-    .map((k) => `        if (id === ${JSON.stringify(k.id)}) return <${tagFor(k.type)} ${cfgOf(k.config)} />`)
+    .map((k) => `        if (id === ${JSON.stringify(k.id)}) return ${renderLeaf(k, NO_OPENER)}`)
     .join('\n')
   return `${shell}>\n      <OSBModalBody cols={${modal.cols}} rows={${modal.rows}} kids={[${kids.map(geom).join(', ')}]} renderKid={(id) => {\n${rendered}\n        return null\n      }} />\n    </OSBModal>`
 }
@@ -78,9 +74,7 @@ export function generatePage(doc: CanvasDoc): string {
   const header = modals.length > 0 ? `import { useState } from 'react'\n${baseHeader}` : baseHeader
   const body = roots
     .map((n) => {
-      const kids = doc.nodes
-        .filter((k) => k.parentId === n.id && k.type in OSB_REGISTRY)
-        .sort(byFlow)
+      const kids = childrenOf(doc.nodes, n.id, true).filter((k) => k.type in OSB_REGISTRY)
       return `      ${renderNode(n, kids, modalIds)}`
     })
     .join('\n')

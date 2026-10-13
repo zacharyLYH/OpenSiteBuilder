@@ -30,6 +30,17 @@ export const ALIGN_OPTIONS: { value: OSBAlign; label: string }[] = [
   { value: 'center', label: 'Center' },
 ]
 
+/** Surface emphasis shared by every raised/chrome component (cards, popups).
+ * Written once so the two surfaces never drift apart in value or wording. */
+export type OSBSurface = 'elevated' | 'outlined' | 'plain'
+
+/** The one option list behind every "surface style" drawer field. */
+export const SURFACE_OPTIONS: { value: OSBSurface; label: string }[] = [
+  { value: 'elevated', label: 'Raised' },
+  { value: 'outlined', label: 'Outline' },
+  { value: 'plain', label: 'Plain' },
+]
+
 /** Padding (dot squares) kept around children inside a container. */
 export const CONTAINER_PAD = 1
 

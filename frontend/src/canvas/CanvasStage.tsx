@@ -5,8 +5,11 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './canvas.css'
 import { OSB_REGISTRY } from '../osb/registry'
+import { modalChildStyle } from '../osb/OSBModal'
 import { useOSBTheme } from '../osb/OSBTheme'
+import { startChildResize } from './childResize'
 import { containerFloor, type CanvasDoc, type PlacedNode } from './doc'
+import PlacedChildLayer from './PlacedChildLayer'
 import { canvasMetrics, GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, HEADER_PX, minGridWidth } from './grid'
 import type { Feedback } from './gesture'
 import type { PaletteEntry } from './CanvasHeader'
@@ -18,20 +21,6 @@ const noOverlap: GridLayoutProps['compactor'] = {
   allowOverlap: true,
   preventCollision: false,
   compact: (layout) => layout,
-}
-
-/** Percent box for a footprint inside its parent's cell rectangle. */
-function childPos(
-  parent: { cols: number; rows: number },
-  kid: { x: number; y: number; cols: number; rows: number },
-): React.CSSProperties {
-  return {
-    position: 'absolute',
-    left: `${(kid.x / parent.cols) * 100}%`,
-    top: `${(kid.y / parent.rows) * 100}%`,
-    width: `${(kid.cols / parent.cols) * 100}%`,
-    height: `${(kid.rows / parent.rows) * 100}%`,
-  }
 }
 
 /** Selected-node delete control; the caller passes the position classes. */
@@ -101,43 +90,20 @@ export default function CanvasStage(p: CanvasStageProps) {
   const [resizing, setResizing] = useState<{ id: string; cols: number; rows: number } | null>(null)
   // True while a child SE-resize is in flight (suppresses HTML5 drag).
   const resizeActive = useRef(false)
-  const resizeDims = useRef<{ cols: number; rows: number } | null>(null)
 
   /** SE resize for nested atoms; commits on release through the usual gate. */
-  const startChildResize = (e: React.MouseEvent, parent: PlacedNode, kid: PlacedNode) => {
-    e.stopPropagation()
-    e.preventDefault()
+  const onChildResize = (e: React.MouseEvent, parent: PlacedNode, kid: PlacedNode) => {
     const shell = (e.currentTarget as HTMLElement).closest('[data-testid^="container-"]') as HTMLElement | null
     if (!shell) return
-    const g = OSB_REGISTRY[kid.type].grid
-    const { width: boxW, height: boxH } = shell.getBoundingClientRect()
-    const { clientX: startX, clientY: startY } = e
-    const pitchX = boxW / parent.cols
-    const pitchY = boxH / parent.rows
-    // Clamp into the shell and the type's own min/max footprint.
-    const dimsAt = (dx: number, dy: number) => ({
-      cols: Math.max(g.minCols, Math.min(g.maxCols, Math.min(parent.cols - kid.x, kid.cols + Math.round(dx / pitchX)))),
-      rows: Math.max(g.minRows, Math.min(g.maxRows, Math.min(parent.rows - kid.y, kid.rows + Math.round(dy / pitchY)))),
+    startChildResize(e, {
+      box: shell.getBoundingClientRect(),
+      parent,
+      kid,
+      grid: OSB_REGISTRY[kid.type].grid,
+      onActive: (a) => (resizeActive.current = a),
+      onPreview: (dims) => setResizing(dims ? { id: kid.id, ...dims } : null),
+      onCommit: (dims) => p.onResizeKid(kid.id, { x: kid.x, y: kid.y, ...dims }, parent.id),
     })
-    resizeActive.current = true
-    resizeDims.current = { cols: kid.cols, rows: kid.rows }
-    const onMove = (ev: MouseEvent) => {
-      const dims = dimsAt(ev.clientX - startX, ev.clientY - startY)
-      resizeDims.current = dims
-      setResizing((r) => (r && r.id === kid.id && r.cols === dims.cols && r.rows === dims.rows ? r : { id: kid.id, ...dims }))
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      resizeActive.current = false
-      const dims = resizeDims.current
-      resizeDims.current = null
-      setResizing(null)
-      if (!dims || (dims.cols === kid.cols && dims.rows === kid.rows)) return
-      p.onResizeKid(kid.id, { x: kid.x, y: kid.y, ...dims }, parent.id)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
   }
 
   /** A container's whole body: its chrome, its children, the landing ghost,
@@ -156,61 +122,32 @@ export default function CanvasStage(p: CanvasStageProps) {
         className={`relative h-full w-full${fb.conflicts.includes(parent.id) ? ' drag-conflict' : ''}`}
       >
         {entry.render(parent.config)}
-        <div
-          data-testid={showBounds ? 'child-bounds' : undefined}
-          className={`pointer-events-none absolute inset-0${showBounds ? ' show-child-bounds' : ''}`}
-        >
-          {kids.map((k) => (
-            <div
-              key={k.id}
-              data-testid="canvas-node"
-              data-type={k.type}
-              data-id={k.id}
-              data-parent={parent.id}
-              draggable
-              onDragStart={(e) => {
-                e.stopPropagation()
-                if (resizeActive.current) {
-                  e.preventDefault()
-                  return
-                }
-                p.onBeginChildDrag(k.id, e)
-              }}
-              onDragEnd={p.onEndDrag}
-              onClick={(e) => {
-                // Linked buttons render real <a> tags: stay in the editor.
-                e.preventDefault()
-                e.stopPropagation()
-                p.onSelect(k.id)
-              }}
-              style={childPos(parent, resizing?.id === k.id ? { ...k, ...resizing } : k)}
-              className={`osb-child pointer-events-auto ${k.id === selectedId ? 'canvas-selected overflow-hidden' : 'overflow-hidden'}${fb.conflicts.includes(k.id) ? ' drag-conflict' : ''}`}
-            >
-              {OSB_REGISTRY[k.type].render(k.config)}
-              {k.id === selectedId && (
-                <>
-                  <div
-                    data-testid={`resize-${k.id}`}
-                    aria-label="Resize element"
-                    onMouseDown={(e) => startChildResize(e, parent, k)}
-                    className="absolute bottom-0 right-0 z-10 h-4 w-4 cursor-se-resize rounded-tl-md border-l border-t border-sky-500 bg-white/90"
-                  />
-                  <RemoveButton
-                    id={k.id}
-                    onRemove={p.onRemove}
-                    className="absolute right-0 top-0 z-10 rounded-bl-md bg-white px-1.5 py-0.5 text-[10px] text-slate-600 shadow-sm hover:bg-slate-100"
-                  />
-                </>
-              )}
-            </div>
-          ))}
-        </div>
+        <PlacedChildLayer
+          parent={parent}
+          kids={kids}
+          selectedId={selectedId}
+          conflicts={fb.conflicts}
+          resizing={resizing}
+          bounds={showBounds}
+          ids={{ node: 'canvas-node', resize: (id) => `resize-${id}`, remove: 'remove-node' }}
+          onSelect={p.onSelect}
+          onRemove={p.onRemove}
+          onDragStart={(k, e) => {
+            if (resizeActive.current) {
+              e.preventDefault()
+              return
+            }
+            p.onBeginChildDrag(k.id, e)
+          }}
+          onDragEnd={p.onEndDrag}
+          onResize={(e, k) => onChildResize(e, parent, k)}
+        />
         {fb.ghost && fb.ghost.parentId === parent.id && (
           <div
             aria-hidden
             data-testid="drop-ghost"
             data-ok={fb.ghost.ok}
-            style={childPos(parent, fb.ghost)}
+            style={modalChildStyle(parent, fb.ghost)}
             className={`pointer-events-none absolute rounded-md border-2 border-dashed ${
               fb.ghost.ok ? 'border-sky-500 bg-sky-500/10' : 'border-rose-500 bg-rose-500/10'
             }`}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import type { OSBTheme } from '../osb/types'
@@ -41,6 +42,31 @@ export interface CanvasHeaderProps {
   onCloseValidation(): void
   onExit(): void
   onPush(): void
+}
+
+/** Shared chrome for the on-demand panels (checks, popups): one card, one
+ * header row, one close affordance, so they read as a single system. */
+function FloatingPanel(p: {
+  testid: string
+  title: string
+  closeLabel: string
+  onClose(): void
+  children: ReactNode
+}) {
+  return (
+    <div
+      data-testid={p.testid}
+      className="fixed right-3 top-16 z-50 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">{p.title}</p>
+        <Button type="button" aria-label={p.closeLabel} variant="outline" size="sm" onClick={p.onClose}>
+          ✕
+        </Button>
+      </div>
+      {p.children}
+    </div>
+  )
 }
 
 /** App bar + the on-demand checks panel. Pure presentation: it renders the
@@ -104,7 +130,6 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
           >
             {p.preview ? 'Show grid' : 'Preview site'}
           </Button>
-          <span className="ml-auto text-xs text-slate-400">Drag to add · move · resize</span>
           {p.issues && (
             <span data-testid="doc-warning" className="text-xs text-amber-600">
               Pieces must touch — drag them together
@@ -136,13 +161,7 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
       </header>
 
       {p.validation && (
-        <div data-testid="validate-panel" className="fixed right-3 top-16 z-50 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Checks</p>
-            <Button type="button" aria-label="Close checks" variant="outline" size="sm" onClick={p.onCloseValidation}>
-              ✕
-            </Button>
-          </div>
+        <FloatingPanel testid="validate-panel" title="Checks" closeLabel="Close checks" onClose={p.onCloseValidation}>
           {p.validation.ok ? (
             <p data-testid="validate-ok" className="mt-2 text-sm text-emerald-700">
               All checks pass — pieces touch, nothing overlaps.
@@ -156,17 +175,11 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
               ))}
             </ul>
           )}
-        </div>
+        </FloatingPanel>
       )}
 
       {p.popups && (
-        <div data-testid="popups-panel" className="fixed right-3 top-16 z-50 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Popups</p>
-            <Button type="button" aria-label="Close popups" variant="outline" size="sm" onClick={p.onClosePopups}>
-              ✕
-            </Button>
-          </div>
+        <FloatingPanel testid="popups-panel" title="Popups" closeLabel="Close popups" onClose={p.onClosePopups}>
           {p.popups.length === 0 ? (
             <p className="mt-2 text-xs text-slate-500">No popups yet — select a button to attach one.</p>
           ) : (
@@ -188,7 +201,7 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
               ))}
             </ul>
           )}
-        </div>
+        </FloatingPanel>
       )}
     </>
   )

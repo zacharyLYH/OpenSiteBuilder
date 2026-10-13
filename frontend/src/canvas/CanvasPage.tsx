@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GridLayoutProps, Layout, LayoutItem } from 'react-grid-layout'
 import { OSB_PALETTE_TYPES, OSB_REGISTRY, type OSBNodeType } from '../osb/registry'
-import { OSBModalTestPreview } from '../osb/OSBModal'
 import { OSBThemeProvider } from '../osb/OSBTheme'
 import { OSB_PATTERNS, OSB_PATTERN_IDS } from '../osb/patterns'
 import { clearProjectSlug, getProjectSlug } from '../lib/project'
@@ -10,7 +9,7 @@ import { Label } from '../components/ui/label'
 import CanvasHeader, { type PaletteEntry } from './CanvasHeader'
 import CanvasStage from './CanvasStage'
 import ConfigDrawer from './ConfigDrawer'
-import ModalEditor from './ModalEditor'
+import ModalEditor, { ModalTestPreview } from './ModalEditor'
 import { movedRoots, overContainer, planAt, planRoute, type DragPlan } from './gesture'
 import {
   canPlaceModalChild,
@@ -106,17 +105,12 @@ export default function CanvasPage() {
     [],
   )
 
-  /** One landing for every op result: apply + select, or bounce with words. */
+  /** One landing for every op result: apply + select, or bounce with words.
+   * Node and popup ops land here alike — the select is simply optional. */
   const applyResult = (r: DocResult, selectId?: string) => {
     if (!r.ok) return reject(r.reason)
     setDoc(r.doc)
     if (selectId !== undefined) setSelectedId(selectId)
-  }
-
-  /** One landing for every popup op result: apply, or bounce with words. */
-  const applyModalResult = (r: DocResult) => {
-    if (!r.ok) return reject(r.reason)
-    setDoc(r.doc)
   }
 
   /** One landing for every drop: the gate already ruled, so this only applies. */
@@ -514,7 +508,7 @@ export default function CanvasPage() {
           onReject={reject}
           onConsumeDrag={clearDrag}
           onDropChild={(type, rect) =>
-            applyModalResult(
+            applyResult(
               insertModalChild(docRef.current, editingModal.id, {
                 id: crypto.randomUUID(),
                 type,
@@ -525,9 +519,9 @@ export default function CanvasPage() {
             )
           }
           onMoveIn={(id, rect) => moveIntoModal(editingModal.id, id, rect)}
-          onMoveChild={(id, rect) => applyModalResult(moveModalChild(docRef.current, editingModal.id, id, rect))}
-          onResizeChild={(id, rect) => applyModalResult(moveModalChild(docRef.current, editingModal.id, id, rect))}
-          onResizeShell={(cols, rows) => applyModalResult(resizeModal(docRef.current, editingModal.id, cols, rows))}
+          onMoveChild={(id, rect) => applyResult(moveModalChild(docRef.current, editingModal.id, id, rect))}
+          onResizeChild={(id, rect) => applyResult(moveModalChild(docRef.current, editingModal.id, id, rect))}
+          onResizeShell={(cols, rows) => applyResult(resizeModal(docRef.current, editingModal.id, cols, rows))}
           onRemoveChild={(id) => removeSelected(id)}
         />
       )}
@@ -593,24 +587,3 @@ function PopupSection({
   )
 }
 
-/** The live dialog from anywhere (editor Test, drawer Test): X, outside
- * press, and Escape all close. Shared absolute kids, so it matches edit. */
-function ModalTestPreview({ modal, onClose }: { modal: ModalDoc; onClose: () => void }) {
-  const byId = new Map(modal.children.map((k) => [k.id, k]))
-  return (
-    <OSBModalTestPreview
-      config={modal.config}
-      cols={modal.cols}
-      rows={modal.rows}
-      kids={modal.children}
-      renderKid={(id) => {
-        const k = byId.get(id)
-        return k ? OSB_REGISTRY[k.type].render(k.config) : null
-      }}
-      open
-      onOpenChange={(o) => {
-        if (!o) onClose()
-      }}
-    />
-  )
-}

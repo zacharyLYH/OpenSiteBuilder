@@ -16,8 +16,9 @@ and later files only build on earlier ones.
 | 7 | `CanvasStage.tsx` | The rendering: board, nodes, ghosts, bounds. | "why does it look like that?" |
 | 8 | `CanvasHeader.tsx` | The app bar, the global theme + preview controls, and the checks panel. | "where do the buttons/messages live?" |
 | 9 | `ConfigDrawer.tsx` | Non-spatial props (text, style, link). | "how does the settings panel work?" |
-| 10 | `push.ts` / `codegen.ts` | Publishing: doc → `site.json` + React. | "what actually ships to GitHub?" |
-| 11 | `canvas.css` | Drag visuals. | "why is that border blue/red?" |
+| 10 | `PlacedChildLayer.tsx` / `childResize.ts` | The shared child surface: percent boxes, selection chrome, and the one SE-resize gesture. | "how do card children and popup children render/drag/resize?" |
+| 11 | `push.ts` / `codegen.ts` | Publishing: doc → `site.json` + React. | "what actually ships to GitHub?" |
+| 12 | `canvas.css` | Drag visuals. | "why is that border blue/red?" |
 
 `../../specs/nesting-rules.md` (a sibling of `src/`) is the authority on
 layout rules. Where this file and that one disagree, that one wins.
@@ -69,6 +70,11 @@ Three consequences worth remembering:
    hover, drop, file validation — calls it rather than re-checking rules.
 3. **A refusal is never silent.** Rejected gestures leave the document
    untouched and put a plain-language reason in the header.
+
+`PlacedChildLayer.tsx` + `childResize.ts` are the ONE implementation of "a
+child inside a parent": the canvas container body and the popup editor render
+the same markup and share the same resize gesture, differing only in the
+testid vocabulary they pass in.
 
 ## Where things are written down
 

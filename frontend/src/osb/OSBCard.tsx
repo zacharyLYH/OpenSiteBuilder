@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { useOSBTheme } from './OSBTheme'
-import { resolveConfig, type OSBField, type OSBTheme } from './types'
+import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface, type OSBTheme } from './types'
 
 /**
  * Transplanted from shadcn/ui `card.tsx` (MIT). The decomposition
@@ -23,7 +23,7 @@ import { resolveConfig, type OSBField, type OSBTheme } from './types'
  *   the header grid is kept but the container-query variant is dropped.
  */
 
-export type OSBCardVariant = 'elevated' | 'outlined' | 'plain'
+export type OSBCardVariant = OSBSurface
 export type OSBCardRadius = 'none' | 'soft' | 'rounded' | 'pill'
 export type OSBCardShadow = 'none' | 'soft' | 'medium' | 'strong'
 export type OSBCardPadding = 'compact' | 'cozy' | 'spacious'
@@ -43,11 +43,8 @@ export const OSB_CARD_DEFAULTS: OSBCardConfig = {
 }
 
 // One option list per user-facing knob; the render reads the same lists.
-export const OSB_CARD_VARIANTS: { value: OSBCardVariant; label: string }[] = [
-  { value: 'elevated', label: 'Raised' },
-  { value: 'outlined', label: 'Outline' },
-  { value: 'plain', label: 'Plain' },
-]
+// Surface emphasis is shared with popups (osb/types), so wording never drifts.
+export const OSB_CARD_VARIANTS: { value: OSBCardVariant; label: string }[] = SURFACE_OPTIONS
 export const OSB_CARD_RADII: { value: OSBCardRadius; label: string }[] = [
   { value: 'none', label: 'Square' },
   { value: 'soft', label: 'Soft' },
