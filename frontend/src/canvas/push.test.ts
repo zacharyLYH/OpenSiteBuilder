@@ -57,6 +57,7 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
       'src/App.jsx',
       'src/lib/utils.ts',
       'src/osb/OSBDialog.tsx',
+      'src/osb/OSBTheme.tsx',
       'src/osb/types.ts',
       ...OSB_NODE_TYPES.map((t) => `src/osb/${tagFor(t)}.tsx`),
     ].sort()
@@ -72,6 +73,12 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
     const site = fileContent(payload.files, 'site.json')
     expect(validateSite(JSON.parse(site))).toEqual({ ok: true, errors: [] })
     expect(siteJson(DOC, 'my-shop')).toBe(site)
+  })
+
+  it('publishes the global document theme into site.json (one theme, not per node)', () => {
+    expect((JSON.parse(siteJson(DOC, 'x')) as { site: { theme: string } }).site.theme).toBe('light')
+    const dark = { ...DOC, theme: 'dark' as const }
+    expect((JSON.parse(siteJson(dark, 'x')) as { site: { theme: string } }).site.theme).toBe('dark')
   })
 
   it('surfaces backend failures without throwing', async () => {

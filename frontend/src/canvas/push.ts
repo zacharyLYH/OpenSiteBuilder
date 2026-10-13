@@ -2,7 +2,7 @@ import { publishFiles, strField } from '../api'
 import { generatePage } from './codegen'
 import { validateSite } from '../site/validate'
 import { SITE_SCHEMA_VERSION } from '../site/types'
-import { modalsOf, type CanvasDoc } from './doc'
+import { modalsOf, themeOf, type CanvasDoc } from './doc'
 import osbTypesSrc from '../osb/types.ts?raw'
 import cnSrc from '../lib/utils.ts?raw'
 
@@ -60,7 +60,7 @@ export function siteObject(doc: CanvasDoc, slug: string): unknown {
   }))
   return {
     version: SITE_SCHEMA_VERSION,
-    site: { name: slug, theme: 'light' },
+    site: { name: slug, theme: themeOf(doc) },
     pages: [
       {
         id: 'home',

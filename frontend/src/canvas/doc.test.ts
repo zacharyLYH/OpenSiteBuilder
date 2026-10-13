@@ -461,7 +461,7 @@ describe('patterns: atomic compositions (no screenshots)', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.doc.nodes).toHaveLength(4)
-    expect(r.doc.nodes.find((n) => n.id === 'c1')).toMatchObject({ type: 'card', cols: 12, rows: 10 })
+    expect(r.doc.nodes.find((n) => n.id === 'c1')).toMatchObject({ type: 'card', cols: 6, rows: 5 })
     for (const n of r.doc.nodes) {
       if (n.id !== 'c1') expect(n.parentId).toBe('c1')
     }

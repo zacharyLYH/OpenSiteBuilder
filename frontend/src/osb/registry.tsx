@@ -54,7 +54,7 @@ export const OSB_REGISTRY = {
     'Card',
     OSB_CARD_DEFAULTS,
     OSB_CARD_FIELDS,
-    { minCols: 6, minRows: 4, maxCols: 32, maxRows: 32, cols: 12, rows: 10 },
+    { minCols: 4, minRows: 3, maxCols: 32, maxRows: 32, cols: 6, rows: 5 },
     OSBCard,
     { kind: 'container', emptyHint: 'Drag text, buttons or images here' },
   ),
@@ -62,21 +62,23 @@ export const OSB_REGISTRY = {
     'Text',
     OSB_TEXT_DEFAULTS,
     OSB_TEXT_FIELDS,
-    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 12, cols: 6, rows: 1 },
+    // Text starts tiny (one cell) and is dragged out; a big default is
+    // awkward to place on a full page.
+    { minCols: 1, minRows: 1, maxCols: 32, maxRows: 12, cols: 1, rows: 1 },
     OSBText,
   ),
   button: defineEntry(
     'Button',
     OSB_BUTTON_DEFAULTS,
     OSB_BUTTON_FIELDS,
-    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 4, cols: 4, rows: 1 },
+    { minCols: 2, minRows: 1, maxCols: 32, maxRows: 4, cols: 3, rows: 1 },
     OSBButton,
   ),
   image: defineEntry(
     'Image',
     OSB_IMAGE_DEFAULTS,
     OSB_IMAGE_FIELDS,
-    { minCols: 2, minRows: 2, maxCols: 32, maxRows: 24, cols: 8, rows: 6 },
+    { minCols: 2, minRows: 2, maxCols: 32, maxRows: 24, cols: 6, rows: 4 },
     OSBImage,
   ),
   modal: defineEntry(

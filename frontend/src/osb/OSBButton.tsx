@@ -1,12 +1,16 @@
+import { cva } from 'class-variance-authority'
 import { cn } from '../lib/utils'
-import { ALIGN_OPTIONS, resolveConfig, type OSBAlign, type OSBField, type OSBTheme } from './types'
+import { useOSBTheme } from './OSBTheme'
+import { ALIGN_OPTIONS, resolveConfig, type OSBAlign, type OSBField } from './types'
+
+export type OSBButtonVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'ghost' | 'link'
+export type OSBButtonSize = 'sm' | 'default' | 'lg'
 
 export type OSBButtonConfig = {
   label: string
-  variant: 'primary' | 'secondary' | 'outline'
-  size: 'sm' | 'md'
+  variant: OSBButtonVariant
+  size: OSBButtonSize
   align: OSBAlign
-  theme: OSBTheme
   /** Destination URL. Empty = plain button (unless a popup is attached). */
   href: string
   /** Open the destination in a new tab. Ignored when href is empty. */
@@ -17,69 +21,89 @@ export type OSBButtonConfig = {
 
 export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
   label: 'Button',
-  variant: 'primary',
-  size: 'md',
+  variant: 'default',
+  size: 'default',
   align: 'left',
-  theme: 'light',
   href: '',
   openInNewTab: false,
   modalId: '',
 }
 
+// The one option list behind the "Style" drawer field and the render. Values
+// are shadcn's vocabulary; labels are the plain-language names users see.
+export const OSB_BUTTON_VARIANTS: { value: OSBButtonVariant; label: string }[] = [
+  { value: 'default', label: 'Primary' },
+  { value: 'secondary', label: 'Secondary' },
+  { value: 'destructive', label: 'Danger' },
+  { value: 'outline', label: 'Outline' },
+  { value: 'ghost', label: 'Ghost' },
+  { value: 'link', label: 'Link' },
+]
+
+// The one option list behind the "Size" drawer field and the render.
+export const OSB_BUTTON_SIZES: { value: OSBButtonSize; label: string }[] = [
+  { value: 'sm', label: 'Small' },
+  { value: 'default', label: 'Medium' },
+  { value: 'lg', label: 'Large' },
+]
+
 export const OSB_BUTTON_FIELDS: OSBField[] = [
   { key: 'label', label: 'Button text', kind: 'text', required: true },
   { key: 'href', label: 'Link', hint: 'Where this button goes. Leave empty for no link.', kind: 'text' },
   { key: 'openInNewTab', label: 'Open in a new tab', kind: 'boolean', visibleWhen: { key: 'href' } },
-  {
-    key: 'variant',
-    label: 'Style',
-    kind: 'select',
-    options: [
-      { value: 'primary', label: 'Primary' },
-      { value: 'secondary', label: 'Secondary' },
-      { value: 'outline', label: 'Outline' },
-    ],
-  },
-  {
-    key: 'size',
-    label: 'Size',
-    kind: 'select',
-    options: [
-      { value: 'sm', label: 'Small' },
-      { value: 'md', label: 'Medium' },
-    ],
-  },
-  {
-    key: 'align',
-    label: 'Alignment',
-    kind: 'select',
-    options: ALIGN_OPTIONS,
-  },
-  { key: 'theme', label: 'Appearance', kind: 'theme' },
+  { key: 'variant', label: 'Style', kind: 'select', options: OSB_BUTTON_VARIANTS },
+  { key: 'size', label: 'Size', kind: 'select', options: OSB_BUTTON_SIZES },
+  { key: 'align', label: 'Alignment', kind: 'select', options: ALIGN_OPTIONS },
 ]
 
-// Complete static classes only — never interpolate (PRD §6.6).
-const VARIANT_CLASSES: Record<OSBButtonConfig['variant'], Record<OSBTheme, string>> = {
-  primary: {
-    light: 'bg-slate-900 text-slate-50 hover:bg-slate-700',
-    dark: 'bg-slate-50 text-slate-900 hover:bg-slate-200',
+// shadcn/ui buttonVariants (MIT), copied to complete static classes. Size
+// changes only the font scale and horizontal padding: the button fills its
+// grid box (box is the component), so height comes from the footprint.
+// Never interpolate — cva selects whole class strings (PRD §6.6).
+const buttonVariants = cva(
+  'inline-flex h-full w-full max-w-full items-center justify-center whitespace-normal break-words rounded-md font-medium transition-colors',
+  {
+    variants: {
+      variant: {
+        default: 'bg-slate-900 text-slate-50 hover:bg-slate-900/90',
+        secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-100/80',
+        destructive: 'bg-red-600 text-slate-50 hover:bg-red-600/90',
+        outline: 'border border-slate-200 bg-white text-slate-900 hover:bg-slate-100',
+        ghost: 'text-slate-900 hover:bg-slate-100',
+        link: 'text-slate-900 underline-offset-4 hover:underline',
+      },
+      size: {
+        sm: 'px-3 text-xs',
+        default: 'px-4 text-sm',
+        lg: 'px-6 text-base',
+      },
+    },
+    defaultVariants: { variant: 'default', size: 'default' },
   },
-  secondary: {
-    light: 'bg-slate-200 text-slate-900 hover:bg-slate-300',
-    dark: 'bg-slate-800 text-slate-50 hover:bg-slate-700',
-  },
-  outline: {
-    light: 'border border-slate-300 bg-transparent text-slate-900 hover:bg-slate-100',
-    dark: 'border border-slate-600 bg-transparent text-slate-50 hover:bg-slate-800',
-  },
+)
+
+// Dark is a GLOBAL theme shadcn has no static token for here: overlay one
+// complete class string per variant and let tailwind-merge resolve conflicts
+// — the same way shadcn consumers customize through className.
+const DARK_VARIANT_CLASSES: Record<OSBButtonVariant, string> = {
+  default: 'bg-slate-50 text-slate-900 hover:bg-slate-200',
+  secondary: 'bg-slate-800 text-slate-50 hover:bg-slate-700',
+  destructive: 'bg-red-600 text-slate-50 hover:bg-red-500',
+  outline: 'border-slate-600 bg-transparent text-slate-50 hover:bg-slate-800',
+  ghost: 'text-slate-50 hover:bg-slate-800',
+  link: 'text-slate-50',
 }
 
-// Font scale only: the button fills its grid box (box is the component),
-// so height comes from the footprint, never from a fixed px class.
-const SIZE_CLASSES: Record<OSBButtonConfig['size'], string> = {
-  sm: 'px-3 text-xs',
-  md: 'px-5 text-sm',
-}
+// Docs saved before the shadcn vocabulary used the old names; normalize on
+// read so nothing stored ever renders an unstyled button.
+const VARIANT_ALIASES: Record<string, OSBButtonVariant> = { primary: 'default' }
+const SIZE_ALIASES: Record<string, OSBButtonSize> = { md: 'default' }
+
+const normalizeVariant = (v: unknown): OSBButtonVariant =>
+  typeof v === 'string' ? (VARIANT_ALIASES[v] ?? (v as OSBButtonVariant)) : 'default'
+
+const normalizeSize = (v: unknown): OSBButtonSize =>
+  typeof v === 'string' ? (SIZE_ALIASES[v] ?? (v as OSBButtonSize)) : 'default'
 
 const ALIGN_JUSTIFY: Record<OSBAlign, string> = {
   left: 'justify-start',
@@ -109,13 +133,12 @@ export function sanitizeHref(raw: unknown): string {
 
 export default function OSBButton({ config, onClick }: OSBButtonProps) {
   const c = resolveConfig(OSB_BUTTON_DEFAULTS, config)
+  const variant = normalizeVariant(c.variant)
+  const size = normalizeSize(c.size)
+  const theme = useOSBTheme()
   const href = sanitizeHref(c.href)
   const label = c.label.length === 0 ? 'Button' : c.label
-  const cls = cn(
-    'inline-flex h-full w-full max-w-full items-center justify-center whitespace-normal break-words rounded-md font-medium transition-colors',
-    VARIANT_CLASSES[c.variant][c.theme],
-    SIZE_CLASSES[c.size],
-  )
+  const cls = cn(buttonVariants({ variant, size }), theme === 'dark' && DARK_VARIANT_CLASSES[variant])
   // Linked buttons are real anchors (keyboard + right-click + SEO work);
   // unlinked ones stay <button> so Enter/Space still activate them.
   const inner =

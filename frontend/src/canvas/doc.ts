@@ -1,6 +1,6 @@
 import { OSB_PATTERNS } from '../osb/patterns'
 import { OSB_REGISTRY, canContain, isAtomType, isContainerType, type OSBNodeType } from '../osb/registry'
-import { CONTAINER_PAD } from '../osb/types'
+import { CONTAINER_PAD, type OSBTheme } from '../osb/types'
 import { GRID_COLS } from './grid'
 
 export interface PlacedNode {
@@ -22,6 +22,9 @@ export interface CanvasDoc {
   /** Popups live beside the grid, never in it: no overlap, contiguity, or
    * RGL layout ever sees them. Old docs load without the key (see loadDoc). */
   modals?: ModalDoc[]
+  /** Global light/dark for the whole site, not a per-node setting. Old docs
+   * load without the key (see themeOf). */
+  theme?: OSBTheme
 }
 
 /** A popup shell: card-like footprint plus free-form atom children. */
@@ -35,10 +38,13 @@ export interface ModalDoc {
 }
 
 /** A fresh, empty canvas. Docs are never mutated, so sharing is safe. */
-export const EMPTY_DOC: CanvasDoc = { version: 1, nodes: [], modals: [] }
+export const EMPTY_DOC: CanvasDoc = { version: 1, nodes: [], modals: [], theme: 'light' }
 
 /** Modals, tolerating old docs saved before popups existed. */
 export const modalsOf = (doc: CanvasDoc): ModalDoc[] => doc.modals ?? []
+
+/** The site theme, tolerating old docs saved before it was global. */
+export const themeOf = (doc: CanvasDoc): OSBTheme => (doc.theme === 'dark' ? 'dark' : 'light')
 
 type Rect = { x: number; y: number; cols: number; rows: number }
 
@@ -57,6 +63,7 @@ export function loadDoc(key: string): CanvasDoc {
         (n) => n.parentId === null || (n.parentId !== null && roots.has(n.parentId) && isAtomType(n.type)),
       ),
       modals: pruneModals(Array.isArray(doc.modals) ? doc.modals : []),
+      theme: themeOf(doc),
     }
   } catch {
     return EMPTY_DOC

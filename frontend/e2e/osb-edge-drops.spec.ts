@@ -54,13 +54,13 @@ test('edge drop: the rightmost cell that still fits lands and stays inside', asy
   await openCanvas(page, 'e2e-edge-right')
 
   const grid = page.getByTestId('canvas')
-  // Text drops 6 cells wide, so cell 26 is the rightmost landing that fits.
-  await dropToCell(page, page.getByTestId('palette-text'), grid, { x: 26, y: 0 }, { cols: 6, rows: 1 })
+  // Text starts 1 cell wide, so cell 31 is the rightmost landing that fits.
+  await dropToCell(page, page.getByTestId('palette-text'), grid, { x: 31, y: 0 }, { cols: 1, rows: 1 })
   await page.waitForTimeout(900)
 
   const doc = await persistedDoc(page, 'e2e-edge-right')
   expect(doc.nodes).toHaveLength(1)
-  expect(doc.nodes[0]).toMatchObject({ type: 'text', x: 26, cols: 6 })
+  expect(doc.nodes[0]).toMatchObject({ type: 'text', x: 31, cols: 1 })
   expect(doc.nodes[0].x + doc.nodes[0].cols).toBeLessThanOrEqual(32)
   await expect(page.getByTestId('drop-message')).toHaveCount(0)
 })

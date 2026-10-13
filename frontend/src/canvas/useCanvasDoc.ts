@@ -3,9 +3,11 @@ import {
   EMPTY_DOC,
   loadDoc,
   storageKey,
+  themeOf,
   validateDoc,
   type CanvasDoc,
 } from './doc'
+import type { OSBTheme } from '../osb/types'
 import { useDebouncedEffect } from './useDebouncedEffect'
 
 /** Long enough to coalesce a drag into one write, short enough to feel safe. */
@@ -38,9 +40,11 @@ export function useCanvasDoc(projectName: string | null) {
     doc,
     roots,
     issues,
+    theme: themeOf(doc),
     epoch,
     docRef,
     setDoc,
+    setTheme: (theme: OSBTheme) => setDoc((d) => ({ ...d, theme })),
     resync: () => setEpoch((e) => e + 1),
   }
 }

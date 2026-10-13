@@ -1,4 +1,6 @@
-/** Light + dark are the only themes. Explicit per render, never ambient. */
+/** Light + dark are the only themes. A GLOBAL property of the page (the
+ * document / `site.theme`), provided once via OSBThemeProvider and read by
+ * components with useOSBTheme — never a per-component config. */
 export type OSBTheme = 'light' | 'dark'
 
 /**
@@ -52,7 +54,7 @@ export type OSBField =
       hint?: string
       required?: boolean
       visibleWhen?: { key: string }
-      kind: 'text' | 'longtext' | 'theme' | 'boolean'
+      kind: 'text' | 'longtext' | 'boolean'
     }
   | {
       key: string

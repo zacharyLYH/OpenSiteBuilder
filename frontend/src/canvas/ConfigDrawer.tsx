@@ -53,29 +53,13 @@ function FieldControl({
         {value === true ? 'On' : 'Off'}
       </Button>
     )
-  if (field.kind === 'theme')
-    return (
-      <div className="flex gap-1 rounded-md bg-slate-100 p-1">
-        {['light', 'dark'].map((t) => (
-          <Button
-            key={t}
-            type="button"
-            variant={text === t ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => onChange(t)}
-            className="flex-1 capitalize"
-          >
-            {t}
-          </Button>
-        ))}
-      </div>
-    )
   return <Input id={id} value={text} onChange={(e) => onChange(e.target.value)} />
 }
 
-// Style-only inspector: text content and chrome (variant, theme, alignment).
-// Structure (add / move / resize / delete) lives on the canvas alone — this
-// drawer never creates, moves, resizes, or deletes nodes. The optional
+// Style-only inspector: text content and chrome (variant, alignment). Theme is
+// global (the header), never a per-node setting. Structure (add / move /
+// resize / delete) lives on the canvas alone — this drawer never creates,
+// moves, resizes, or deletes nodes. The optional
 // `actions` slot lets the controller append node-type-specific intents
 // (e.g. a button's popup attach) without branching the generic editor.
 export default function ConfigDrawer({

@@ -29,7 +29,7 @@ test('delete cascades: removing a card removes its children and closes the drawe
   await expect(page.getByTestId('canvas-node')).toHaveCount(0)
   await expect(page.getByTestId('config-drawer')).toHaveCount(0)
   await expect(page.getByTestId('canvas-empty')).toBeVisible()
-  expect(await persistedDoc(page, slug)).toEqual({ version: 1, nodes: [], modals: [] })
+  expect(await persistedDoc(page, slug)).toEqual({ version: 1, nodes: [], modals: [], theme: 'light' })
 })
 
 test('double drop: a second drop on the same cells is refused, doc unchanged', async ({ page }) => {

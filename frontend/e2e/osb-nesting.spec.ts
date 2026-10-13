@@ -13,16 +13,16 @@ import { validateSite } from '../src/site/validate'
 // cards at root), full containment, sibling exclusivity, footprints, and
 // one edge-connected patch per sibling set (corner contact is not enough).
 //
-//   card1 (0,0,12,10)  — pattern drop: shell + title + body + button.
-//     title  (1,1,8,2) — pattern-authored, touches body at y=3.
-//     body   (1,3,8,3) — touches title (y=3) and button (y=6).
-//     button (1,6,4,1) — pattern-authored.
-//     button (5,6,4→6,1) — nested via palette, parked to touch at x=5,
+//   card1 (0,0,6,5)    — pattern drop: shell + title + body + button.
+//     title  (0,0,5,1) — pattern-authored, touches body at y=1.
+//     body   (0,1,5,2) — touches title (y=1) and button (y=3).
+//     button (0,3,3,1) — pattern-authored.
+//     button (0,4,3,1) — nested via palette, parked to touch at y=4,
 //                        then grown +2 cols via its SE handle.
-//   text (12,0,6,1)    — lands beside the shell (free placement).
-//   button (0,20,4,1)  — scattered on purpose: lands, warns, and Validate
+//   text (6,0,1,1)     — lands beside the shell (free placement).
+//   button (0,20,3,1)  — scattered on purpose: lands, warns, and Validate
 //                        pins the touch issue.
-//   button take-out    — lifted from the card to (20,0).
+//   button take-out    — lifted from the card to (8,0).
 //   red ghost          — parked button hovered over title cells previews the
 //                        refusal live, releases unchanged.
 //   red RGL drag       — freed button dragged over title flashes invalid,
@@ -42,7 +42,7 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   const grid = page.getByTestId('canvas')
 
   // Pattern drop: shell + 3 connected atoms land atomically.
-  await dropToCell(page, page.getByTestId('palette-pattern-card-content'), grid, { x: 0, y: 0 }, { cols: 12, rows: 10 })
+  await dropToCell(page, page.getByTestId('palette-pattern-card-content'), grid, { x: 0, y: 0 }, { cols: 6, rows: 5 })
   await closeDrawerIfOpen(page)
   await page.waitForTimeout(900)
   let doc = await persistedDoc(page, 'e2e-nesting')
@@ -51,9 +51,10 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   if (!card) throw new Error('pattern drop landed no card')
   const cardId = card.id
   expect(doc.nodes.filter((n) => n.parentId === cardId)).toHaveLength(3)
+  expect(card).toMatchObject({ x: 0, y: 0, cols: 6, rows: 5 })
 
   // Text neighbor lands beside the shell (free placement, no touch gate).
-  await dropToCell(page, page.getByTestId('palette-text'), grid, { x: 12, y: 0 }, { cols: 6, rows: 1 })
+  await dropToCell(page, page.getByTestId('palette-text'), grid, { x: 6, y: 0 }, { cols: 1, rows: 1 })
   await closeDrawerIfOpen(page)
   await page.waitForTimeout(900)
   doc = await persistedDoc(page, 'e2e-nesting')
@@ -62,23 +63,23 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   // Nest a button into the card (dropped on free cells), then reload: the
   // persisted doc is the handoff between gesture phases (back-to-back
   // synthetic drags don't re-initiate dragstart in automation).
-  await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 3, y: 6 }, { cols: 4, rows: 1 })
+  await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 3, y: 4 }, { cols: 3, rows: 1 })
   await expect(page.locator(`[data-parent="${cardId}"]`)).toHaveCount(4)
   await closeDrawerIfOpen(page)
   await page.waitForTimeout(900)
 
-  // Park it at (5,6), touching the pattern button at x=5.
+  // Park it at (0,4), touching the pattern button at y=4.
   await page.reload()
   const kid = page.locator(`[data-parent="${cardId}"]`).last()
-  await dragChildToCell(page, kid, page.getByTestId(`container-${cardId}`), 12, 10, 5, 6)
+  await dragChildToCell(page, kid, page.getByTestId(`container-${cardId}`), 6, 5, 0, 4)
   await page.waitForTimeout(900)
   doc = await persistedDoc(page, 'e2e-nesting')
   const kidId = await kid.getAttribute('data-id')
   if (!kidId) throw new Error('nested button has no data-id')
   expect(nodeById(doc, kidId)).toMatchObject({
     parentId: cardId,
-    x: 5,
-    y: 6,
+    x: 0,
+    y: 4,
   })
 
   // Red ghost: hovering the parked button over occupied title cells previews
@@ -89,10 +90,10 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await page.mouse.move(gsbox.x + gsbox.width / 2, gsbox.y + gsbox.height / 2)
   await page.mouse.down()
   const gcbox = await bbox(page.getByTestId(`container-${cardId}`))
-  // Title center: parent-local (5,2).
+  // Title center: parent-local (2.5, 0.5).
   await page.mouse.move(
-    gcbox.x + ((1 + 4) / 12) * gcbox.width,
-    gcbox.y + ((1 + 1) / 10) * gcbox.height,
+    gcbox.x + (2.5 / 6) * gcbox.width,
+    gcbox.y + (0.5 / 5) * gcbox.height,
     { steps: 8 },
   )
   await expect(page.getByTestId('drop-ghost')).toBeVisible()
@@ -102,7 +103,7 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await page.mouse.up()
   await page.waitForTimeout(900)
   doc = await persistedDoc(page, 'e2e-nesting')
-  expect(nodeById(doc, kidId)).toMatchObject({ parentId: cardId, x: 5, y: 6 })
+  expect(nodeById(doc, kidId)).toMatchObject({ parentId: cardId, x: 0, y: 4 })
   await expect(page.getByTestId('drop-message')).toContainText('That spot is taken')
   await closeDrawerIfOpen(page)
 
@@ -113,10 +114,10 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await page.mouse.move(imgBox.x + imgBox.width / 2, imgBox.y + imgBox.height / 2)
   await page.mouse.down()
   const tcbox = await bbox(page.getByTestId(`container-${cardId}`))
-  // Title center: parent-local (5,2); the 8x6 image would cover it.
+  // Title center: parent-local (2.5, 0.5); the 6x4 image would cover it.
   await page.mouse.move(
-    tcbox.x + ((1 + 4) / 12) * tcbox.width,
-    tcbox.y + ((1 + 1) / 10) * tcbox.height,
+    tcbox.x + (2.5 / 6) * tcbox.width,
+    tcbox.y + (0.5 / 5) * tcbox.height,
     { steps: 8 },
   )
   const titleKid = page.locator(`[data-parent="${cardId}"]`).first()
@@ -132,14 +133,14 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
 
   // Invalid: a card can never nest inside a card (R1 kind deny). Doc unchanged.
   const before = await persistedDoc(page, 'e2e-nesting')
-  await dropToCell(page, page.getByTestId('palette-pattern-card-content'), grid, { x: 2, y: 2 }, { cols: 12, rows: 10 })
+  await dropToCell(page, page.getByTestId('palette-pattern-card-content'), grid, { x: 2, y: 2 }, { cols: 6, rows: 5 })
   await page.waitForTimeout(900)
   expect((await persistedDoc(page, 'e2e-nesting')).nodes).toHaveLength(before.nodes.length)
   await closeDrawerIfOpen(page)
 
   // Scattered root drops land like legos now (no touch gate); the canvas
   // warns and Validate pins the touch issue.
-  await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 0, y: 20 }, { cols: 4, rows: 1 })
+  await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 0, y: 20 }, { cols: 3, rows: 1 })
   await page.waitForTimeout(900)
   expect((await persistedDoc(page, 'e2e-nesting')).nodes).toHaveLength(before.nodes.length + 1)
   await expect(page.getByTestId('doc-warning')).toBeVisible()
@@ -151,7 +152,7 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await expect(page.getByTestId('validate-panel')).toHaveCount(0)
 
   // Invalid: nesting onto occupied card cells is an overlap, and says so.
-  await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 1, y: 1 }, { cols: 4, rows: 1 })
+  await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 1, y: 1 }, { cols: 3, rows: 1 })
   await expect(page.getByTestId('drop-message')).toContainText('That spot is taken')
   await page.waitForTimeout(900)
   expect((await persistedDoc(page, 'e2e-nesting')).nodes).toHaveLength(before.nodes.length + 1)
@@ -172,13 +173,15 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await page.mouse.up()
   await page.waitForTimeout(900)
   doc = await persistedDoc(page, 'e2e-nesting')
-  expect(nodeById(doc, parkedId0)).toMatchObject({ cols: 6, rows: 1, parentId: cardId })
+  expect(nodeById(doc, parkedId0)).toMatchObject({ cols: 5, rows: 1, parentId: cardId })
   await closeDrawerIfOpen(page)
 
   // Bounds: selecting the shell draws every child's box (text is invisible
   // otherwise).
+  // The children fill the shell's left columns; the rightmost strip is the
+  // empty part of the card, so click there to select the shell itself.
   const cbox = await bbox(page.getByTestId(`container-${cardId}`))
-  await page.mouse.click(cbox.x + 10, cbox.y + cbox.height - 10)
+  await page.mouse.click(cbox.x + cbox.width * 0.95, cbox.y + cbox.height * 0.5)
   await expect(page.getByTestId('config-drawer')).toContainText('Card settings')
   const outline = await page
     .locator(`[data-parent="${cardId}"]`)
@@ -188,17 +191,16 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   await closeDrawerIfOpen(page)
 
   // Take out: reload first (child-origin drags need a fresh gesture
-  // session), then drag the parked (now 6-wide) button to (20,0), touching
-  // the text at x=20. RGL centers the take-out on the cursor, so aim the
-  // cursor at the footprint center (23, 0.5).
+  // session), then drag the parked (now 5-wide) button to (8,0). RGL centers
+  // the take-out on the cursor, so aim the cursor at the footprint center.
   // It must leave as a root node with old and new sets still connected.
   await page.reload()
   const parkedId = await page.locator(`[data-parent="${cardId}"]`).last().getAttribute('data-id')
   if (!parkedId) throw new Error('parked button has no data-id')
-  await dropToCell(page, page.locator(`[data-parent="${cardId}"]`).last(), grid, { x: 20, y: 0 }, { cols: 6, rows: 1 })
+  await dropToCell(page, page.locator(`[data-parent="${cardId}"]`).last(), grid, { x: 8, y: 0 }, { cols: 5, rows: 1 })
   await page.waitForTimeout(900)
   doc = await persistedDoc(page, 'e2e-nesting')
-  expect(nodeById(doc, parkedId)).toMatchObject({ parentId: null, x: 20, y: 0 })
+  expect(nodeById(doc, parkedId)).toMatchObject({ parentId: null, x: 8, y: 0 })
   expect(doc.nodes.filter((n) => n.parentId === cardId)).toHaveLength(3)
   await closeDrawerIfOpen(page)
 
@@ -206,25 +208,25 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   // cells flashes invalid mid-flight; releasing snaps back unchanged.
   await page.reload()
   doc = await persistedDoc(page, 'e2e-nesting')
-  const freedNode = doc.nodes.find((n) => n.parentId === null && n.type === 'button' && n.x === 20)
+  const freedNode = doc.nodes.find((n) => n.parentId === null && n.type === 'button' && n.x === 8)
   if (!freedNode) throw new Error('freed button missing from persisted doc')
   const freedId = freedNode.id
   const freed = page.locator(`[data-id="${freedId}"]`)
   const fbox = await bbox(freed)
   const rpitch = await gridPitch(page)
-  // Freed center is root (23,0.5); title center is root (5,2): delta in cells.
+  // Freed center is root (10.5,0.5); title center is root (2.5,0.5): delta in cells.
   await page.mouse.move(fbox.x + fbox.width / 2, fbox.y + fbox.height / 2)
   await page.mouse.down()
   await page.mouse.move(
-    fbox.x + fbox.width / 2 - 18 * rpitch,
-    fbox.y + fbox.height / 2 + 1.5 * rpitch,
+    fbox.x + fbox.width / 2 - 8 * rpitch,
+    fbox.y + fbox.height / 2,
     { steps: 10 },
   )
   await expect(freed).toHaveClass(/drag-invalid/)
   await expect(grid).toHaveScreenshot('osb-nesting-drag-invalid.png')
   await page.mouse.up()
   await page.waitForTimeout(900)
-  expect(nodeById(await persistedDoc(page, 'e2e-nesting'), freedId)).toMatchObject({ parentId: null, x: 20, y: 0 })
+  expect(nodeById(await persistedDoc(page, 'e2e-nesting'), freedId)).toMatchObject({ parentId: null, x: 8, y: 0 })
   await closeDrawerIfOpen(page)
 
   // (2a) FINAL artifacts: the free-placed doc flags its scattered island

@@ -1,22 +1,30 @@
 import { useMemo, useState } from 'react'
 import type { SiteNode } from '../site/types'
 import { OSBModalTestPreview } from './OSBModal'
+import { OSBThemeProvider } from './OSBTheme'
 import { OSB_REGISTRY } from './registry'
+import type { OSBTheme } from './types'
 
-function parseHash(): SiteNode[] | null {
+interface MountSpec {
+  nodes: SiteNode[]
+  theme: OSBTheme
+}
+
+/** `#nodes=<json>&theme=dark` — theme is global, not a per-node config. */
+function parseHash(): MountSpec | null {
   try {
-    const m = window.location.hash.match(/^#nodes=(.*)$/)
-    if (!m) return null
-    const nodes = JSON.parse(decodeURIComponent(m[1])) as SiteNode[]
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const raw = params.get('nodes')
+    if (!raw) return null
+    const nodes = JSON.parse(raw) as SiteNode[]
     if (!Array.isArray(nodes)) return null
-    return nodes.filter((n) => n && typeof n.type === 'string' && n.type in OSB_REGISTRY)
+    return {
+      theme: params.get('theme') === 'dark' ? 'dark' : 'light',
+      nodes: nodes.filter((n) => n && typeof n.type === 'string' && n.type in OSB_REGISTRY),
+    }
   } catch {
     return null
   }
-}
-
-function isDark(n: SiteNode): boolean {
-  return (n.config as { theme?: unknown } | undefined)?.theme === 'dark'
 }
 
 function renderSiteNode(n: SiteNode): React.ReactNode {
@@ -62,23 +70,26 @@ function ModalPreview({ node }: { node: SiteNode }) {
 
 /**
  * Generic screenshot mount for e2e specs: renders whatever node list the spec
- * passes in `#nodes=<json>` through the registry. Dev-only /osb-mount route.
+ * passes in `#nodes=<json>&theme=dark` through the registry. Dev-only
+ * /osb-mount route.
  */
 export default function OsbMount() {
-  const nodes = useMemo(() => parseHash(), [])
-  if (nodes === null) {
+  const spec = useMemo(() => parseHash(), [])
+  if (spec === null) {
     return <div data-testid="osb-mount-empty">missing #nodes=[site.json nodes]</div>
   }
+  const { nodes, theme } = spec
   return (
-    <div data-testid="osb-mount" className="bg-slate-200 p-4">
-      {nodes.map((n, i) => (
-        <div
-          key={typeof n.id === 'string' ? n.id : i}
-          className={isDark(n) ? 'bg-slate-950 p-4' : 'bg-white p-4'}
-        >
-          {renderSiteNode(n)}
-        </div>
-      ))}
-    </div>
+    <OSBThemeProvider theme={theme}>
+      <div
+        data-testid="osb-mount"
+        data-theme={theme}
+        className={`p-4 ${theme === 'dark' ? 'bg-slate-950 text-slate-50' : 'bg-white text-slate-900'}`}
+      >
+        {nodes.map((n, i) => (
+          <div key={typeof n.id === 'string' ? n.id : i}>{renderSiteNode(n)}</div>
+        ))}
+      </div>
+    </OSBThemeProvider>
   )
 }

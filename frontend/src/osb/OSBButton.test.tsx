@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import OSBButton, { sanitizeHref, OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS } from './OSBButton'
+import OSBButton, {
+  sanitizeHref,
+  OSB_BUTTON_DEFAULTS,
+  OSB_BUTTON_FIELDS,
+  OSB_BUTTON_SIZES,
+  OSB_BUTTON_VARIANTS,
+} from './OSBButton'
+import { OSBThemeProvider } from './OSBTheme'
 import ConfigDrawer from '../canvas/ConfigDrawer'
 import type { PlacedNode } from '../canvas/doc'
 
@@ -105,10 +112,58 @@ describe('OSBButton link rendering', () => {
   })
 })
 
+describe('OSBButton shadcn variants', () => {
+  it('renders every shadcn variant with its copied class values', () => {
+    const expected: Record<string, string> = {
+      default: 'bg-slate-900',
+      secondary: 'bg-slate-100',
+      destructive: 'bg-red-600',
+      outline: 'border-slate-200',
+      ghost: 'hover:bg-slate-100',
+      link: 'hover:underline',
+    }
+    for (const [variant, needle] of Object.entries(expected)) {
+      const { unmount } = render(<OSBButton config={{ label: 'Go', variant: variant as never }} />)
+      expect(screen.getByRole('button', { name: 'Go' }).className).toContain(needle)
+      unmount()
+    }
+  })
+
+  it('overlays the GLOBAL dark theme over the variant (provider)', () => {
+    render(
+      <OSBThemeProvider theme="dark">
+        <OSBButton config={{ label: 'Go' }} />
+      </OSBThemeProvider>,
+    )
+    const cls = screen.getByRole('button', { name: 'Go' }).className
+    expect(cls).toContain('bg-slate-50')
+    expect(cls).toContain('text-slate-900')
+  })
+
+  it('normalizes legacy variant/size values so old docs still render styled', () => {
+    render(<OSBButton config={{ label: 'Legacy', variant: 'primary' as never, size: 'md' as never }} />)
+    const cls = screen.getByRole('button', { name: 'Legacy' }).className
+    expect(cls).toContain('bg-slate-900')
+    expect(cls).toContain('text-sm')
+  })
+
+  it('derives the Style/Size drawer fields from their option lists (single source)', () => {
+    const field = (key: string) => {
+      const f = OSB_BUTTON_FIELDS.find((x) => x.key === key)
+      if (!f || f.kind !== 'select') throw new Error(`expected a select field for ${key}`)
+      return f.options
+    }
+    expect(field('variant')).toEqual(OSB_BUTTON_VARIANTS)
+    expect(field('size')).toEqual(OSB_BUTTON_SIZES)
+  })
+})
+
 describe('OSBButton registry shape', () => {
-  it('defaults to unlinked, same-tab', () => {
+  it('defaults to unlinked, same-tab, primary/medium', () => {
     expect(OSB_BUTTON_DEFAULTS.href).toBe('')
     expect(OSB_BUTTON_DEFAULTS.openInNewTab).toBe(false)
+    expect(OSB_BUTTON_DEFAULTS.variant).toBe('default')
+    expect(OSB_BUTTON_DEFAULTS.size).toBe('default')
   })
 
   it('exposes link + new-tab drawer fields (old docs still load: missing keys fall back)', () => {

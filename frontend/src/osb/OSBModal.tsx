@@ -1,13 +1,13 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { Dialog, DialogContent, DialogTitle } from './OSBDialog'
+import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, type OSBField, type OSBTheme } from './types'
 
 export type OSBModalConfig = {
   /** Internal name + accessible title. Read aloud on open, never shown. */
   title: string
   variant: 'elevated' | 'outlined' | 'plain'
-  theme: OSBTheme
   /** Every popup keeps an X — shadcn parity, touch users need a target. */
   showClose: boolean
 }
@@ -15,7 +15,6 @@ export type OSBModalConfig = {
 export const OSB_MODAL_DEFAULTS: OSBModalConfig = {
   title: 'Popup',
   variant: 'elevated',
-  theme: 'light',
   showClose: true,
 }
 
@@ -37,7 +36,6 @@ export const OSB_MODAL_FIELDS: OSBField[] = [
       { value: 'plain', label: 'Plain' },
     ],
   },
-  { key: 'theme', label: 'Appearance', kind: 'theme' },
   { key: 'showClose', label: 'Show close button', kind: 'boolean' },
 ]
 
@@ -170,11 +168,12 @@ export interface OSBModalProps {
 
 export default function OSBModal({ config, cols = 12, rows = 10, open, onOpenChange, children }: OSBModalProps) {
   const c = resolveConfig(OSB_MODAL_DEFAULTS, config)
+  const theme = useOSBTheme()
   // Same chrome on both paths; the shadcn base owns overlay/focus/anim AND
   // its p-6 padding. The inner body keeps editor-exact geometry (width from
   // cols, height from rows) inside that padding, so Test matches edit while
   // the transplanted dialog contract (outside press, Escape, X) stays whole.
-  const shell = cn('max-h-[85vh] overflow-y-auto', SHELL_CLASSES[c.variant][c.theme])
+  const shell = cn('max-h-[85vh] overflow-y-auto', SHELL_CLASSES[c.variant][theme])
   const title = c.title.length === 0 ? 'Popup' : c.title
   const body = (
     <div style={{ height: modalHeightPx(rows) }} className="relative w-full overflow-hidden">

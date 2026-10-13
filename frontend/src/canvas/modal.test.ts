@@ -52,7 +52,8 @@ describe('modal gate (canPlaceModalChild)', () => {
 
   it('refuses overflow, oversize footprints, and overlaps', () => {
     expect(canPlaceModalChild(SHELL, 'text', { x: 10, y: 9, cols: 6, rows: 2 })).toBe('containment')
-    expect(canPlaceModalChild(SHELL, 'text', { x: 0, y: 0, cols: 1, rows: 1 })).toBe('footprint')
+    // A button needs 2 cols; one col is an undersized footprint.
+    expect(canPlaceModalChild(SHELL, 'button', { x: 0, y: 0, cols: 1, rows: 1 })).toBe('footprint')
     // t1 sits at (1,1,8,2).
     expect(canPlaceModalChild(SHELL, 'button', { x: 2, y: 1, cols: 4, rows: 1 })).toBe('overlap')
     // ...unless it is t1 itself moving.

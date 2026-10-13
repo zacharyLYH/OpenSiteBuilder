@@ -1,5 +1,6 @@
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
+import type { OSBTheme } from '../osb/types'
 import type { DocValidation } from './doc'
 import { HEADER_PX } from './grid'
 
@@ -19,6 +20,12 @@ export interface CanvasHeaderProps {
   pushMsg: string
   pushing: boolean
   canPush: boolean
+  /** Global site theme (light/dark) — the one place it is chosen. */
+  theme: OSBTheme
+  /** Hide the editor grid (dots + backdrop) to preview the real site. */
+  preview: boolean
+  onTheme(theme: OSBTheme): void
+  onTogglePreview(): void
   /** On-demand check results; null while the panel is closed. */
   validation: DocValidation | null
   /** Popup count for the tray button. */
@@ -69,7 +76,35 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
               {entry.label}
             </Button>
           ))}
-          <span className="ml-auto text-xs text-slate-400">Drag onto the canvas · drag to move · corner to resize</span>
+          {/* Global appearance: the single light/dark switch for the whole site,
+              not a per-component setting. */}
+          <div role="group" aria-label="Site theme" className="flex gap-0.5 rounded-md bg-slate-100 p-0.5">
+            {(['light', 'dark'] as const).map((t) => (
+              <Button
+                key={t}
+                type="button"
+                data-testid={`theme-${t}`}
+                aria-pressed={p.theme === t}
+                variant={p.theme === t ? 'default' : 'secondary'}
+                size="sm"
+                onClick={() => p.onTheme(t)}
+                className="capitalize"
+              >
+                {t}
+              </Button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            data-testid="toggle-preview"
+            aria-pressed={p.preview}
+            variant={p.preview ? 'default' : 'outline'}
+            size="sm"
+            onClick={p.onTogglePreview}
+          >
+            {p.preview ? 'Show grid' : 'Preview site'}
+          </Button>
+          <span className="ml-auto text-xs text-slate-400">Drag to add · move · resize</span>
           {p.issues && (
             <span data-testid="doc-warning" className="text-xs text-amber-600">
               Pieces must touch — drag them together

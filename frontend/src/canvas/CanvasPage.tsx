@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GridLayoutProps, Layout, LayoutItem } from 'react-grid-layout'
 import { OSB_PALETTE_TYPES, OSB_REGISTRY, type OSBNodeType } from '../osb/registry'
 import { OSBModalTestPreview } from '../osb/OSBModal'
+import { OSBThemeProvider } from '../osb/OSBTheme'
 import { OSB_PATTERNS, OSB_PATTERN_IDS } from '../osb/patterns'
 import { clearProjectSlug, getProjectSlug } from '../lib/project'
 import { Button } from '../components/ui/button'
@@ -57,10 +58,13 @@ export default function CanvasPage() {
     if (!projectName) window.location.href = '/'
   }, [projectName])
 
-  const { doc, roots, issues, epoch, docRef, setDoc, resync } = useCanvasDoc(projectName)
+  const { doc, roots, issues, theme, epoch, docRef, setDoc, setTheme, resync } = useCanvasDoc(projectName)
   const { feedback: fb, patch, arm, clear: clearDrag, current: currentDrag } = useDragSession(doc)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Preview hides the editor grid (dots + backdrop) to show the real site.
+  // An editor preference, not document state — it never publishes.
+  const [preview, setPreview] = useState(false)
   // On-demand checks panel: touch is checked on click, not at placement.
   const [validation, setValidation] = useState<DocValidation | null>(null)
   // Popup editing: which modal shell is open in the overlay editor, and
@@ -424,11 +428,16 @@ export default function CanvasPage() {
     ) : null
 
   return (
+    <OSBThemeProvider theme={theme}>
     <div className="h-screen w-screen overflow-hidden bg-white">
       <CanvasHeader
         project={projectName}
         palettes={palettes}
         issues={!issues.ok}
+        theme={theme}
+        preview={preview}
+        onTheme={setTheme}
+        onTogglePreview={() => setPreview((v) => !v)}
         dropMsg={dropMsg}
         pushMsg={pushMsg}
         pushing={pushing}
@@ -464,6 +473,7 @@ export default function CanvasPage() {
         selectedId={selectedId}
         fb={fb}
         palettes={palettes}
+        preview={preview}
         epoch={epoch}
         onRootDragOver={onRootDragOver}
         rgl={{
@@ -526,6 +536,7 @@ export default function CanvasPage() {
         <ModalTestPreview modal={testingModal} onClose={() => setTestingModalId(null)} />
       )}
     </div>
+    </OSBThemeProvider>
   )
 }
 

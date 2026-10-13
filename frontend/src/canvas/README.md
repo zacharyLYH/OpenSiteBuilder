@@ -14,7 +14,7 @@ and later files only build on earlier ones.
 | 5 | `useDragSession.ts` | The armed drag + its transient feedback. | "what is being dragged right now?" |
 | 6 | `CanvasPage.tsx` | The controller: selection + the gesture handlers. | "what happens when the user drops something?" |
 | 7 | `CanvasStage.tsx` | The rendering: board, nodes, ghosts, bounds. | "why does it look like that?" |
-| 8 | `CanvasHeader.tsx` | The app bar and the checks panel. | "where do the buttons/messages live?" |
+| 8 | `CanvasHeader.tsx` | The app bar, the global theme + preview controls, and the checks panel. | "where do the buttons/messages live?" |
 | 9 | `ConfigDrawer.tsx` | Non-spatial props (text, style, link). | "how does the settings panel work?" |
 | 10 | `push.ts` / `codegen.ts` | Publishing: doc → `site.json` + React. | "what actually ships to GitHub?" |
 | 11 | `canvas.css` | Drag visuals. | "why is that border blue/red?" |
@@ -73,7 +73,10 @@ Three consequences worth remembering:
 ## Where things are written down
 
 - Structure (what exists, and where) → the document, in `doc.ts`.
-- Non-spatial props (text, variant, theme, link) → `ConfigDrawer.tsx`.
+- Non-spatial per-node props (text, variant, settings, link) → `ConfigDrawer.tsx`.
+- Global theme (light/dark) and the editor grid toggle → `CanvasHeader.tsx` +
+  `OSBThemeProvider`; the theme is document state (`doc.theme`), the preview
+  toggle is an editor-only preference.
 - Styles and transient feedback → `canvas.css` + the `Feedback` object in
   `gesture.ts`.
 

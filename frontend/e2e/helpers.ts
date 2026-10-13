@@ -3,9 +3,10 @@ import type { SiteNode } from '../src/site/types'
 import type { CanvasDoc } from '../src/canvas/doc'
 import { GRID_MARGIN_X } from '../src/canvas/grid'
 
-/** Mount a node stack through the generic /osb-mount harness. */
-export async function mountNodes(page: Page, nodes: SiteNode[]): Promise<void> {
-  await page.goto('/osb-mount#nodes=' + encodeURIComponent(JSON.stringify(nodes)))
+/** Mount a node stack through the generic /osb-mount harness. Theme is
+ * global, so it is a separate param — never a per-node config. */
+export async function mountNodes(page: Page, nodes: SiteNode[], theme: 'light' | 'dark' = 'light'): Promise<void> {
+  await page.goto('/osb-mount#nodes=' + encodeURIComponent(JSON.stringify(nodes)) + `&theme=${theme}`)
 }
 
 export const STORAGE_KEY = (slug: string): string => `osb.project.${slug}`

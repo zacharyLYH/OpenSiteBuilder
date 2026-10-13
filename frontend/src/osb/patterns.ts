@@ -26,15 +26,19 @@ export interface OSBPattern {
 export const OSB_PATTERNS: Record<string, OSBPattern> = {
   'card-content': {
     name: 'Card',
-    containerCols: 12,
-    containerRows: 10,
+    // Half-size default: big cards are awkward to place on a full page.
+    // Children keep one cell of breathing room so the shell's floor matches
+    // its size (containerFloor = child extent + CONTAINER_PAD).
+    containerCols: 6,
+    containerRows: 5,
     containerConfig: {},
-    // Edge-connected by construction: title touches body (y=3), body
-    // touches button (y=6). No overlaps, fully inside the 12x10 shell.
+    // Edge-connected by construction: title touches body (y=1), body touches
+    // button (y=3). No overlaps, fully inside the 6x5 shell. Typography mirrors
+    // shadcn Card: a heading title, muted body copy, then the action.
     children: [
-      { type: 'text', config: { text: 'Card title' }, x: 1, y: 1, cols: 8, rows: 2 },
-      { type: 'text', config: { text: 'Card body copy.' }, x: 1, y: 3, cols: 8, rows: 3 },
-      { type: 'button', config: { label: 'Learn more' }, x: 1, y: 6, cols: 4, rows: 1 },
+      { type: 'text', config: { text: 'Card title', heading: 'h4' }, x: 0, y: 0, cols: 5, rows: 1 },
+      { type: 'text', config: { text: 'Card body copy.', tone: 'muted' }, x: 0, y: 1, cols: 5, rows: 2 },
+      { type: 'button', config: { label: 'Learn more' }, x: 0, y: 3, cols: 3, rows: 1 },
     ],
   },
 }

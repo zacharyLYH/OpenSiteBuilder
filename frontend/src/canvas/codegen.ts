@@ -1,11 +1,12 @@
 import { OSB_NODE_TYPES, OSB_REGISTRY } from '../osb/registry'
-import { modalsOf, type CanvasDoc, type ModalDoc, type PlacedNode } from './doc'
+import { modalsOf, themeOf, type CanvasDoc, type ModalDoc, type PlacedNode } from './doc'
 
 /** Registry key -> published component tag/file ('card' -> 'OSBCard'). */
 export const tagFor = (type: string): string => `OSB${type[0].toUpperCase()}${type.slice(1)}`
 
 const baseHeader = [
   '// Generated from the OpenSiteBuilder canvas. Do not edit by hand.',
+  `import { OSBThemeProvider } from './osb/OSBTheme'`,
   ...OSB_NODE_TYPES.map((t) => `import ${tagFor(t)} from './osb/${tagFor(t)}'`),
   `import { OSBModalBody } from './osb/OSBModal'`,
 ].join('\n')
@@ -86,11 +87,16 @@ export function generatePage(doc: CanvasDoc): string {
   const popupLayer = modals.map((m) => `      ${renderModal(m)}`).join('\n')
   const stateLine = modals.length > 0 ? '\n  const [openModal, setOpenModal] = useState(null)' : ''
   const layers = [body, popupLayer].filter((s) => s.length > 0).join('\n')
+  // Theme is global: the whole page is wrapped once, not themed per node.
+  const theme = themeOf(doc)
+  const pageBg = theme === 'dark' ? 'bg-slate-950 text-slate-50' : 'bg-white text-slate-900'
   return `${header}\nexport default function SitePage() {${stateLine}
   return (
-    <main>
+    <OSBThemeProvider theme=${JSON.stringify(theme)}>
+      <main className=${JSON.stringify(`${pageBg} min-h-screen`)}>
 ${layers}
-    </main>
+      </main>
+    </OSBThemeProvider>
   )
 }
 `

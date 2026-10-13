@@ -64,7 +64,20 @@ describe('generatePage', () => {
       doc([{ id: 'a', type: 'video' as never, config: {}, parentId: null, x: 0, y: 0, cols: 1, rows: 1 }]),
     )
     expect(out).not.toContain('<OSBVideo')
-    expect(out).toContain('<main>')
-    expect(generatePage(doc([]))).toContain('<main>')
+    expect(out).toContain('<main className=')
+    expect(generatePage(doc([]))).toContain('<main className=')
+  })
+
+  it('wraps the one global theme around the page (never per node)', () => {
+    const light = generatePage(doc([{ ...R('a', 'text'), config: { text: 'Hi' } }]))
+    expect(light).toContain(`import { OSBThemeProvider } from './osb/OSBTheme'`)
+    expect(light).toContain('<OSBThemeProvider theme="light">')
+    expect(light).toContain('bg-white text-slate-900')
+    // No per-node theme leaks into configs anymore.
+    expect(light).not.toContain('"theme"')
+
+    const dark = generatePage({ ...doc([{ ...R('a', 'text') }]), theme: 'dark' })
+    expect(dark).toContain('<OSBThemeProvider theme="dark">')
+    expect(dark).toContain('bg-slate-950 text-slate-50')
   })
 })

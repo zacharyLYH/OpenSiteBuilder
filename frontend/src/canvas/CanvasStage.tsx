@@ -5,6 +5,7 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './canvas.css'
 import { OSB_REGISTRY } from '../osb/registry'
+import { useOSBTheme } from '../osb/OSBTheme'
 import { containerFloor, type CanvasDoc, type PlacedNode } from './doc'
 import { canvasMetrics, GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, HEADER_PX, minGridWidth } from './grid'
 import type { Feedback } from './gesture'
@@ -63,6 +64,8 @@ export interface CanvasStageProps {
   fb: Feedback
   /** Palette labels — the empty state lists exactly what the bar offers. */
   palettes: PaletteEntry[]
+  /** Hide the editor grid (dots + backdrop) so the canvas reads as the site. */
+  preview: boolean
   /** Remount key: a fresh grid every gesture end, so refused drags snap back. */
   epoch: number
   rgl: GridCallbacks
@@ -87,7 +90,8 @@ export interface CanvasStageProps {
  * (ghosts, reds, bounds) render here; the controller owns the rules.
  */
 export default function CanvasStage(p: CanvasStageProps) {
-  const { doc, selectedId, fb } = p
+  const { doc, selectedId, fb, preview } = p
+  const theme = useOSBTheme()
   // The board measures itself: width in, geometry out. The controller only
   // ever asks for numbers, never for the element.
   const { width, containerRef, mounted } = useContainerWidth()
@@ -250,28 +254,35 @@ export default function CanvasStage(p: CanvasStageProps) {
   return (
     <main
       data-testid="canvas"
+      data-theme={theme}
+      data-preview={preview ? 'true' : 'false'}
       onClick={p.onClearSelection}
       style={{ height: `calc(100vh - ${HEADER_PX}px)` }}
-      className={`relative overflow-auto${fb.dragging ? ' dragging-on' : ''}${fb.forbidden ? ' drop-forbidden' : ''}`}
+      className={`relative overflow-auto${theme === 'dark' ? ' bg-slate-950' : preview ? ' bg-white' : ''}${
+        fb.dragging ? ' dragging-on' : ''
+      }${fb.forbidden ? ' drop-forbidden' : ''}`}
     >
       <div ref={containerRef} style={{ minWidth: minGridWidth(), height }} className="relative">
-        <div className="canvas-backdrop pointer-events-none absolute inset-0" />
-        <div
-          aria-hidden
-          data-testid="canvas-dots"
-          className="canvas-dots absolute left-0 top-0"
-          style={{
-            gridTemplateColumns: `repeat(${GRID_COLS}, ${cell}px)`,
-            gridAutoRows: `${cell}px`,
-            gap: `${GRID_MARGIN_X}px`,
-            width: GRID_COLS * cell + GRID_MARGIN_X * (GRID_COLS - 1),
-          }}
-        >
-          {Array.from({ length: GRID_COLS * dotRows }, (_, i) => (
-            <i key={i} className="canvas-dot" />
-          ))}
-        </div>
-        {doc.nodes.length === 0 && (
+        {/* Neon backdrop is editor chrome and light-only; preview hides it. */}
+        {!preview && theme === 'light' && <div className="canvas-backdrop pointer-events-none absolute inset-0" />}
+        {!preview && (
+          <div
+            aria-hidden
+            data-testid="canvas-dots"
+            className="canvas-dots absolute left-0 top-0"
+            style={{
+              gridTemplateColumns: `repeat(${GRID_COLS}, ${cell}px)`,
+              gridAutoRows: `${cell}px`,
+              gap: `${GRID_MARGIN_X}px`,
+              width: GRID_COLS * cell + GRID_MARGIN_X * (GRID_COLS - 1),
+            }}
+          >
+            {Array.from({ length: GRID_COLS * dotRows }, (_, i) => (
+              <i key={i} className="canvas-dot" />
+            ))}
+          </div>
+        )}
+        {doc.nodes.length === 0 && !preview && (
           <div
             data-testid="canvas-empty"
             className="pointer-events-none fixed bottom-0 left-0 right-0 top-14 flex flex-col items-center justify-center gap-1"
