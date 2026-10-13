@@ -49,14 +49,17 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
     }
     expect(payload.message).toBe('canvas publish')
     const app = fileContent(payload.files, 'src/App.jsx')
-    // Runtime ships every OSB* component (incl. the shadcn dialog base
-    // OSBModal imports) plus shared sources.
+    // Runtime ships every OSB* component (incl. the shadcn dialog/sheet
+    // bases OSBModal/OSBDrawer import, plus the shared overlay geometry)
+    // plus shared sources.
     const shipped = new Map(payload.files.map((f) => [f.path, f.content]))
     const expectedPaths = [
       'site.json',
       'src/App.jsx',
       'src/lib/utils.ts',
       'src/osb/OSBDialog.tsx',
+      'src/osb/OSBOverlay.tsx',
+      'src/osb/OSBSheet.tsx',
       'src/osb/OSBTheme.tsx',
       'src/osb/types.ts',
       ...OSB_NODE_TYPES.map((t) => `src/osb/${tagFor(t)}.tsx`),

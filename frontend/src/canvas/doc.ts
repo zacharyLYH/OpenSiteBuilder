@@ -22,6 +22,9 @@ export interface CanvasDoc {
   /** Popups live beside the grid, never in it: no overlap, contiguity, or
    * RGL layout ever sees them. Old docs load without the key (see loadDoc). */
   modals?: ModalDoc[]
+  /** Side panels: same overlay contract as popups, a separate store so the
+   * two kinds never collide. Old docs load without the key (see loadDoc). */
+  drawers?: DrawerDoc[]
   /** Global light/dark for the whole site, not a per-node setting. Old docs
    * load without the key (see themeOf). */
   theme?: OSBTheme
@@ -37,11 +40,21 @@ export interface ModalDoc {
   children: PlacedNode[]
 }
 
+/**
+ * A drawer shell: the same shape as a popup (footprint + atom children).
+ * One shape for both overlay kinds — every overlay op below is generic over
+ * it, so modal and drawer logic cannot drift.
+ */
+export type DrawerDoc = ModalDoc
+
 /** A fresh, empty canvas. Docs are never mutated, so sharing is safe. */
-export const EMPTY_DOC: CanvasDoc = { version: 1, nodes: [], modals: [], theme: 'light' }
+export const EMPTY_DOC: CanvasDoc = { version: 1, nodes: [], modals: [], drawers: [], theme: 'light' }
 
 /** Modals, tolerating old docs saved before popups existed. */
 export const modalsOf = (doc: CanvasDoc): ModalDoc[] => doc.modals ?? []
+
+/** Drawers, tolerating old docs saved before panels existed. */
+export const drawersOf = (doc: CanvasDoc): DrawerDoc[] => doc.drawers ?? []
 
 /** The site theme, tolerating old docs saved before it was global. */
 export const themeOf = (doc: CanvasDoc): OSBTheme => (doc.theme === 'dark' ? 'dark' : 'light')
@@ -63,7 +76,8 @@ export function loadDoc(key: string): CanvasDoc {
       nodes: known.filter(
         (n) => n.parentId === null || (n.parentId !== null && roots.has(n.parentId) && isAtomType(n.type)),
       ),
-      modals: pruneModals(Array.isArray(doc.modals) ? doc.modals : []),
+      modals: pruneOverlays(Array.isArray(doc.modals) ? doc.modals : []),
+      drawers: pruneOverlays(Array.isArray(doc.drawers) ? doc.drawers : []),
       theme: themeOf(doc),
     }
   } catch {
@@ -71,9 +85,10 @@ export function loadDoc(key: string): CanvasDoc {
   }
 }
 
-/** Keep well-formed popups: string ids (first wins), atom children that
- * belong to their own shell. Geometry is validated on demand, not dropped. */
-function pruneModals(raw: ModalDoc[]): ModalDoc[] {
+/** Keep well-formed overlays: string ids (first wins), atom children that
+ * belong to their own shell. Geometry is validated on demand, not dropped.
+ * One pruner for popups + drawers — the shape is identical. */
+function pruneOverlays(raw: ModalDoc[]): ModalDoc[] {
   const seen = new Set<string>()
   const out: ModalDoc[] = []
   for (const m of raw) {
@@ -213,8 +228,8 @@ export function canInsertReason(
   ignoreId?: string,
 ): RejectReason | null {
   if (!(type in OSB_REGISTRY)) return 'unknown-type'
-  // Popups never enter through node ops — only createModal makes one.
-  if (type === 'modal') return 'kind'
+  // Overlays never enter through node ops — only createModal/createDrawer make one.
+  if (type === 'modal' || type === 'drawer') return 'kind'
   if (!isRectOk(rect)) return 'integrity'
   if (!footprintOk(type, rect)) return 'footprint'
   if (parentId === null) {
@@ -366,26 +381,18 @@ export function removeNode(doc: CanvasDoc, id: string): CanvasDoc {
 }
 
 // ---------------------------------------------------------------------------
-// Popups. Same vocabulary as nodes (one gate, atomic ops, plain-language
-// reasons) but a separate store, so grid rules never see popup content.
+// Overlays (popups + drawers). Same vocabulary as nodes (one gate, atomic
+// ops, plain-language reasons) but separate stores, so grid rules never see
+// overlay content. Modal and drawer ops below are thin wrappers over one
+// generic core — the shape is identical, only the collection differs.
 // ---------------------------------------------------------------------------
 
 export type ModalShell = Pick<ModalDoc, 'cols' | 'rows' | 'children'>
 
-/** One popup by id — the lookup every popup op shares. */
-const findModal = (doc: CanvasDoc, id: string): ModalDoc | undefined => modalsOf(doc).find((m) => m.id === id)
-
-/** Every popup mutation funnels here: replace one shell by id, untouched
- * siblings preserved. Keeps the "map over modals" boilerplate in one place. */
-const mapModal = (doc: CanvasDoc, id: string, fn: (m: ModalDoc) => ModalDoc): CanvasDoc => ({
-  ...doc,
-  modals: modalsOf(doc).map((m) => (m.id === id ? fn(m) : m)),
-})
-
-/** THE popup landing rule: atoms only (never a popup-in-popup), inside the
- * shell, on whole cells, never overlapping a sibling. */
-export function canPlaceModalChild(
-  modal: ModalShell,
+/** The overlay landing rule: atoms only (never an overlay-in-overlay),
+// inside the shell, on whole cells, never overlapping a sibling. */
+export function canPlaceOverlayChild(
+  shell: ModalShell,
   type: string,
   rect: CellRect,
   ignoreId?: string,
@@ -394,33 +401,107 @@ export function canPlaceModalChild(
   if (!isAtomType(type)) return 'kind'
   if (!isRectOk(rect)) return 'integrity'
   if (!footprintOk(type as OSBNodeType, rect)) return 'footprint'
-  if (rect.x + rect.cols > modal.cols || rect.y + rect.rows > modal.rows) return 'containment'
-  const hit = modal.children.some((k) => k.id !== ignoreId && collides(rect, k))
+  if (rect.x + rect.cols > shell.cols || rect.y + rect.rows > shell.rows) return 'containment'
+  const hit = shell.children.some((k) => k.id !== ignoreId && collides(rect, k))
   return hit ? 'overlap' : null
 }
+
+/** THE popup landing rule — alias over the shared overlay gate. */
+export function canPlaceModalChild(
+  modal: ModalShell,
+  type: string,
+  rect: CellRect,
+  ignoreId?: string,
+): RejectReason | null {
+  return canPlaceOverlayChild(modal, type, rect, ignoreId)
+}
+
+/** THE drawer landing rule — alias over the shared overlay gate. */
+export function canPlaceDrawerChild(
+  drawer: ModalShell,
+  type: string,
+  rect: CellRect,
+  ignoreId?: string,
+): RejectReason | null {
+  return canPlaceOverlayChild(drawer, type, rect, ignoreId)
+}
+
+type OverlayKey = 'modals' | 'drawers'
+
+const overlaysOf = (doc: CanvasDoc, key: OverlayKey): ModalDoc[] => (key === 'modals' ? modalsOf(doc) : drawersOf(doc))
+
+/** One overlay by id — the lookup every overlay op shares. */
+const findOverlay = (doc: CanvasDoc, key: OverlayKey, id: string): ModalDoc | undefined =>
+  overlaysOf(doc, key).find((m) => m.id === id)
+
+/** Every overlay mutation funnels here: replace one shell by id, untouched
+ * siblings preserved. Keeps the "map over overlays" boilerplate in one place. */
+const mapOverlay = (doc: CanvasDoc, key: OverlayKey, id: string, fn: (m: ModalDoc) => ModalDoc): CanvasDoc => ({
+  ...doc,
+  [key]: overlaysOf(doc, key).map((m) => (m.id === id ? fn(m) : m)),
+})
+
+/** One popup by id — the lookup every popup op shares. */
+export const findModal = (doc: CanvasDoc, id: string): ModalDoc | undefined => findOverlay(doc, 'modals', id)
+
+/** One drawer by id — the lookup every drawer op shares. */
+export const findDrawer = (doc: CanvasDoc, id: string): DrawerDoc | undefined => findOverlay(doc, 'drawers', id)
+
+/** Every popup mutation funnels here: replace one shell by id, untouched
+ * siblings preserved. Keeps the "map over modals" boilerplate in one place. */
+const mapModal = (doc: CanvasDoc, id: string, fn: (m: ModalDoc) => ModalDoc): CanvasDoc => mapOverlay(doc, 'modals', id, fn)
+
+/** Every drawer mutation funnels here — mirror of mapModal. */
+const mapDrawer = (doc: CanvasDoc, id: string, fn: (m: DrawerDoc) => DrawerDoc): CanvasDoc =>
+  mapOverlay(doc, 'drawers', id, fn)
 
 /** Append a popup shell. Children arrive via insertModalChild. */
 export function createModal(doc: CanvasDoc, modal: ModalDoc): CanvasDoc {
   return { ...doc, modals: [...modalsOf(doc), modal] }
 }
 
+/** Append a drawer shell. Children arrive via insertDrawerChild. */
+export function createDrawer(doc: CanvasDoc, drawer: DrawerDoc): CanvasDoc {
+  return { ...doc, drawers: [...drawersOf(doc), drawer] }
+}
+
 export function updateModalConfig(doc: CanvasDoc, id: string, config: Record<string, unknown>): CanvasDoc {
   return mapModal(doc, id, (m) => ({ ...m, config }))
 }
 
-/** Resize the shell: same floor rule as containers (never under children). */
-export function resizeModal(doc: CanvasDoc, id: string, cols: number, rows: number): DocResult {
-  const modal = findModal(doc, id)
-  if (!modal) return { ok: false, reason: 'unknown-type' }
-  const g = OSB_REGISTRY.modal.grid
+export function updateDrawerConfig(doc: CanvasDoc, id: string, config: Record<string, unknown>): CanvasDoc {
+  return mapDrawer(doc, id, (m) => ({ ...m, config }))
+}
+
+function resizeOverlay(
+  doc: CanvasDoc,
+  key: OverlayKey,
+  gridType: OSBNodeType,
+  id: string,
+  cols: number,
+  rows: number,
+): DocResult {
+  const shell = findOverlay(doc, key, id)
+  if (!shell) return { ok: false, reason: 'unknown-type' }
+  const g = OSB_REGISTRY[gridType].grid
   if (!Number.isInteger(cols + rows) || cols < g.minCols || rows < g.minRows || cols > g.maxCols || rows > g.maxRows) {
     return { ok: false, reason: 'footprint' }
   }
-  if (!containerFitsKids(modal.children, { id, cols, rows })) return { ok: false, reason: 'undersize' }
-  return { ok: true, doc: mapModal(doc, id, (m) => ({ ...m, cols, rows })) }
+  if (!containerFitsKids(shell.children, { id, cols, rows })) return { ok: false, reason: 'undersize' }
+  return { ok: true, doc: mapOverlay(doc, key, id, (m) => ({ ...m, cols, rows })) }
 }
 
-/** Removing a popup unlinks every button that opened it (canvas + popups). */
+/** Resize the shell: same floor rule as containers (never under children). */
+export function resizeModal(doc: CanvasDoc, id: string, cols: number, rows: number): DocResult {
+  return resizeOverlay(doc, 'modals', 'modal', id, cols, rows)
+}
+
+/** Resize the drawer shell — mirror of resizeModal. */
+export function resizeDrawer(doc: CanvasDoc, id: string, cols: number, rows: number): DocResult {
+  return resizeOverlay(doc, 'drawers', 'drawer', id, cols, rows)
+}
+
+/** Removing a popup unlinks every button that opened it (canvas + overlays). */
 export function removeModal(doc: CanvasDoc, id: string): CanvasDoc {
   const scrub = (n: PlacedNode): PlacedNode =>
     (n.config as { modalId?: unknown } | undefined)?.modalId === id
@@ -432,31 +513,93 @@ export function removeModal(doc: CanvasDoc, id: string): CanvasDoc {
     modals: modalsOf(doc)
       .filter((m) => m.id !== id)
       .map((m) => ({ ...m, children: m.children.map(scrub) })),
+    drawers: drawersOf(doc).map((m) => ({ ...m, children: m.children.map(scrub) })),
   }
 }
 
-export function insertModalChild(doc: CanvasDoc, modalId: string, child: PlacedNode): DocResult {
-  const modal = findModal(doc, modalId)
-  if (!modal) return { ok: false, reason: 'unknown-type' }
-  const reason = canPlaceModalChild(modal, child.type, child)
-  if (reason) return { ok: false, reason }
-  return { ok: true, doc: mapModal(doc, modalId, (m) => ({ ...m, children: [...m.children, child] })) }
+/** Removing a drawer unlinks every button that opened it (canvas + overlays). */
+export function removeDrawer(doc: CanvasDoc, id: string): CanvasDoc {
+  const scrub = (n: PlacedNode): PlacedNode =>
+    (n.config as { drawerId?: unknown } | undefined)?.drawerId === id
+      ? { ...n, config: { ...n.config, drawerId: '' } }
+      : n
+  return {
+    ...doc,
+    nodes: doc.nodes.map(scrub),
+    drawers: drawersOf(doc)
+      .filter((m) => m.id !== id)
+      .map((m) => ({ ...m, children: m.children.map(scrub) })),
+    modals: modalsOf(doc).map((m) => ({ ...m, children: m.children.map(scrub) })),
+  }
 }
 
-export function moveModalChild(doc: CanvasDoc, modalId: string, id: string, rect: CellRect): DocResult {
-  const modal = findModal(doc, modalId)
-  const child = modal?.children.find((k) => k.id === id)
-  if (!modal || !child) return { ok: false, reason: 'unknown-type' }
-  const reason = canPlaceModalChild(modal, child.type, rect, id)
+function insertOverlayChild(
+  doc: CanvasDoc,
+  key: OverlayKey,
+  overlayId: string,
+  child: PlacedNode,
+): DocResult {
+  const shell = findOverlay(doc, key, overlayId)
+  if (!shell) return { ok: false, reason: 'unknown-type' }
+  const reason = canPlaceOverlayChild(shell, child.type, child)
+  if (reason) return { ok: false, reason }
+  return { ok: true, doc: mapOverlay(doc, key, overlayId, (m) => ({ ...m, children: [...m.children, child] })) }
+}
+
+function moveOverlayChild(doc: CanvasDoc, key: OverlayKey, overlayId: string, id: string, rect: CellRect): DocResult {
+  const shell = findOverlay(doc, key, overlayId)
+  const child = shell?.children.find((k) => k.id === id)
+  if (!shell || !child) return { ok: false, reason: 'unknown-type' }
+  const reason = canPlaceOverlayChild(shell, child.type, rect, id)
   if (reason) return { ok: false, reason }
   return {
     ok: true,
-    doc: mapModal(doc, modalId, (m) => ({ ...m, children: m.children.map((k) => (k.id === id ? { ...k, ...rect } : k)) })),
+    doc: mapOverlay(doc, key, overlayId, (m) => ({
+      ...m,
+      children: m.children.map((k) => (k.id === id ? { ...k, ...rect } : k)),
+    })),
   }
 }
 
+function removeOverlayChild(doc: CanvasDoc, key: OverlayKey, overlayId: string, id: string): CanvasDoc {
+  return mapOverlay(doc, key, overlayId, (m) => ({ ...m, children: m.children.filter((k) => k.id !== id) }))
+}
+
+function updateOverlayChildConfig(
+  doc: CanvasDoc,
+  key: OverlayKey,
+  overlayId: string,
+  id: string,
+  config: Record<string, unknown>,
+): CanvasDoc {
+  return mapOverlay(doc, key, overlayId, (m) => ({
+    ...m,
+    children: m.children.map((k) => (k.id === id ? { ...k, config } : k)),
+  }))
+}
+
+export function insertModalChild(doc: CanvasDoc, modalId: string, child: PlacedNode): DocResult {
+  return insertOverlayChild(doc, 'modals', modalId, child)
+}
+
+export function insertDrawerChild(doc: CanvasDoc, drawerId: string, child: PlacedNode): DocResult {
+  return insertOverlayChild(doc, 'drawers', drawerId, child)
+}
+
+export function moveModalChild(doc: CanvasDoc, modalId: string, id: string, rect: CellRect): DocResult {
+  return moveOverlayChild(doc, 'modals', modalId, id, rect)
+}
+
+export function moveDrawerChild(doc: CanvasDoc, drawerId: string, id: string, rect: CellRect): DocResult {
+  return moveOverlayChild(doc, 'drawers', drawerId, id, rect)
+}
+
 export function removeModalChild(doc: CanvasDoc, modalId: string, id: string): CanvasDoc {
-  return mapModal(doc, modalId, (m) => ({ ...m, children: m.children.filter((k) => k.id !== id) }))
+  return removeOverlayChild(doc, 'modals', modalId, id)
+}
+
+export function removeDrawerChild(doc: CanvasDoc, drawerId: string, id: string): CanvasDoc {
+  return removeOverlayChild(doc, 'drawers', drawerId, id)
 }
 
 export function updateModalChildConfig(
@@ -465,10 +608,16 @@ export function updateModalChildConfig(
   id: string,
   config: Record<string, unknown>,
 ): CanvasDoc {
-  return mapModal(doc, modalId, (m) => ({
-    ...m,
-    children: m.children.map((k) => (k.id === id ? { ...k, config } : k)),
-  }))
+  return updateOverlayChildConfig(doc, 'modals', modalId, id, config)
+}
+
+export function updateDrawerChildConfig(
+  doc: CanvasDoc,
+  drawerId: string,
+  id: string,
+  config: Record<string, unknown>,
+): CanvasDoc {
+  return updateOverlayChildConfig(doc, 'drawers', drawerId, id, config)
 }
 
 /** Center-point hit test: at most one container candidate (depth 1). */
@@ -608,50 +757,74 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
       errors.push(`container ${parentId} undersizes its children`)
     }
   }
-  // Popups: same whole-document backstop as nodes — shell footprint, child
-  // gates, pairwise overlaps, one connected patch, and trigger integrity.
-  const modalIds = new Set<string>()
-  for (const m of modalsOf(doc)) {
-    if (typeof m.id !== 'string' || m.id.length === 0 || modalIds.has(m.id)) {
-      errors.push(`popup ${JSON.stringify((m as { id: unknown } | null)?.id)} has a bad or duplicate id`)
-      continue
-    }
-    modalIds.add(m.id)
-    const g = OSB_REGISTRY.modal.grid
-    if (!Number.isInteger(m.cols + m.rows) || m.cols < g.minCols || m.rows < g.minRows || m.cols > g.maxCols || m.rows > g.maxRows) {
-      errors.push(`popup ${m.id}: that size isn't allowed`)
-    }
-    const kids = Array.isArray(m.children) ? m.children : []
-    for (const k of kids) {
-      if (!(k.type in OSB_REGISTRY) || !isAtomType(k.type)) {
-        errors.push(`popup ${m.id} child ${k.id}: that can't go there`)
+  // Overlays: same whole-document backstop as nodes — shell footprint,
+  // child gates, pairwise overlaps, one connected patch, and trigger
+  // integrity. Popups + drawers share one checker; only the label differs.
+  const checkOverlaySet = (label: string, shells: ModalDoc[], gridType: OSBNodeType, seen: Set<string>) => {
+    for (const m of shells) {
+      if (typeof m.id !== 'string' || m.id.length === 0 || seen.has(m.id)) {
+        errors.push(`${label} ${JSON.stringify((m as { id: unknown } | null)?.id)} has a bad or duplicate id`)
         continue
       }
-      if (k.parentId !== m.id) errors.push(`popup ${m.id} child ${k.id}: missing parent`)
-      const reason = canPlaceModalChild({ cols: m.cols, rows: m.rows, children: kids }, k.type, k, k.id)
-      if (reason && reason !== 'overlap') errors.push(`popup ${m.id} child ${k.id}: ${reasonText(reason).toLowerCase()}`)
-    }
-    for (let i = 0; i < kids.length; i++)
-      for (let j = i + 1; j < kids.length; j++)
-        if (collides(kids[i], kids[j])) errors.push(`popup ${m.id} children ${kids[i].id} and ${kids[j].id} overlap`)
-    if (!isContiguous(kids)) errors.push(`children of popup ${m.id} are scattered (must touch)`)
-    if (!containerFitsKids(kids, { id: m.id, cols: m.cols, rows: m.rows })) {
-      errors.push(`popup ${m.id} undersizes its children`)
+      seen.add(m.id)
+      const g = OSB_REGISTRY[gridType].grid
+      if (!Number.isInteger(m.cols + m.rows) || m.cols < g.minCols || m.rows < g.minRows || m.cols > g.maxCols || m.rows > g.maxRows) {
+        errors.push(`${label} ${m.id}: that size isn't allowed`)
+      }
+      const kids = Array.isArray(m.children) ? m.children : []
+      for (const k of kids) {
+        if (!(k.type in OSB_REGISTRY) || !isAtomType(k.type)) {
+          errors.push(`${label} ${m.id} child ${k.id}: that can't go there`)
+          continue
+        }
+        if (k.parentId !== m.id) errors.push(`${label} ${m.id} child ${k.id}: missing parent`)
+        const reason = canPlaceOverlayChild({ cols: m.cols, rows: m.rows, children: kids }, k.type, k, k.id)
+        if (reason && reason !== 'overlap') errors.push(`${label} ${m.id} child ${k.id}: ${reasonText(reason).toLowerCase()}`)
+      }
+      for (let i = 0; i < kids.length; i++)
+        for (let j = i + 1; j < kids.length; j++)
+          if (collides(kids[i], kids[j])) errors.push(`${label} ${m.id} children ${kids[i].id} and ${kids[j].id} overlap`)
+      if (!isContiguous(kids)) errors.push(`children of ${label} ${m.id} are scattered (must touch)`)
+      if (!containerFitsKids(kids, { id: m.id, cols: m.cols, rows: m.rows })) {
+        errors.push(`${label} ${m.id} undersizes its children`)
+      }
     }
   }
-  // Trigger integrity: buttons open existing popups, and buttons inside a
-  // popup never open another one.
-  const checkTrigger = (n: PlacedNode, where: string, inModal: boolean) => {
+  const overlayIds = new Set<string>()
+  checkOverlaySet('popup', modalsOf(doc), 'modal', overlayIds)
+  const drawerStart = overlayIds.size
+  checkOverlaySet('drawer', drawersOf(doc), 'drawer', overlayIds)
+  void drawerStart
+  // Cross-kind duplicate ids (a popup and a drawer sharing one id) would
+  // confuse triggers: flag the drawer side.
+  // (overlayIds already unions both sets; per-set dupes are caught above.)
+  const modalIds = new Set(modalsOf(doc).map((m) => m.id))
+  const drawerIds = new Set(drawersOf(doc).map((m) => m.id))
+  for (const id of drawerIds) {
+    if (modalIds.has(id)) errors.push(`drawer ${id} duplicates a popup id`)
+  }
+  // Trigger integrity: buttons open existing overlays (at most one — a link
+  // is ignored while either is attached), and buttons inside an overlay
+  // never open another one.
+  const checkTrigger = (n: PlacedNode, where: string, inOverlay: boolean) => {
     if (n.type !== 'button') return
-    const target = (n.config as { modalId?: unknown } | undefined)?.modalId
-    if (typeof target !== 'string' || target.length === 0) return
-    if (inModal) {
-      errors.push(`${where} button ${n.id} inside a popup cannot open another popup`)
+    const cfg = n.config as { modalId?: unknown; drawerId?: unknown } | undefined
+    const modalTarget = typeof cfg?.modalId === 'string' && cfg.modalId.length > 0 ? cfg.modalId : null
+    const drawerTarget = typeof cfg?.drawerId === 'string' && cfg.drawerId.length > 0 ? cfg.drawerId : null
+    if (modalTarget && drawerTarget) {
+      errors.push(`${where} button ${n.id} cannot open two overlays`)
       return
     }
-    if (!modalIds.has(target)) errors.push(`${where} button ${n.id} opens a missing popup`)
+    const target = modalTarget ?? drawerTarget
+    if (!target) return
+    if (inOverlay) {
+      errors.push(`${where} button ${n.id} inside a ${where.startsWith('popup') ? 'popup' : 'drawer'} cannot open another ${modalTarget ? 'popup' : 'drawer'}`)
+      return
+    }
+    if (!overlayIds.has(target)) errors.push(`${where} button ${n.id} opens a missing ${modalTarget ? 'popup' : 'drawer'}`)
   }
   for (const n of doc.nodes) checkTrigger(n, 'node', false)
   for (const m of modalsOf(doc)) for (const k of m.children) checkTrigger(k, `popup ${m.id} child`, true)
+  for (const m of drawersOf(doc)) for (const k of m.children) checkTrigger(k, `drawer ${m.id} child`, true)
   return { ok: errors.length === 0, errors }
 }

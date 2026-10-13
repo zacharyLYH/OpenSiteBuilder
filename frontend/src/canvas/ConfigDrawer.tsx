@@ -105,6 +105,8 @@ export default function ConfigDrawer({
       <SheetContent
         side={side}
         data-testid="config-drawer"
+        showOverlay={false}
+        showCloseButton={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="overflow-y-auto"
       >

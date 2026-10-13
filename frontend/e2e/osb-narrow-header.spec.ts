@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from '@playwright/test'
+import { test, expect, type Locator } from '@playwright/test'
 import { openCanvas } from './helpers'
 
 // The app bar is the only way to Validate, leave the project, or Publish. It
@@ -12,13 +12,6 @@ const inViewport = async (locator: Locator, width: number): Promise<boolean> => 
   return !!box && box.x >= 0 && box.x + box.width <= width
 }
 
-const scrollHeaderToEnd = async (page: Page): Promise<void> => {
-  await page.locator('header').evaluate((el) => {
-    el.scrollLeft = el.scrollWidth
-  })
-  await page.waitForTimeout(200)
-}
-
 test('narrow window: Validate, Exit and Push stay reachable', async ({ page }) => {
   const width = 390
   await page.setViewportSize({ width, height: 844 })
@@ -27,10 +20,13 @@ test('narrow window: Validate, Exit and Push stay reachable', async ({ page }) =
   const header = page.locator('header')
   expect(await header.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
 
-  await scrollHeaderToEnd(page)
-  expect(await inViewport(page.getByTestId('validate'), width)).toBe(true)
-  expect(await inViewport(page.getByRole('button', { name: 'Exit project' }), width)).toBe(true)
-  expect(await inViewport(page.getByRole('button', { name: 'Push' }), width)).toBe(true)
+  // Reachable means each button can be scrolled into the window and clicked
+  // — not that every action fits on screen at once (Popups + Drawers trays
+  // widened the bar past a single 390px window).
+  for (const target of [page.getByTestId('validate'), page.getByRole('button', { name: 'Exit project' }), page.getByRole('button', { name: 'Push' })]) {
+    await target.scrollIntoViewIfNeeded()
+    expect(await inViewport(target, width)).toBe(true)
+  }
   // Reachable means clickable, not merely painted.
   await page.getByTestId('validate').click()
   await expect(page.getByTestId('validate-panel')).toBeVisible()

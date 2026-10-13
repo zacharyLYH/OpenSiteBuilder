@@ -1,6 +1,13 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { Dialog, DialogContent, DialogTitle } from './OSBDialog'
+import {
+  OSBOverlayBody,
+  OVERLAY_CELL_PX,
+  overlayChildStyle,
+  overlayHeightPx,
+  overlayWidthPx,
+} from './OSBOverlay'
 import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface, type OSBTheme } from './types'
 
@@ -54,17 +61,21 @@ const SHELL_CLASSES: Record<OSBModalConfig['variant'], Record<OSBTheme, string>>
  * resize in the editor lands at the same px in Test + published. The dialog
  * caps width at 92vw (small viewports); the editor shell is uncapped so drop
  * math stays in whole cells.
+ *
+ * THE overlay pitch lives in OSBOverlay — modals and drawers share it so
+ * the two shells never drift. The MODAL_* names stay as aliases: existing
+ * imports (editor, tests, codegen) keep working.
  */
-export const MODAL_CELL_PX = 28
+export const MODAL_CELL_PX = OVERLAY_CELL_PX
 
 /** Dialog width from the shell footprint, capped at 92vw. */
 export function modalWidthPx(cols: number): string {
-  return `min(92vw, ${Math.max(1, cols) * MODAL_CELL_PX}px)`
+  return overlayWidthPx(cols)
 }
 
 /** Dialog body height from the shell footprint. Rows resize stays visible. */
 export function modalHeightPx(rows: number): string {
-  return `${Math.max(1, rows) * MODAL_CELL_PX}px`
+  return overlayHeightPx(rows)
 }
 
 /** Percent box for a footprint inside the shell's cell rectangle. Shared by
@@ -73,14 +84,8 @@ export function modalHeightPx(rows: number): string {
 export function modalChildStyle(
   parent: { cols: number; rows: number },
   kid: { x: number; y: number; cols: number; rows: number },
-): CSSProperties {
-  return {
-    position: 'absolute',
-    left: `${(kid.x / parent.cols) * 100}%`,
-    top: `${(kid.y / parent.rows) * 100}%`,
-    width: `${(kid.cols / parent.cols) * 100}%`,
-    height: `${(kid.rows / parent.rows) * 100}%`,
-  }
+) {
+  return overlayChildStyle(parent, kid)
 }
 
 /**
@@ -89,6 +94,9 @@ export function modalChildStyle(
  * Sorts flow order (top-to-bottom, left-to-right); each kid keeps its grid
  * footprint, so the Got It button keeps its editor width everywhere.
  * OSBModal owns the sized relative body; this returns only the boxes.
+ *
+ * THE shared overlay body lives in OSBOverlay — this stays as an alias so
+ * the editor, mount, and codegen keep one import per overlay kind.
  */
 export function OSBModalBody({
   cols,
@@ -101,18 +109,7 @@ export function OSBModalBody({
   kids: { id: string; x: number; y: number; cols: number; rows: number }[]
   renderKid: (id: string) => ReactNode
 }): ReactNode {
-  const shell = { cols, rows }
-  return (
-    <>
-      {[...kids]
-        .sort((a, b) => a.y - b.y || a.x - b.x)
-        .map((k) => (
-          <div key={k.id} style={modalChildStyle(shell, k)} className="overflow-hidden">
-            {renderKid(k.id)}
-          </div>
-        ))}
-    </>
-  )
+  return <OSBOverlayBody cols={cols} rows={rows} kids={kids} renderKid={renderKid} />
 }
 
 /**

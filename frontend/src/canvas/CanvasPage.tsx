@@ -9,22 +9,31 @@ import { Label } from '../components/ui/label'
 import CanvasHeader, { type PaletteEntry } from './CanvasHeader'
 import CanvasStage from './CanvasStage'
 import ConfigDrawer from './ConfigDrawer'
+import DrawerEditor, { DrawerTestPreview } from './DrawerEditor'
 import ModalEditor, { ModalTestPreview } from './ModalEditor'
 import { movedRoots, overContainer, planAt, planRoute, type DragPlan } from './gesture'
 import {
-  canPlaceModalChild,
+  canPlaceOverlayChild,
+  drawersOf,
   eventCell,
+  insertDrawerChild,
   insertModalChild,
   insertNode,
   insertPattern,
   modalsOf,
+  moveDrawerChild,
   moveModalChild,
   moveNode,
   reasonText,
+  removeDrawer,
+  removeDrawerChild,
   removeModal,
   removeModalChild,
   removeNode,
+  resizeDrawer,
   resizeModal,
+  updateDrawerChildConfig,
+  updateDrawerConfig,
   updateModalChildConfig,
   updateModalConfig,
   type CanvasDoc,
@@ -32,6 +41,7 @@ import {
   type DocResult,
   type DocValidation,
   type DragPayload,
+  type DrawerDoc,
   type ModalDoc,
   type PlacedNode,
   type RejectReason,
@@ -66,11 +76,14 @@ export default function CanvasPage() {
   const [preview, setPreview] = useState(false)
   // On-demand checks panel: touch is checked on click, not at placement.
   const [validation, setValidation] = useState<DocValidation | null>(null)
-  // Popup editing: which modal shell is open in the overlay editor, and
-  // whether the header tray listing every popup is open.
+  // Overlay editing: which popup / drawer shell is open in the shared
+  // overlay editor, and whether the header trays listing them are open.
   const [editingModalId, setEditingModalId] = useState<string | null>(null)
   const [testingModalId, setTestingModalId] = useState<string | null>(null)
+  const [editingDrawerId, setEditingDrawerId] = useState<string | null>(null)
+  const [testingDrawerId, setTestingDrawerId] = useState<string | null>(null)
   const [popupsOpen, setPopupsOpen] = useState(false)
+  const [drawersOpen, setDrawersOpen] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushMsg, setPushMsg] = useState('')
   // Rejected gestures fail silently otherwise.
@@ -252,10 +265,22 @@ export default function CanvasPage() {
         setSelectedId((s) => (s === id ? null : s))
         return
       }
+      const ed = drawersOf(d).find((m) => m.id === editingDrawerId) ?? null
+      if (ed && ed.id === id) {
+        setDoc(removeDrawer(d, id))
+        setEditingDrawerId((cur) => (cur === id ? null : cur))
+        setSelectedId((s) => (s === id ? null : s))
+        return
+      }
+      if (ed && ed.children.some((k) => k.id === id)) {
+        setDoc(removeDrawerChild(d, ed.id, id))
+        setSelectedId((s) => (s === id ? null : s))
+        return
+      }
       setDoc((prev) => removeNode(prev, id))
       setSelectedId((s) => (s === id ? null : s))
     },
-    [setDoc, editingModalId, docRef],
+    [setDoc, editingModalId, editingDrawerId, docRef],
   )
 
   const resizeKid = (id: string, rect: CellRect, parentId: string) =>
@@ -305,26 +330,30 @@ export default function CanvasPage() {
 
   const editingModal: ModalDoc | null = modalsOf(doc).find((m) => m.id === editingModalId) ?? null
   const testingModal: ModalDoc | null = modalsOf(doc).find((m) => m.id === testingModalId) ?? null
+  const editingDrawer: DrawerDoc | null = drawersOf(doc).find((m) => m.id === editingDrawerId) ?? null
+  const testingDrawer: DrawerDoc | null = drawersOf(doc).find((m) => m.id === testingDrawerId) ?? null
 
-  /** Attach a fresh popup (pre-filled like the Card pattern) to a button. */
-  const createModal = (buttonId: string) => {
-    const g = OSB_REGISTRY.modal.grid
-    const mid = crypto.randomUUID()
+  /** Attach a fresh overlay (pre-filled like the Card pattern) to a button.
+   * Attaching one kind clears the other — a button opens at most one. */
+  const createOverlay = (kind: 'modal' | 'drawer', buttonId: string) => {
+    const g = OSB_REGISTRY[kind].grid
+    const oid = crypto.randomUUID()
+    const titleWord = kind === 'modal' ? 'Popup' : 'Panel'
     const kids: { type: OSBNodeType; config: Record<string, unknown>; x: number; y: number; cols: number; rows: number }[] = [
-      { type: 'text', config: { text: 'Popup title' }, x: 1, y: 1, cols: 8, rows: 2 },
-      { type: 'text', config: { text: 'Popup body copy.' }, x: 1, y: 3, cols: 8, rows: 3 },
+      { type: 'text', config: { text: `${titleWord} title` }, x: 1, y: 1, cols: 8, rows: 2 },
+      { type: 'text', config: { text: `${titleWord} body copy.` }, x: 1, y: 3, cols: 8, rows: 3 },
       { type: 'button', config: { label: 'Got it' }, x: 1, y: 6, cols: 4, rows: 1 },
     ]
-    const modal: ModalDoc = {
-      id: mid,
-      config: { ...OSB_REGISTRY.modal.defaults },
+    const shell: ModalDoc = {
+      id: oid,
+      config: { ...OSB_REGISTRY[kind].defaults },
       cols: g.cols,
       rows: g.rows,
       children: kids.map((k) => ({
         id: crypto.randomUUID(),
         type: k.type,
         config: { ...OSB_REGISTRY[k.type].defaults, ...k.config },
-        parentId: mid,
+        parentId: oid,
         x: k.x,
         y: k.y,
         cols: k.cols,
@@ -332,20 +361,39 @@ export default function CanvasPage() {
       })),
     }
     setDoc((d) => {
-      const withModal: CanvasDoc = { ...d, modals: [...modalsOf(d), modal] }
+      const withOverlay: CanvasDoc =
+        kind === 'modal' ? { ...d, modals: [...modalsOf(d), shell] } : { ...d, drawers: [...drawersOf(d), shell] }
+      const linkKey = kind === 'modal' ? 'modalId' : 'drawerId'
+      const clearKey = kind === 'modal' ? 'drawerId' : 'modalId'
       return {
-        ...withModal,
-        nodes: withModal.nodes.map((n) => (n.id === buttonId ? { ...n, config: { ...n.config, modalId: mid } } : n)),
+        ...withOverlay,
+        nodes: withOverlay.nodes.map((n) =>
+          n.id === buttonId ? { ...n, config: { ...n.config, [linkKey]: oid, [clearKey]: '' } } : n,
+        ),
       }
     })
-    setSelectedId(mid)
-    setEditingModalId(mid)
+    setSelectedId(oid)
+    if (kind === 'modal') setEditingModalId(oid)
+    else setEditingDrawerId(oid)
   }
+
+  /** Attach a fresh popup (pre-filled like the Card pattern) to a button. */
+  const createModal = (buttonId: string) => createOverlay('modal', buttonId)
+
+  /** Attach a fresh drawer (pre-filled like the Card pattern) to a button. */
+  const createDrawer = (buttonId: string) => createOverlay('drawer', buttonId)
 
   const unlinkModal = (buttonId: string) => {
     setDoc((d) => ({
       ...d,
       nodes: d.nodes.map((n) => (n.id === buttonId ? { ...n, config: { ...n.config, modalId: '' } } : n)),
+    }))
+  }
+
+  const unlinkDrawer = (buttonId: string) => {
+    setDoc((d) => ({
+      ...d,
+      nodes: d.nodes.map((n) => (n.id === buttonId ? { ...n, config: { ...n.config, drawerId: '' } } : n)),
     }))
   }
 
@@ -356,17 +404,29 @@ export default function CanvasPage() {
     setSelectedId((s) => (s === id ? null : s))
   }
 
-  /** The drawer edits nodes, popup children, and popup shells alike. */
+  const removeDrawerFlow = (id: string) => {
+    setDoc((d) => removeDrawer(d, id))
+    setEditingDrawerId((cur) => (cur === id ? null : cur))
+    setTestingDrawerId((cur) => (cur === id ? null : cur))
+    setSelectedId((s) => (s === id ? null : s))
+  }
+
+  /** The drawer edits nodes, overlay children, and overlay shells alike. */
   const applyConfig = (id: string, config: Record<string, unknown>) => {
     const em = modalsOf(docRef.current).find((m) => m.id === editingModalId) ?? null
     if (em && em.id === id) return void setDoc((d) => updateModalConfig(d, id, config))
     if (em && em.children.some((k) => k.id === id)) {
       return void setDoc((d) => updateModalChildConfig(d, em.id, id, config))
     }
+    const ed = drawersOf(docRef.current).find((m) => m.id === editingDrawerId) ?? null
+    if (ed && ed.id === id) return void setDoc((d) => updateDrawerConfig(d, id, config))
+    if (ed && ed.children.some((k) => k.id === id)) {
+      return void setDoc((d) => updateDrawerChildConfig(d, ed.id, id, config))
+    }
     setDoc((d) => ({ ...d, nodes: d.nodes.map((n) => (n.id === id ? { ...n, config } : n)) }))
   }
 
-  // The armed drag's gated type for the popup editor (patterns land as cards).
+  // The armed drag's gated type for the overlay editor (patterns land as cards).
   const armed = currentDrag()
   const armedType: string | null = !armed
     ? null
@@ -376,47 +436,79 @@ export default function CanvasPage() {
         ? 'card'
         : (doc.nodes.find((n) => n.id === (armed.drag as { id: string }).id)?.type ?? null)
 
-  /** A canvas atom dragged into the open popup: lands in the shell, leaves. */
-  const moveIntoModal = (modalId: string, id: string, rect: CellRect) => {
+  /** A canvas atom dragged into the open overlay: lands in the shell, leaves. */
+  const moveIntoOverlay = (kind: 'modal' | 'drawer', overlayId: string, id: string, rect: CellRect) => {
     const d = docRef.current
     const node = d.nodes.find((n) => n.id === id)
     if (!node) return
-    const modal = modalsOf(d).find((m) => m.id === modalId)
-    if (!modal) return
-    const reason = canPlaceModalChild(modal, node.type, rect)
+    const shell = kind === 'modal' ? modalsOf(d).find((m) => m.id === overlayId) : drawersOf(d).find((m) => m.id === overlayId)
+    if (!shell) return
+    const reason = canPlaceOverlayChild(shell, node.type, rect)
     if (reason) return reject(reason)
-    const r = insertModalChild(d, modalId, { ...node, parentId: modalId, ...rect })
+    const r =
+      kind === 'modal'
+        ? insertModalChild(d, overlayId, { ...node, parentId: overlayId, ...rect })
+        : insertDrawerChild(d, overlayId, { ...node, parentId: overlayId, ...rect })
     if (!r.ok) return reject(r.reason)
     setDoc(removeNode(r.doc, id))
     setSelectedId(id)
   }
 
+  /** A canvas atom dragged into the open popup: lands in the shell, leaves. */
+  const moveIntoModal = (modalId: string, id: string, rect: CellRect) => moveIntoOverlay('modal', modalId, id, rect)
+
+  /** A canvas atom dragged into the open drawer: lands in the shell, leaves. */
+  const moveIntoDrawer = (drawerId: string, id: string, rect: CellRect) => moveIntoOverlay('drawer', drawerId, id, rect)
+
   const selected: PlacedNode | null =
-    doc.nodes.find((n) => n.id === selectedId) ?? editingModal?.children.find((k) => k.id === selectedId) ?? null
-  // The popup shell edits through the same drawer via a synthetic node.
+    doc.nodes.find((n) => n.id === selectedId) ??
+    editingModal?.children.find((k) => k.id === selectedId) ??
+    editingDrawer?.children.find((k) => k.id === selectedId) ??
+    null
+  // Overlay shells edit through the same drawer via a synthetic node.
   const drawerNode: PlacedNode | null =
     editingModal && selectedId === editingModal.id
       ? { id: editingModal.id, type: 'modal', config: editingModal.config, parentId: null, x: 0, y: 0, cols: editingModal.cols, rows: editingModal.rows }
-      : selected
+      : editingDrawer && selectedId === editingDrawer.id
+        ? { id: editingDrawer.id, type: 'drawer', config: editingDrawer.config, parentId: null, x: 0, y: 0, cols: editingDrawer.cols, rows: editingDrawer.rows }
+        : selected
   const side = drawerNode && drawerNode.x + drawerNode.cols / 2 >= GRID_COLS / 2 ? 'left' : 'right'
 
-  /** Button-only drawer section: attach, open, test, or detach its popup. A
-   * button inside a popup never gets one (no popup-in-popup). */
-  const inModal = !!editingModal && editingModal.children.some((k) => k.id === selectedId)
+  /** Button-only drawer section: attach, open, test, or detach its overlay. A
+   * button inside an overlay never gets one (no overlay-in-overlay). */
+  const inOverlay =
+    (!!editingModal && editingModal.children.some((k) => k.id === selectedId)) ||
+    (!!editingDrawer && editingDrawer.children.some((k) => k.id === selectedId))
   const drawerActions =
-    drawerNode && drawerNode.type === 'button' && !inModal ? (
-      <PopupSection
-        node={drawerNode}
-        modals={modalsOf(doc)}
-        onCreate={() => createModal(drawerNode.id)}
-        onEdit={(mid) => setEditingModalId(mid)}
-        onTest={(mid) => setTestingModalId(mid)}
-        onUnlink={() => unlinkModal(drawerNode.id)}
-      />
+    drawerNode && drawerNode.type === 'button' && !inOverlay ? (
+      <>
+        <PopupSection
+          node={drawerNode}
+          modals={modalsOf(doc)}
+          onCreate={() => createModal(drawerNode.id)}
+          onEdit={(mid) => setEditingModalId(mid)}
+          onTest={(mid) => setTestingModalId(mid)}
+          onUnlink={() => unlinkModal(drawerNode.id)}
+        />
+        <DrawerSection
+          node={drawerNode}
+          drawers={drawersOf(doc)}
+          onCreate={() => createDrawer(drawerNode.id)}
+          onEdit={(did) => setEditingDrawerId(did)}
+          onTest={(did) => setTestingDrawerId(did)}
+          onUnlink={() => unlinkDrawer(drawerNode.id)}
+        />
+      </>
     ) : drawerNode && drawerNode.type === 'modal' && !editingModal ? (
       <div className="flex flex-col gap-1">
         <Button type="button" data-testid="edit-popup-content" size="sm" onClick={() => setEditingModalId(drawerNode.id)}>
           Edit popup content
+        </Button>
+      </div>
+    ) : drawerNode && drawerNode.type === 'drawer' && !editingDrawer ? (
+      <div className="flex flex-col gap-1">
+        <Button type="button" data-testid="edit-drawer-content" size="sm" onClick={() => setEditingDrawerId(drawerNode.id)}>
+          Edit drawer content
         </Button>
       </div>
     ) : null
@@ -438,6 +530,7 @@ export default function CanvasPage() {
         canPush={doc.nodes.length > 0}
         validation={validation}
         modalCount={modalsOf(doc).length}
+        drawerCount={drawersOf(doc).length}
         popups={
           popupsOpen
             ? modalsOf(doc).map((m) => ({
@@ -446,14 +539,30 @@ export default function CanvasPage() {
               }))
             : null
         }
+        drawers={
+          drawersOpen
+            ? drawersOf(doc).map((m) => ({
+                id: m.id,
+                title: (m.config as { title?: unknown } | undefined)?.title,
+              }))
+            : null
+        }
         onOpenPopups={() => setPopupsOpen(true)}
         onClosePopups={() => setPopupsOpen(false)}
+        onOpenDrawers={() => setDrawersOpen(true)}
+        onCloseDrawers={() => setDrawersOpen(false)}
         onEditModal={(id) => {
           setPopupsOpen(false)
           setSelectedId(id)
           setEditingModalId(id)
         }}
         onRemoveModal={removeModalFlow}
+        onEditDrawer={(id) => {
+          setDrawersOpen(false)
+          setSelectedId(id)
+          setEditingDrawerId(id)
+        }}
+        onRemoveDrawer={removeDrawerFlow}
         onEndDrag={clearDrag}
         onValidate={() => setValidation(issues)}
         onCloseValidation={() => setValidation(null)}
@@ -526,8 +635,41 @@ export default function CanvasPage() {
         />
       )}
 
+      {editingDrawer && (
+        <DrawerEditor
+          drawer={editingDrawer}
+          armed={armed}
+          armedType={armedType}
+          selectedId={selectedId}
+          onSelect={(id) => setSelectedId(id)}
+          onClose={() => setEditingDrawerId(null)}
+          onReject={reject}
+          onConsumeDrag={clearDrag}
+          onDropChild={(type, rect) =>
+            applyResult(
+              insertDrawerChild(docRef.current, editingDrawer.id, {
+                id: crypto.randomUUID(),
+                type,
+                config: {},
+                parentId: editingDrawer.id,
+                ...rect,
+              }),
+            )
+          }
+          onMoveIn={(id, rect) => moveIntoDrawer(editingDrawer.id, id, rect)}
+          onMoveChild={(id, rect) => applyResult(moveDrawerChild(docRef.current, editingDrawer.id, id, rect))}
+          onResizeChild={(id, rect) => applyResult(moveDrawerChild(docRef.current, editingDrawer.id, id, rect))}
+          onResizeShell={(cols, rows) => applyResult(resizeDrawer(docRef.current, editingDrawer.id, cols, rows))}
+          onRemoveChild={(id) => removeSelected(id)}
+        />
+      )}
+
       {testingModal && (
         <ModalTestPreview modal={testingModal} onClose={() => setTestingModalId(null)} />
+      )}
+
+      {testingDrawer && (
+        <DrawerTestPreview drawer={testingDrawer} onClose={() => setTestingDrawerId(null)} />
       )}
     </div>
     </OSBThemeProvider>
@@ -581,6 +723,58 @@ function PopupSection({
             ＋ New popup
           </Button>
           <p className="text-xs text-slate-500">Opens a popup when visitors click this button.</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** The button's drawer attach: mirror of PopupSection over drawers. */
+function DrawerSection({
+  node,
+  drawers,
+  onCreate,
+  onEdit,
+  onTest,
+  onUnlink,
+}: {
+  node: PlacedNode
+  drawers: DrawerDoc[]
+  onCreate(): void
+  onEdit(did: string): void
+  onTest(did: string): void
+  onUnlink(): void
+}) {
+  const drawerId = (node.config as { drawerId?: unknown } | undefined)?.drawerId
+  const linked = typeof drawerId === 'string' && drawerId.length > 0 ? drawers.find((m) => m.id === drawerId) ?? null : null
+  const linkedTitle = (linked?.config as { title?: unknown } | undefined)?.title
+  return (
+    <div className="flex flex-col gap-1">
+      <Label>Drawer</Label>
+      {linked ? (
+        <>
+          <p data-testid="linked-drawer-name" className="text-xs text-slate-600">
+            Opens “{typeof linkedTitle === 'string' && linkedTitle.length > 0 ? linkedTitle : 'Panel'}”
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" data-testid="edit-drawer" variant="outline" size="sm" onClick={() => onEdit(linked.id)}>
+              Edit drawer
+            </Button>
+            <Button type="button" data-testid="test-drawer" variant="outline" size="sm" onClick={() => onTest(linked.id)}>
+              Test drawer
+            </Button>
+            <Button type="button" data-testid="unlink-drawer" variant="outline" size="sm" onClick={onUnlink}>
+              Detach
+            </Button>
+          </div>
+          <p className="text-xs text-slate-500">A link is ignored while a drawer is attached.</p>
+        </>
+      ) : (
+        <>
+          <Button type="button" data-testid="new-drawer" variant="outline" size="sm" onClick={onCreate}>
+            ＋ New drawer
+          </Button>
+          <p className="text-xs text-slate-500">Opens a drawer when visitors click this button.</p>
         </>
       )}
     </div>

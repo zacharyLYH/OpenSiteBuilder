@@ -84,35 +84,36 @@ export function validateSite(doc: unknown): SiteValidation {
     for (const [k, c] of kids.entries()) checkNode(c, `${path}.children[${k}]`, type)
   }
 
-  /** Popup footprint + kid boxes travel as plain numbers; present means integer. */
-  function checkModals(modals: unknown, path: string): void {
-    if (modals === undefined) return
-    if (!Array.isArray(modals)) {
+  /** Overlay footprint + kid boxes travel as plain numbers; present means integer.
+   * One checker for popups (`modals`) + drawers — only the type word differs. */
+  function checkOverlays(overlays: unknown, path: string, type: 'modal' | 'drawer'): void {
+    if (overlays === undefined) return
+    if (!Array.isArray(overlays)) {
       errors.push(`${path} must be an array when present`)
       return
     }
-    for (const [i, m] of (modals as unknown[]).entries()) {
+    for (const [i, m] of (overlays as unknown[]).entries()) {
       if (typeof m !== 'object' || m === null) {
         errors.push(`${path}[${i}] must be an object`)
         continue
       }
-      const modal = m as Record<string, unknown>
-      checkId('modal', `${path}[${i}]`, modal['id'], nodeIds)
-      const type = modal['type']
-      if (type !== 'modal') {
-        errors.push(`${path}[${i}].type must be "modal"`)
+      const overlay = m as Record<string, unknown>
+      checkId(type, `${path}[${i}]`, overlay['id'], nodeIds)
+      const overlayType = overlay['type']
+      if (overlayType !== type) {
+        errors.push(`${path}[${i}].type must be ${JSON.stringify(type)}`)
         continue
       }
-      if (modal['config'] !== undefined && (typeof modal['config'] !== 'object' || modal['config'] === null)) {
+      if (overlay['config'] !== undefined && (typeof overlay['config'] !== 'object' || overlay['config'] === null)) {
         errors.push(`${path}[${i}].config must be an object when present`)
       }
       for (const key of ['cols', 'rows'] as const) {
-        const v = modal[key]
+        const v = overlay[key]
         if (v !== undefined && !(typeof v === 'number' && Number.isInteger(v))) {
           errors.push(`${path}[${i}].${key} must be an integer when present`)
         }
       }
-      const kids = modal['children']
+      const kids = overlay['children']
       if (kids === undefined) continue
       if (!Array.isArray(kids)) {
         errors.push(`${path}[${i}].children must be an array when present`)
@@ -126,8 +127,8 @@ export function validateSite(doc: unknown): SiteValidation {
         const kid = c as Record<string, unknown>
         checkId('node', `${path}[${i}].children[${k}]`, kid['id'], nodeIds)
         const kidType = kid['type']
-        if (typeof kidType !== 'string' || !canContain('modal', kidType)) {
-          errors.push(`${path}[${i}].children[${k}] type ${JSON.stringify(kidType)} is not an atom in a popup`)
+        if (typeof kidType !== 'string' || !canContain(type, kidType)) {
+          errors.push(`${path}[${i}].children[${k}] type ${JSON.stringify(kidType)} is not an atom in a ${type === 'modal' ? 'popup' : 'drawer'}`)
           continue
         }
         if (kid['config'] !== undefined && (typeof kid['config'] !== 'object' || kid['config'] === null)) {
@@ -162,7 +163,8 @@ export function validateSite(doc: unknown): SiteValidation {
       continue
     }
     for (const [j, n] of (page['nodes'] as unknown[]).entries()) checkNode(n, `pages[${i}].nodes[${j}]`, null)
-    checkModals(page['modals'], `pages[${i}].modals`)
+    checkOverlays(page['modals'], `pages[${i}].modals`, 'modal')
+    checkOverlays(page['drawers'], `pages[${i}].drawers`, 'drawer')
   }
 
   return { ok: errors.length === 0, errors }

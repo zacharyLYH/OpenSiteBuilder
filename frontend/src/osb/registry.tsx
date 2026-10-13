@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 import OSBButton, { OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS, type OSBButtonConfig } from './OSBButton'
 import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, type OSBCardConfig } from './OSBCard'
 import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } from './OSBImage'
+import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, type OSBDrawerConfig } from './OSBDrawer'
 import OSBModal, { OSB_MODAL_DEFAULTS, OSB_MODAL_FIELDS, type OSBModalConfig } from './OSBModal'
 import OSBText, { OSB_TEXT_DEFAULTS, OSB_TEXT_FIELDS, type OSBTextConfig } from './OSBText'
 import type { OSBField, OSBGridSize, OSBKind } from './types'
@@ -45,8 +46,9 @@ function defineEntry<C extends Record<string, unknown>>(
  * rendering are all derived below. Key order is the palette order.
  *
  * Atoms (text, button, image) are the only visible leaves. Card is the only
- * container. Popup is an overlay shell whose content lives in `modals[]`,
- * never on the grid — it enters from a button drawer, not the palette.
+ * container. Popup + drawer are overlay shells whose content lives in
+ * `modals[]` / `drawers[]`, never on the grid — they enter from a button
+ * drawer, not the palette.
  * Named compositions are patterns in ./patterns, not types here.
  */
 export const OSB_REGISTRY = {
@@ -89,6 +91,14 @@ export const OSB_REGISTRY = {
     OSBModal,
     { kind: 'overlay', emptyHint: 'Drag text, buttons or images here' },
   ),
+  drawer: defineEntry(
+    'Drawer',
+    OSB_DRAWER_DEFAULTS,
+    OSB_DRAWER_FIELDS,
+    { minCols: 6, minRows: 4, maxCols: 24, maxRows: 24, cols: 10, rows: 10 },
+    OSBDrawer,
+    { kind: 'overlay', emptyHint: 'Drag text, buttons or images here' },
+  ),
 }
 
 export type OSBNodeType = keyof typeof OSB_REGISTRY
@@ -110,16 +120,21 @@ export function isContainerType(t: string): boolean {
 
 /**
  * The one structural membership rule. A container holds any atom; a popup
- * holds any atom; nothing else nests anywhere. Default deny: unknown types
- * reject.
+ * or drawer holds any atom; nothing else nests anywhere. Default deny:
+ * unknown types reject.
  */
 export function canContain(parentType: string, childType: string): boolean {
-  return (isContainerType(parentType) || parentType === 'modal') && isAtomType(childType)
+  return (isContainerType(parentType) || parentType === 'modal' || parentType === 'drawer') && isAtomType(childType)
 }
 
 export function isModalType(t: string): boolean {
   return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'overlay'
 }
 
-export type { OSBButtonConfig, OSBCardConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig }
-export { OSBButton, OSBCard, OSBImage, OSBModal, OSBText }
+/** Both overlay kinds share one structural rule — modal + drawer alike. */
+export function isOverlayType(t: string): boolean {
+  return t === 'modal' || t === 'drawer'
+}
+
+export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig }
+export { OSBButton, OSBCard, OSBDrawer, OSBImage, OSBModal, OSBText }
