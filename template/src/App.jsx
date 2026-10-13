@@ -1,5 +1,3 @@
-import React from 'react'
-
 export default function App() {
   return (
     <main className="mx-auto max-w-xl p-6">
