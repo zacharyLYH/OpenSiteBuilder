@@ -61,7 +61,7 @@ describe('overlay gate (one rule for every kind)', () => {
     expect(canPlaceOverlayChild(SHELL, 'modal', rect)).toBe('kind')
     expect(canPlaceOverlayChild(SHELL, 'drawer', rect)).toBe('kind')
     expect(canPlaceOverlayChild(SHELL, 'card', rect)).toBe('kind')
-    expect(canPlaceOverlayChild(SHELL, 'video', rect)).toBe('unknown-type')
+    expect(canPlaceOverlayChild(SHELL, 'audio', rect)).toBe('unknown-type')
   })
 
   it('refuses overflow, oversize footprints, and overlaps', () => {

@@ -61,7 +61,7 @@ describe('generatePage', () => {
 
   it('drops unknown types and renders an empty shell for empty docs', () => {
     const out = generatePage(
-      doc([{ id: 'a', type: 'video' as never, config: {}, parentId: null, x: 0, y: 0, cols: 1, rows: 1 }]),
+      doc([{ id: 'a', type: 'audio' as never, config: {}, parentId: null, x: 0, y: 0, cols: 1, rows: 1 }]),
     )
     expect(out).not.toContain('<OSBVideo')
     expect(out).toContain('<main className=')

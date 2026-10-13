@@ -102,7 +102,7 @@ describe('kind rule: containers hold any atom, nothing else nests', () => {
   })
 
   it('canInsertReason names the rejection', () => {
-    expect(canInsertReason([], 'video' as never, { x: 0, y: 0, cols: 4, rows: 2 }, null)).toBe('unknown-type')
+    expect(canInsertReason([], 'audio' as never, { x: 0, y: 0, cols: 4, rows: 2 }, null)).toBe('unknown-type')
     expect(canInsertReason([], 'button', { x: -1, y: 0, cols: 4, rows: 1 }, null)).toBe('integrity')
     const cards: CanvasDoc = { version: 1, nodes: [root('c', 'card', 0, 0, 12, 10)] }
     // Container inside a container: kind deny.

@@ -21,7 +21,7 @@ describe('site.json', () => {
     expect(
       validateSite({
         ...example,
-        pages: [{ id: 'p', path: '/', title: 't', nodes: [{ id: 'n', type: 'video' }] }],
+        pages: [{ id: 'p', path: '/', title: 't', nodes: [{ id: 'n', type: 'audio' }] }],
       }).ok,
     ).toBe(false)
   })

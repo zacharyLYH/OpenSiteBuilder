@@ -40,7 +40,7 @@ test('recovery: unknown types, orphans and broken nesting are pruned and persist
       nodes: [
         { id: 'c1', type: 'card', config: {}, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
         { id: 'orphan', type: 'text', config: {}, parentId: 'gone', x: 0, y: 0, cols: 4, rows: 1 },
-        { id: 'ghost', type: 'video', config: {}, parentId: null, x: 14, y: 0, cols: 4, rows: 1 },
+        { id: 'ghost', type: 'audio', config: {}, parentId: null, x: 14, y: 0, cols: 4, rows: 1 },
         { id: 'inner', type: 'card', config: {}, parentId: 'c1', x: 1, y: 1, cols: 6, rows: 4 },
         { id: 'deep', type: 'text', config: {}, parentId: 'inner', x: 0, y: 0, cols: 4, rows: 1 },
       ],

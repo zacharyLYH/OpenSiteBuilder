@@ -6,6 +6,7 @@ import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, type OSBDrawerConfig
 import OSBModal, { OSB_MODAL_DEFAULTS, OSB_MODAL_FIELDS, type OSBModalConfig } from './OSBModal'
 import { OSBOverlayBody } from './OSBOverlay'
 import OSBText, { OSB_TEXT_DEFAULTS, OSB_TEXT_FIELDS, type OSBTextConfig } from './OSBText'
+import OSBVideo, { OSB_VIDEO_DEFAULTS, OSB_VIDEO_FIELDS, type OSBVideoConfig } from './OSBVideo'
 import type { OSBField, OSBGridSize, OSBKind } from './types'
 
 /** shadcn portal an overlay shell opens in. Declared per overlay kind so the
@@ -118,6 +119,13 @@ export const OSB_REGISTRY = {
     OSBDrawer,
     { kind: 'overlay', chrome: 'sheet', emptyHint: 'Drag text, buttons or images here' },
   ),
+  video: defineEntry(
+    'Video',
+    OSB_VIDEO_DEFAULTS,
+    OSB_VIDEO_FIELDS,
+    { minCols: 2, minRows: 2, maxCols: 32, maxRows: 24, cols: 6, rows: 4 },
+    OSBVideo,
+  ),
 }
 
 export type OSBNodeType = keyof typeof OSB_REGISTRY
@@ -127,7 +135,7 @@ export const OSB_NODE_TYPES: OSBNodeType[] = Object.keys(OSB_REGISTRY) as OSBNod
 // Palette order: plain atoms only. Cards always enter via the Card pattern
 // (a shell pre-filled with connected atoms); an empty shell is what remains
 // after its children are deleted, never a starting point.
-export const OSB_PALETTE_TYPES: OSBNodeType[] = ['text', 'button', 'image']
+export const OSB_PALETTE_TYPES: OSBNodeType[] = ['text', 'button', 'image', 'video']
 
 export function isAtomType(t: string): boolean {
   return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].kind === 'atom'
@@ -207,5 +215,5 @@ export function OSBOverlayTestPreview({
   )
 }
 
-export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig }
-export { OSBButton, OSBCard, OSBDrawer, OSBImage, OSBModal, OSBText }
+export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig, OSBVideoConfig }
+export { OSBButton, OSBCard, OSBDrawer, OSBImage, OSBModal, OSBText, OSBVideo }
