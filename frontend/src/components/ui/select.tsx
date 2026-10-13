@@ -1,6 +1,6 @@
 import * as React from 'react'
 import * as SelectPrimitive from '@radix-ui/react-select'
-import { cn } from '../../lib/utils'
+import { cn, FOCUS_RING } from '../../lib/utils'
 
 const Select = SelectPrimitive.Root
 const SelectValue = SelectPrimitive.Value
@@ -13,6 +13,7 @@ const SelectTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       'flex w-full items-center justify-between rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900',
+      FOCUS_RING,
       className,
     )}
     {...props}

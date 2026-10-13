@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { cn } from '../../lib/utils'
+import { cn, FOCUS_RING } from '../../lib/utils'
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>
 
@@ -9,7 +9,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       type={type}
       ref={ref}
       className={cn(
-        'flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50',
+        FOCUS_RING,
         className,
       )}
       {...props}

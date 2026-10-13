@@ -299,6 +299,13 @@ function subtreeFits(nodes: PlacedNode[], id: string, parentId: string | null): 
   return true
 }
 
+function basicRectReason(type: string, rect: CellRect): RejectReason | null {
+  if (!(type in OSB_REGISTRY)) return 'unknown-type'
+  if (!isRectOk(rect)) return 'integrity'
+  if (!footprintOk(type as OSBNodeType, rect)) return 'footprint'
+  return null
+}
+
 /** The single gate for every insert/move (R1–R4). Touch (contiguity) is NOT
  * enforced here — pieces move freely, and Validate checks touch on demand.
  * Depth is global: atoms live at depth ≤ 2, containers at depth 0.
@@ -310,11 +317,10 @@ export function canInsertReason(
   parentId: string | null = null,
   ignoreId?: string,
 ): RejectReason | null {
-  if (!(type in OSB_REGISTRY)) return 'unknown-type'
   // Overlays never enter through node ops — only createOverlay makes one.
   if (isOverlayType(type)) return 'kind'
-  if (!isRectOk(rect)) return 'integrity'
-  if (!footprintOk(type, rect)) return 'footprint'
+  const basic = basicRectReason(type, rect)
+  if (basic) return basic
   if (parentId === null) {
     if (!isAtomType(type) && !isContainerType(type)) return 'kind'
     if (rect.x + rect.cols > GRID_COLS) return 'containment'
@@ -495,8 +501,8 @@ export function canPlaceOverlayChild(
 ): RejectReason | null {
   if (!(type in OSB_REGISTRY)) return 'unknown-type'
   if (!isAtomType(type)) return 'kind'
-  if (!isRectOk(rect)) return 'integrity'
-  if (!footprintOk(type as OSBNodeType, rect)) return 'footprint'
+  const basic = basicRectReason(type, rect)
+  if (basic) return basic
   if (rect.x + rect.cols > shell.cols || rect.y + rect.rows > shell.rows) return 'containment'
   const hit = shell.children.some((k) => k.id !== ignoreId && collides(rect, k))
   return hit ? 'overlap' : null

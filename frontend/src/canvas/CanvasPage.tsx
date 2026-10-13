@@ -7,7 +7,7 @@ import { overlayTargetOf } from '../osb/types'
 import { clearProjectSlug, getProjectSlug } from '../lib/project'
 import { Button } from '../components/ui/button'
 import { Label } from '../components/ui/label'
-import CanvasHeader, { type PaletteEntry } from './CanvasHeader'
+import CanvasHeader, { type PaletteEntry, type PushStatus } from './CanvasHeader'
 import CanvasStage from './CanvasStage'
 import ConfigDrawer from './ConfigDrawer'
 import OverlayEditor, { OverlayTestPreview } from './OverlayEditor'
@@ -74,8 +74,9 @@ export default function CanvasPage() {
   // which is under a live Test preview. Kind is data, never parallel state.
   const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null)
   const [testingOverlayId, setTestingOverlayId] = useState<string | null>(null)
-  const [pushing, setPushing] = useState(false)
-  const [pushMsg, setPushMsg] = useState('')
+  const [push, setPush] = useState<PushStatus | null>(null)
+  // In flight is a state of the push itself, not a parallel flag.
+  const pushing = push?.kind === 'busy'
   // Rejected gestures fail silently otherwise.
   const [dropMsg, setDropMsg] = useState<string | null>(null)
   const dropMsgTimer = useRef<number | null>(null)
@@ -299,12 +300,16 @@ export default function CanvasPage() {
   }
 
   const publish = () => {
-    setPushing(true)
-    setPushMsg('Pushing…')
+    setPush({ kind: 'busy', text: 'Pushing…' })
     pushDoc(doc, projectName)
-      .then((r) => setPushMsg(r.ok ? `Pushed ${r.commit.slice(0, 7)}` : `Push failed: ${r.error}`))
-      .catch((e) => setPushMsg(`Push failed: ${String(e)}`))
-      .finally(() => setPushing(false))
+      .then((r) =>
+        setPush(
+          r.ok
+            ? { kind: 'ok', text: `Pushed ${r.commit.slice(0, 7)}` }
+            : { kind: 'error', text: `Push failed: ${r.error}` },
+        ),
+      )
+      .catch((e) => setPush({ kind: 'error', text: `Push failed: ${String(e)}` }))
   }
 
   const editingOverlay: OverlayDoc | null = findOverlay(doc, editingOverlayId ?? '') ?? null
@@ -440,7 +445,7 @@ export default function CanvasPage() {
           onTheme={setTheme}
           onTogglePreview={() => setPreview((v) => !v)}
           dropMsg={dropMsg}
-          pushMsg={pushMsg}
+          push={push}
           pushing={pushing}
           canPush={doc.nodes.length > 0}
           validation={validation}

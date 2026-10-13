@@ -2,9 +2,22 @@ import type { ReactNode } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardTitle } from '../components/ui/card'
+import { cn } from '../lib/utils'
 import type { OSBTheme } from '../osb/types'
 import type { DocValidation } from './doc'
 import { HEADER_PX } from './grid'
+
+/** The one publish status: its words and its severity together, so a failure
+ * can never render in the same grey as a success. `busy` IS the in-flight
+ * state — there is no second flag to keep in sync with the text. */
+export type PushStatus = { kind: 'busy' | 'ok' | 'error'; text: string }
+
+/** Status tone per severity; the header reads it, nothing else. */
+const PUSH_TONE: Record<PushStatus['kind'], string> = {
+  busy: 'text-slate-500',
+  ok: 'text-emerald-700',
+  error: 'text-rose-600',
+}
 
 /** One palette entry: an atom type or a multi-node pattern. */
 export interface PaletteEntry {
@@ -17,7 +30,8 @@ export interface CanvasHeaderProps {
   project: string
   palettes: PaletteEntry[]
   dropMsg: string | null
-  pushMsg: string
+  /** null until the first push — nothing to report reads as nothing shown. */
+  push: PushStatus | null
   pushing: boolean
   canPush: boolean
   /** Global site theme (light/dark) — the one place it is chosen. */
@@ -173,13 +187,13 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
             {p.preview ? 'Show grid' : 'Preview site'}
           </Button>
           {p.dropMsg && (
-            <span data-testid="drop-message" className="text-xs font-medium text-rose-600">
+            <span data-testid="drop-message" role="status" className="text-xs font-medium text-rose-600">
               {p.dropMsg}
             </span>
           )}
-          {p.pushMsg && (
-            <span data-testid="push-status" className="text-xs text-slate-500">
-              {p.pushMsg}
+          {p.push && (
+            <span data-testid="push-status" role="status" className={cn('text-xs', PUSH_TONE[p.push.kind])}>
+              {p.push.text}
             </span>
           )}
           <Button variant="outline" size="sm" data-testid="validate" onClick={p.onValidate}>
