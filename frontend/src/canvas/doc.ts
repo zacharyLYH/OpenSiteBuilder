@@ -1,6 +1,7 @@
 import { OSB_PATTERNS } from '../osb/patterns'
 import { OSB_REGISTRY, canContain, isAtomType, isContainerType, isOverlayType, isTriggerType, overlayNoun, type OSBNodeType } from '../osb/registry'
 import { CONTAINER_PAD, type OSBTheme } from '../osb/types'
+import type { SiteMeta } from '../site/types'
 import { GRID_COLS } from './grid'
 
 export interface PlacedNode {
@@ -26,6 +27,9 @@ export interface CanvasDoc {
   /** Global light/dark for the whole site, not a per-node setting. Old docs
    * load without the key (see themeOf). */
   theme?: OSBTheme
+  /** Global SEO/social metadata, written by Site Settings and read by
+   * siteObject when building the manifest. Optional; old docs lack it. */
+  meta?: SiteMeta
 }
 
 /** Overlay kinds. Registry keys ('modal', 'drawer') — a new kind is a new
@@ -114,6 +118,8 @@ export function loadDoc(key: string): CanvasDoc {
       nodes: known.filter((n) => kept.has(n.id)),
       overlays: pruneOverlays(overlaysOf(doc)),
       theme: themeOf(doc),
+      // Untrusted storage: keep meta only when it is a plain object.
+      meta: doc.meta && typeof doc.meta === 'object' ? doc.meta : undefined,
     }
   } catch {
     return EMPTY_DOC

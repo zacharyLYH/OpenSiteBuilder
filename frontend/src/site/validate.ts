@@ -32,6 +32,20 @@ export function validateSite(doc: unknown): SiteValidation {
     if (site['theme'] !== 'light' && site['theme'] !== 'dark') {
       errors.push('site.theme must be "light" or "dark"')
     }
+    // Optional SEO/social metadata; every field is a string when present.
+    const meta = site['meta']
+    if (meta !== undefined) {
+      if (typeof meta !== 'object' || meta === null) {
+        errors.push('site.meta must be an object when present')
+      } else {
+        for (const key of ['title', 'description', 'ogImage'] as const) {
+          const v = (meta as Record<string, unknown>)[key]
+          if (v !== undefined && typeof v !== 'string') {
+            errors.push(`site.meta.${key} must be a string when present`)
+          }
+        }
+      }
+    }
   }
 
   const pages = Array.isArray(d['pages']) ? (d['pages'] as unknown[]) : null

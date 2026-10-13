@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Sheet, SheetContent, SheetTitle } from './OSBSheet'
-import { OSBOverlayBody, OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
+import { OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
 import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface } from './types'
 
@@ -46,35 +46,6 @@ export const OSB_DRAWER_FIELDS: OSBField[] = [
 // overlay, focus, and slide animation). Surface + static shell are shared
 // with modals (OSBOverlay) — only the scroll bound differs per chrome.
 const SCROLL = 'max-h-full overflow-y-auto'
-
-/**
- * The live sheet over the editor AND the drawer Test button: X, outside
- * press, and Escape all close. Absolutely-positioned atoms (shared
- * OSBOverlayBody) so Test matches the editor grid exactly.
- */
-export function OSBDrawerTestPreview({
-  config,
-  cols,
-  rows,
-  kids,
-  renderKid,
-  open,
-  onOpenChange,
-}: {
-  config?: Partial<OSBDrawerConfig>
-  cols: number
-  rows: number
-  kids: { id: string; x: number; y: number; cols: number; rows: number }[]
-  renderKid: (id: string) => ReactNode
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}): ReactNode {
-  return (
-    <OSBDrawer config={config} cols={cols} rows={rows} open={open} onOpenChange={onOpenChange}>
-      <OSBOverlayBody cols={cols} rows={rows} kids={kids} renderKid={renderKid} />
-    </OSBDrawer>
-  )
-}
 
 export interface OSBDrawerProps {
   config?: Partial<OSBDrawerConfig>

@@ -19,7 +19,7 @@ import { cn } from '../lib/utils'
  * ADAPT-3 (scope): checkbox/radio items ship for shadcn parity but OSB menus
  *   use plain items, labels, and submenus — no knobs expose the rest.
  *
- * This is the ONE menu copy the canvas renders and codegen publishes (see
+ * This is the ONE menu copy the canvas renders and publish ships (see
  * OSB README: single source of truth — the dialog base lives at ./OSBDialog
  * and the sheet base at ./OSBSheet the same way).
  */

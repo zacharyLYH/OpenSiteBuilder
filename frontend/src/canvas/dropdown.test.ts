@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { generatePage } from './codegen'
 import { canInsertReason, insertNode, validateDoc, type CanvasDoc, type PlacedNode } from './doc'
 import { siteObject } from './push'
 import { validateSite } from '../site/validate'
@@ -80,16 +79,6 @@ describe('dropdown publishing', () => {
     ],
   })
 
-  it('emits options from config as a plain leaf tag — no item-tree plumbing', () => {
-    const out = generatePage(docWithMenu())
-    expect(out).toContain('<OSBDropdown')
-    expect(out).toContain('"label":"Shop"')
-    expect(out).toContain('"link":"https://example.com"')
-    // Options are config data now, never child nodes rendered through a slot.
-    expect(out).not.toContain('renderAtom')
-    expect(out).not.toContain('items={[')
-  })
-
   it('ships options in site.json as config, with no canvas children', () => {
     const obj = siteObject(docWithMenu(), 'shop') as {
       pages: { nodes: { id: string; config: { items: unknown[] }; children?: unknown[] }[] }[]
@@ -114,11 +103,14 @@ describe('dropdown publishing', () => {
       label: 'Products',
       items: [{ label: 'Shop', link: '', children: [{ label: 'Sale', link: '/sale' }] }],
     }
-    const out = generatePage(doc)
-    expect(out).toContain('<OSBDropdown')
-    expect(out).toContain('"children":[{"label":"Sale"')
-    expect(out).not.toContain('renderAtom')
-    expect(validateSite(siteObject(doc, 'shop'))).toEqual({ ok: true, errors: [] })
+    const obj = siteObject(doc, 'shop') as {
+      pages: { nodes: { config: { items: { children: { label: string }[] }[] }; children?: unknown[] }[] }[]
+    }
+    const menu = obj.pages[0].nodes[0]
+    // Submenu rows ride in config, never as canvas children.
+    expect(menu.children).toBeUndefined()
+    expect(menu.config.items[0].children[0].label).toBe('Sale')
+    expect(validateSite(obj)).toEqual({ ok: true, errors: [] })
   })
 
   it('rejects a hand-edited submenu of a submenu', () => {

@@ -35,8 +35,8 @@ func PublishablePath(p string) bool {
 		return true
 	case strings.HasPrefix(p, "public/"):
 		return true
-	case p == "index.html" || p == "package.json" || p == "vite.config.js" ||
-		p == "tailwind.config.js" || p == "postcss.config.js" || p == "site.json":
+	case p == "index.html" || p == "package.json" || p == "package-lock.json" ||
+		p == "vite.config.js" || p == "tailwind.config.js" || p == "postcss.config.js" || p == "site.json":
 		return true
 	}
 	return false

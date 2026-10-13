@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { OVERLAY_CELL_PX, overlayChildStyle } from '../osb/OSBOverlay'
-import { OSB_REGISTRY, OSBOverlayTestPreview, overlayNoun, type OSBNodeType } from '../osb/registry'
+import { OSBOverlayShell } from '../osb/OSBRuntime'
+import { OSB_REGISTRY, overlayNoun, type OSBNodeType } from '../osb/registry'
 import { Button } from '../components/ui/button'
 import { startChildResize } from './childResize'
 import PlacedChildLayer from './PlacedChildLayer'
@@ -271,11 +272,12 @@ export default function OverlayEditor(p: OverlayEditorProps) {
 
 /** The real dialog/sheet from anywhere (editor Test, drawer Test): overlays
  * the editor, and X, outside press, and Escape all close. Absolute kids, so
- * it matches the editor grid exactly. Chrome comes from the registry. */
+ * it matches the editor grid exactly. Chrome comes from the registry, and the
+ * shell is the engine's — editor Test and the published site render alike. */
 export function OverlayTestPreview({ kind, overlay, onClose }: { kind: string; overlay: OverlayDoc; onClose: () => void }) {
   const byId = new Map(overlay.children.map((k) => [k.id, k]))
   return (
-    <OSBOverlayTestPreview
+    <OSBOverlayShell
       overlayType={kind}
       config={overlay.config}
       cols={overlay.cols}

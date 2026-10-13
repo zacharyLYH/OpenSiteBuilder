@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { pushDoc, siteJson } from './push'
-import { tagFor } from './codegen'
+import { pushDoc, siteJson, siteObject } from './push'
 import { validateSite } from '../site/validate'
-import { OSB_NODE_TYPES } from '../osb/registry'
 import type { CanvasDoc } from './doc'
 
 const DOC: CanvasDoc = {
@@ -13,6 +11,16 @@ const DOC: CanvasDoc = {
     { id: 't', type: 'text', config: { text: 'Hi' }, parentId: null, x: 12, y: 0, cols: 8, rows: 2 },
   ],
 }
+
+// Exactly the glob push ships: every builder source, minus co-located tests.
+const OSB_SOURCES = import.meta.glob('../osb/OSB*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
+const SHIPPED_OSB = Object.keys(OSB_SOURCES)
+  .filter((p) => !p.includes('.test.'))
+  .map((p) => 'src/' + p.replace('../', ''))
 
 function stubFetch(status: number, body: unknown) {
   vi.stubGlobal(
@@ -31,8 +39,8 @@ function fileContent(files: { path: string; content: string }[], path: string): 
   return found.content
 }
 
-describe('pushDoc (no screenshots — pure wiring)', () => {
-  it('posts generated React + valid site.json to the push API', async () => {
+describe('pushDoc (codegen v2: manifest + runtime, no generated JSX)', () => {
+  it('posts site.json + the static skeleton + the runtime to the push API', async () => {
     stubFetch(200, { commit: 'abc123', url: 'https://x.github.io/y/' })
     const r = await pushDoc(DOC, 'my-shop')
     expect(r).toEqual({ ok: true, commit: 'abc123', url: 'https://x.github.io/y/' })
@@ -48,58 +56,81 @@ describe('pushDoc (no screenshots — pure wiring)', () => {
       message: string
     }
     expect(payload.message).toBe('canvas publish')
-    const app = fileContent(payload.files, 'src/App.jsx')
-    // Runtime ships every OSB* component (incl. the shadcn bases the node
-    // components import) plus shared sources. The expected manifest derives
-    // from the import graph rooted at App + the node components — a new
-    // component or base needs no edits here, and a missing file fails.
-    const shipped = new Map(payload.files.map((f) => [f.path, f.content]))
-    const resolveImport = (importer: string, spec: string): string | null => {
-      // Bare packages (react) and anything outside osb/lib ship nothing.
-      const base = spec.startsWith('./osb/')
-        ? `src/${spec.slice(2)}`
-        : importer.startsWith('src/osb/') && spec.startsWith('./')
-          ? `src/osb/${spec.slice(2)}`
-          : importer.startsWith('src/osb/') && spec.startsWith('../lib/')
-            ? `src/${spec.slice(3)}`
-            : null
-      if (!base) return null
-      if (shipped.has(`${base}.tsx`)) return `${base}.tsx`
-      if (shipped.has(`${base}.ts`)) return `${base}.ts`
-      throw new Error(`unresolved import ${spec} from ${importer}`)
-    }
-    const expected = new Set([
-      'site.json',
-      'src/App.jsx',
-      'src/osb/types.ts',
-      'src/osb/OSBTheme.tsx',
-      ...OSB_NODE_TYPES.map((t) => `src/osb/${tagFor(t)}.tsx`),
-    ])
-    const crawl = (path: string): void => {
-      const content = shipped.get(path)
-      if (!content) throw new Error(`missing file ${path}`)
-      for (const m of content.matchAll(/from '([^']+)'/g)) {
-        const resolved = resolveImport(path, m[1])
-        if (resolved && !expected.has(resolved)) {
-          expected.add(resolved)
-          crawl(resolved)
-        }
-      }
-    }
-    crawl('src/App.jsx')
-    for (const type of OSB_NODE_TYPES) crawl(`src/osb/${tagFor(type)}.tsx`)
-    expect(payload.files.map((f) => f.path).sort()).toEqual([...expected].sort())
-    // Every registered node type must import a component that actually ships.
-    for (const type of OSB_NODE_TYPES) {
-      const tag = tagFor(type)
-      expect(app).toContain(`from './osb/${tag}'`)
-      expect(shipped.get(`src/osb/${tag}.tsx`)).toBeTruthy()
-    }
-    expect(app).toContain('<OSBCard')
-    expect(app.indexOf('<OSBCard')).toBeLessThan(app.indexOf('<OSBText'))
+
+    // The manifest is the payload; it validates and matches siteJson exactly.
     const site = fileContent(payload.files, 'site.json')
     expect(validateSite(JSON.parse(site))).toEqual({ ok: true, errors: [] })
     expect(siteJson(DOC, 'my-shop')).toBe(site)
+
+    // App.jsx is the static skeleton: it imports the manifest + the engine.
+    // No per-node JSX is generated anymore (that is the whole point of v2).
+    const app = fileContent(payload.files, 'src/App.jsx')
+    expect(app).toContain(`import site from '../site.json'`)
+    expect(app).toContain(`import { OSBRuntime } from './osb/OSBRuntime'`)
+    expect(app).toContain('<OSBRuntime manifest={site} />')
+    expect(app).not.toContain('<OSBCard')
+
+    // The engine, the registry, and every shared module they import ship too.
+    for (const path of [
+      'src/osb/OSBRuntime.tsx',
+      'src/osb/registry.tsx',
+      'src/osb/types.ts',
+      'src/site/types.ts',
+      'src/lib/utils.ts',
+    ]) {
+      expect(fileContent(payload.files, path).length).toBeGreaterThan(0)
+    }
+    // Every builder component ships byte-for-byte (folder-sync, not codegen).
+    for (const path of SHIPPED_OSB) {
+      const source = OSB_SOURCES['../' + path.replace('src/', '')]
+      expect(fileContent(payload.files, path)).toBe(source)
+    }
+
+    // The build environment ships too, so a component that adds a dependency
+    // still installs in a repo created earlier (package.json + lock together).
+    expect(fileContent(payload.files, 'package.json')).toContain('osb-template')
+    expect(fileContent(payload.files, 'package-lock.json')).toContain('lockfileVersion')
+
+    // Exactly the expected set — no strays, nothing missing.
+    const expected = [
+      'site.json',
+      'src/App.jsx',
+      'src/osb/OSBRuntime.tsx',
+      'src/osb/registry.tsx',
+      'src/osb/types.ts',
+      'src/site/types.ts',
+      'src/lib/utils.ts',
+      'package.json',
+      'package-lock.json',
+      ...SHIPPED_OSB,
+    ]
+    expect(payload.files.map((f) => f.path).sort()).toEqual([...new Set(expected)].sort())
+  })
+
+  it('ships page nodes in flow order (top→bottom, left→right), not array order', () => {
+    // The doc array is deliberately out of visual order; the manifest must be
+    // sorted by grid position so published flow matches the canvas (PRD §5.3).
+    const doc: CanvasDoc = {
+      version: 1,
+      nodes: [
+        { id: 'bottom', type: 'text', config: {}, parentId: null, x: 0, y: 10, cols: 4, rows: 2 },
+        { id: 'right', type: 'text', config: {}, parentId: null, x: 12, y: 0, cols: 4, rows: 2 },
+        { id: 'left', type: 'text', config: {}, parentId: null, x: 0, y: 0, cols: 4, rows: 2 },
+      ],
+    }
+    const obj = siteObject(doc, 'flow') as { pages: { nodes: { id: string }[] }[] }
+    expect(obj.pages[0].nodes.map((n) => n.id)).toEqual(['left', 'right', 'bottom'])
+  })
+
+  it('reads site.meta from the document, defaulting the title to the slug', () => {
+    const base: CanvasDoc = { version: 1, nodes: [] }
+    expect((siteObject(base, 'my-shop') as { site: { meta: { title: string } } }).site.meta.title).toBe('my-shop')
+    const withMeta: CanvasDoc = { ...base, meta: { title: 'My Shop', description: 'Nice things', ogImage: '/og.png' } }
+    expect((siteObject(withMeta, 'my-shop') as { site: { meta: unknown } }).site.meta).toEqual({
+      title: 'My Shop',
+      description: 'Nice things',
+      ogImage: '/og.png',
+    })
   })
 
   it('publishes the global document theme into site.json (one theme, not per node)', () => {

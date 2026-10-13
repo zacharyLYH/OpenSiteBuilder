@@ -9,8 +9,8 @@ import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface, type OS
  * CardFooter), the `data-slot` markers, layout classes (flex-col gap-6 py-6,
  * px-6 slots, auto-rows-min header grid) and the border/shadow surface are
  * shadcn's verbatim. Deliberate adaptations for OpenSiteBuilder, each marked
- * ADAPT below — this is the ONE card copy the canvas renders and codegen
- * publishes (see OSB README: single source of truth).
+ * ADAPT below — this is the ONE card copy the canvas renders and publish
+ * ships (see OSB README: single source of truth).
  *
  * ADAPT-1 (tokens): shadcn's `bg-card` / `text-card-foreground` / `border`
  *   come from ambient CSS vars OSB does not ship. They map to the slate scale
@@ -183,7 +183,7 @@ export interface OSBCardProps {
 // A card is an empty canvas with chrome. The shell IS shadcn's Card (ADAPT-2
 // for the settings; theme is global); every visible thing inside is a real
 // child node owned by the document, never a ghost prop. Flow children (mount +
-// published codegen) land in shadcn's CardContent slot, padded by the card's
+// the published engine) land in shadcn's CardContent slot, padded by the card's
 // own spacing setting; on the canvas the container overlays its
 // absolutely-positioned children on top of the shell.
 export default function OSBCard({ config, children }: OSBCardProps) {

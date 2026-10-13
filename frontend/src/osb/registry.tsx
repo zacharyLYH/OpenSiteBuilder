@@ -5,7 +5,6 @@ import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } f
 import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, type OSBDrawerConfig } from './OSBDrawer'
 import OSBDropdown, { OSB_DROPDOWN_DEFAULTS, OSB_DROPDOWN_FIELDS, type OSBDropdownConfig } from './OSBDropdown'
 import OSBModal, { OSB_MODAL_DEFAULTS, OSB_MODAL_FIELDS, type OSBModalConfig } from './OSBModal'
-import { OSBOverlayBody } from './OSBOverlay'
 import OSBText, { OSB_TEXT_DEFAULTS, OSB_TEXT_FIELDS, type OSBTextConfig } from './OSBText'
 import OSBVideo, { OSB_VIDEO_DEFAULTS, OSB_VIDEO_FIELDS, type OSBVideoConfig } from './OSBVideo'
 import type { OSBField, OSBGridSize, OSBKind } from './types'
@@ -23,7 +22,7 @@ export interface OSBEntry {
   /** Dashed empty-state hint shown on the canvas for empty containers. */
   emptyHint?: string
   /** This type opens overlays from a click (buttons). The trigger rule —
-   * codegen openers, validation, the canvas attach slot — reads this, never
+   * runtime openers, validation, the canvas attach slot — reads this, never
    * a hardcoded type name. */
   trigger?: boolean
   /** Overlay kinds only: which portal the live shell opens in. */
@@ -32,7 +31,10 @@ export interface OSBEntry {
   fields: OSBField[]
   /** Footprint in cells. cols/rows = drop size = rendered size. */
   grid: OSBGridSize
-  render: (config: unknown, children?: ReactNode) => ReactNode
+  /** Render one node. `onClick` is only meaningful for trigger atoms (buttons);
+   * every other component ignores it. The engine passes it so a published
+   * button can open its overlay — no per-type branching in the runtime. */
+  render: (config: unknown, children?: ReactNode, onClick?: () => void) => ReactNode
 }
 
 /** Lowercase registry name: the noun behind labels, testids, and messages. */
@@ -45,7 +47,7 @@ function defineEntry<C extends Record<string, unknown>>(
   defaults: C,
   fields: OSBField[],
   grid: OSBGridSize,
-  Component: ComponentType<{ config?: Partial<C>; children?: ReactNode }>,
+  Component: ComponentType<{ config?: Partial<C>; children?: ReactNode; onClick?: () => void }>,
   opts?: { kind?: OSBKind; emptyHint?: string; trigger?: boolean; chrome?: OSBChrome },
 ): OSBEntry {
   return {
@@ -57,7 +59,9 @@ function defineEntry<C extends Record<string, unknown>>(
     defaults,
     fields,
     grid,
-    render: (config, children) => <Component config={config as Partial<C>} children={children} />,
+    render: (config, children, onClick) => (
+      <Component config={config as Partial<C>} children={children} onClick={onClick} />
+    ),
   }
 }
 
@@ -181,52 +185,6 @@ export function isOverlayType(t: string): boolean {
 /** Every type that opens overlays from a click — never a hardcoded name. */
 export function isTriggerType(t: string): boolean {
   return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].trigger === true
-}
-
-/**
- * THE live overlay preview (editor Test, drawer Test, screenshot mount).
- * Chrome comes from the entry — a new overlay kind renders with zero edits
- * here. X, outside press, and Escape all close; absolute kids match the
- * editor grid exactly.
- */
-export function OSBOverlayTestPreview({
-  overlayType,
-  config,
-  cols,
-  rows,
-  kids,
-  renderKid,
-  open,
-  onOpenChange,
-}: {
-  overlayType: string
-  config?: Record<string, unknown>
-  cols: number
-  rows: number
-  kids: { id: string; x: number; y: number; cols: number; rows: number }[]
-  renderKid: (id: string) => ReactNode
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}): ReactNode {
-  const body = <OSBOverlayBody cols={cols} rows={rows} kids={kids} renderKid={renderKid} />
-  if ((overlayType in OSB_REGISTRY ? OSB_REGISTRY[overlayType as OSBNodeType].chrome : undefined) === 'sheet') {
-    return (
-      <OSBDrawer
-        config={config as Partial<OSBDrawerConfig>}
-        cols={cols}
-        rows={rows}
-        open={open}
-        onOpenChange={onOpenChange}
-      >
-        {body}
-      </OSBDrawer>
-    )
-  }
-  return (
-    <OSBModal config={config as Partial<OSBModalConfig>} cols={cols} rows={rows} open={open} onOpenChange={onOpenChange}>
-      {body}
-    </OSBModal>
-  )
 }
 
 export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBDropdownConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig, OSBVideoConfig }

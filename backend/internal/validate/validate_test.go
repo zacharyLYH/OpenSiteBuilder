@@ -5,7 +5,7 @@ import (
 )
 
 func TestPublishablePath(t *testing.T) {
-	ok := []string{"src/App.jsx", "src/osb/OSBCard.tsx", "src/lib/utils.ts", "site.json", "src/components/ui/button.jsx", "index.html", "package.json", "vite.config.js", "tailwind.config.js", "postcss.config.js", "public/logo.png"}
+	ok := []string{"src/App.jsx", "src/osb/OSBCard.tsx", "src/lib/utils.ts", "site.json", "src/components/ui/button.jsx", "index.html", "package.json", "package-lock.json", "vite.config.js", "tailwind.config.js", "postcss.config.js", "public/logo.png"}
 	for _, p := range ok {
 		if !PublishablePath(p) {
 			t.Errorf("expected allowed: %s", p)

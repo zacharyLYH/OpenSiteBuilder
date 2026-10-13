@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { SiteNode } from '../site/types'
 import { OSBThemeProvider } from './OSBTheme'
-import { OSB_REGISTRY, OSBOverlayTestPreview, isOverlayType } from './registry'
+import { OSBNodeView, OSBOverlayView } from './OSBRuntime'
+import { OSB_REGISTRY, isOverlayType } from './registry'
 import type { OSBTheme } from './types'
 
 interface MountSpec {
@@ -26,47 +27,17 @@ function parseHash(): MountSpec | null {
   }
 }
 
+/** One node, rendered by the SAME engine the published site uses. Overlays
+ * mount open (screenshots capture the dialog/sheet, not a page). */
 function renderSiteNode(n: SiteNode): React.ReactNode {
-  const kids = Array.isArray(n.children)
-    ? n.children.filter((k) => k && typeof k.type === 'string' && k.type in OSB_REGISTRY)
-    : []
-  const renderedKids = kids.length > 0 ? kids.map((k) => <div key={k.id}>{renderSiteNode(k)}</div>) : undefined
-  // Overlays mount open: screenshots capture the dialog/sheet, not a page.
-  if (isOverlayType(n.type)) return <OverlayPreview node={n} />
-  return OSB_REGISTRY[n.type].render(n.config, renderedKids)
+  if (isOverlayType(n.type)) return <MountedOverlay node={n} />
+  return <OSBNodeView node={n} />
 }
 
-/** One overlay preview: local open state, shared geometry, real portal.
-// Chrome comes from the node type — a new kind needs no new code here. */
-function OverlayPreview({ node }: { node: SiteNode }) {
+/** A mounted overlay is closable like the real thing: local open state. */
+function MountedOverlay({ node }: { node: SiteNode }) {
   const [open, setOpen] = useState(true)
-  const kids = Array.isArray(node.children)
-    ? node.children.filter((k) => k && typeof k.type === 'string' && k.type in OSB_REGISTRY)
-    : []
-  const byId = new Map(kids.map((k) => [k.id, k]))
-  const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : fallback)
-  const geom = (k: SiteNode): { id: string; x: number; y: number; cols: number; rows: number } => ({
-    id: k.id,
-    x: num(k.x, 0),
-    y: num(k.y, 0),
-    cols: num(k.cols, 4),
-    rows: num(k.rows, 1),
-  })
-  return (
-    <OSBOverlayTestPreview
-      overlayType={node.type}
-      config={node.config as Record<string, unknown>}
-      cols={num(node.cols, OSB_REGISTRY[node.type].grid.cols)}
-      rows={num(node.rows, OSB_REGISTRY[node.type].grid.rows)}
-      kids={kids.map(geom)}
-      renderKid={(id) => {
-        const k = byId.get(id)
-        return k ? OSB_REGISTRY[k.type].render(k.config) : null
-      }}
-      open={open}
-      onOpenChange={setOpen}
-    />
-  )
+  return <OSBOverlayView overlay={node} open={open} onOpenChange={setOpen} />
 }
 
 /**

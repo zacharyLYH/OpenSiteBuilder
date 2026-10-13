@@ -1,6 +1,10 @@
 {
   "version": "0.1",
-  "site": { "name": "My Site", "theme": "light" },
+  "site": {
+    "name": "My Site",
+    "theme": "light",
+    "meta": { "title": "My Site", "description": "A site built with OpenSiteBuilder" }
+  },
   "pages": [
     {
       "id": "home",

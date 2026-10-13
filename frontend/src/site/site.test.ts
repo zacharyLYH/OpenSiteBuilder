@@ -26,6 +26,16 @@ describe('site.json', () => {
     ).toBe(false)
   })
 
+  it('accepts optional site.meta but rejects non-string fields', () => {
+    expect(validateSite({ ...example, site: { name: 'x', theme: 'light', meta: { title: 'T', ogImage: '/og.png' } } }).ok).toBe(true)
+    expect(
+      validateSite({ ...example, site: { name: 'x', theme: 'light', meta: { title: 5 } } }).errors,
+    ).toContain('site.meta.title must be a string when present')
+    expect(
+      validateSite({ ...example, site: { name: 'x', theme: 'light', meta: 'nope' } }).errors,
+    ).toContain('site.meta must be an object when present')
+  })
+
   it('rejects duplicate ids and paths not starting with /', () => {
     const dup = {
       ...example,

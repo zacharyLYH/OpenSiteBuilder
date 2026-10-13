@@ -22,12 +22,13 @@ Each component declares `XxxConfig` + `XXX_DEFAULTS`, takes
 `config?: Partial<XxxConfig>`, merges via `resolveConfig`. Missing key =>
 default. To add a knob: interface + defaults + render. Nothing else.
 
-### Single source of truth (canvas == codegen)
+### Single source of truth (canvas == engine == publish)
 
-The visual builder renders these components through `OSB_REGISTRY.render(...)`;
-`codegen.ts` emits the same component tags and `push.ts` ships these exact
-source files. One copy, two consumers — never re-implement a component for the
-publish path. Concretely:
+There is no generated code. The visual builder renders these components through
+`OSB_REGISTRY.render(...)`; the published site renders them through
+`OSBRuntime` (which looks the same registry up by node type); and `push.ts`
+ships these exact source files. One copy, two consumers — never re-implement a
+component for the publish path. Concretely:
 
 - Every drawer `select`'s options are the **same exported list** the render
   reads (e.g. `OSB_BUTTON_VARIANTS`, `OSB_TEXT_HEADINGS`), never a second
@@ -44,7 +45,9 @@ Anything an `OSB*` component imports is either shipped (`../lib/utils.ts`,
 `osb/types.ts`, other `OSB*` files) or must be a dependency of the publish
 **template** (`template/package.json` + lock), because the published repo
 installs from there. That is why `class-variance-authority` (the shadcn `cva`
-mechanism) is in the template.
+mechanism) is in the template. To keep a dependency a *new* component adds
+working in an older user repo, publish also ships `template/package.json` +
+`template/package-lock.json` (they travel as a pair — `npm ci` needs both).
 
 ## Shadcn vocabulary
 
@@ -84,8 +87,26 @@ adaptations are always the same: (1) shadcn CSS-var tokens → explicit slate +
 
 `registry.tsx` (`OSB_REGISTRY`) is the single record of node types: each type
 name is written once as a key. `OSBNodeType`, `OSB_NODE_TYPES`, defaults, and
-rendering all derive from it — nothing is re-declared elsewhere.
-Insert menu / editor / publisher all read it — no per-component branches.
+rendering all derive from it — nothing is re-declared elsewhere. It is a pure
+lookup table: types, defaults, fields, grids, kind/trigger/chrome metadata, and
+a `render`. It holds no preview or overlay-rendering logic — that lives in the
+engine.
+Insert menu / editor / engine all read it — no per-component branches.
+
+## The engine (`OSBRuntime.tsx`)
+
+The player half of "player + manifest". The canvas no longer emits `.jsx`; it
+emits a `site.json` manifest (`frontend/src/site/types.ts`), and the published
+site imports it and hands it to `OSBRuntime`. The engine walks the node tree,
+looks each `type` up in `OSB_REGISTRY`, and renders the matching component —
+`OSBNodeView` recurses containers, `OSBOverlayView` renders overlay manifest
+nodes through the shared `OSBOverlayShell` (the shadcn dialog/sheet; chrome
+comes from the registry, so a new kind needs no engine edit), and a trigger
+atom gets its overlay opener from `config.targetId`. If the JSON is valid, the
+site renders: there is no string-crammed markup to break. The screenshot
+harness (`mount.tsx`) and the editor's Test button both render through the same
+`OSBNodeView` / `OSBOverlayShell`, so canvas preview, screenshots, and the
+published site agree by construction.
 
 ## Sizing rule
 

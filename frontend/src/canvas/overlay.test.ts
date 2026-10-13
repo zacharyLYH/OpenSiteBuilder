@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { generatePage } from './codegen'
 import {
   canInsertReason,
   canPlaceOverlayChild,
@@ -212,7 +211,7 @@ describe('overlay persistence', () => {
   })
 })
 
-describe('overlay publishing', () => {
+describe('overlay publishing (manifest data, not generated JSX)', () => {
   const trigger = {
     id: 'trig',
     type: 'button' as const,
@@ -224,34 +223,32 @@ describe('overlay publishing', () => {
     rows: 1,
   }
 
-  it('emits one shared state, trigger openers, and controlled overlays', () => {
-    const out = generatePage(docWith(SHELL, [trigger]))
-    expect(out).toContain(`import { useState } from 'react'`)
-    expect(out).toContain(`import OSBModal from './osb/OSBModal'`)
-    expect(out).toContain(`import { OSBOverlayBody } from './osb/OSBOverlay'`)
-    expect(out).toContain('const [openOverlay, setOpenOverlay] = useState(null)')
-    expect(out).toContain('<OSBButton config={{"label":"Open","targetId":"m1"}} onClick={() => setOpenOverlay("m1")} />')
-    expect(out).toContain('cols={12} rows={10}')
-    expect(out).toContain('<OSBOverlayBody cols={12} rows={10}')
-    expect(out).toContain('{ id: "b1", x: 1, y: 6, cols: 4, rows: 1 }')
-    expect(out).toContain('open={openOverlay === "m1"}')
-    expect(out).toContain('onOpenChange={(o) => setOpenOverlay(o ? "m1" : null)}')
+  it('keeps the opener as config data — the engine turns it into onClick', () => {
+    const obj = siteObject(docWith(SHELL, [trigger]), 'shop') as {
+      pages: { nodes: { id: string; config: Record<string, unknown> }[] }[]
+    }
+    const trig = obj.pages[0].nodes.find((n) => n.id === 'trig')
+    expect(trig?.config).toMatchObject({ label: 'Open', targetId: 'm1' })
   })
 
-  it('renders drawer shells with the drawer tag', () => {
+  it('ships shell footprint + child geometry so the engine can lay it out', () => {
+    const obj = siteObject(docWith(SHELL, [trigger]), 'shop') as {
+      pages: {
+        overlays: { cols: number; rows: number; children: { id: string; x: number; y: number; cols: number; rows: number }[] }[]
+      }[]
+    }
+    const shell = obj.pages[0].overlays[0]
+    expect(shell.cols).toBe(12)
+    expect(shell.rows).toBe(10)
+    expect(shell.children.find((c) => c.id === 'b1')).toMatchObject({ x: 1, y: 6, cols: 4, rows: 1 })
+  })
+
+  it('ships every overlay kind through one store (kind is data)', () => {
     const dtrigger = { ...trigger, config: { label: 'Open', targetId: 'd1' } }
-    const out = generatePage(docWith(drawerShell('d1', SHELL.children.map((k) => ({ ...k, parentId: 'd1' }))), [dtrigger]))
-    expect(out).toContain('<OSBDrawer')
-    expect(out).toContain('open={openOverlay === "d1"}')
-  })
-
-  it('skips state when there are no overlays, and ignores dangling refs', () => {
-    const plain: CanvasDoc = { version: 1, nodes: [trigger], overlays: [] }
-    const out = generatePage(plain)
-    expect(out).not.toContain('useState')
-    expect(out).not.toContain('<OSBModal')
-    expect(out).not.toContain('setOpenOverlay')
-    expect(out).toContain('<OSBButton config={{"label":"Open","targetId":"m1"}} />')
+    const obj = siteObject(docWith(drawerShell('d1', SHELL.children.map((k) => ({ ...k, parentId: 'd1' }))), [dtrigger]), 'shop') as {
+      pages: { overlays: { id: string; type: string }[] }[]
+    }
+    expect(obj.pages[0].overlays[0]).toMatchObject({ id: 'd1', type: 'drawer' })
   })
 
   it('ships overlays in site.json as valid top-level overlay nodes', () => {

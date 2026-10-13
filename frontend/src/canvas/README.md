@@ -17,7 +17,7 @@ and later files only build on earlier ones.
 | 8 | `CanvasHeader.tsx` | The app bar, the global theme + preview controls, and the checks panel. | "where do the buttons/messages live?" |
 | 9 | `ConfigDrawer.tsx` | Non-spatial props (text, style, link). | "how does the settings panel work?" |
 | 10 | `PlacedChildLayer.tsx` / `childResize.ts` | The shared child surface: percent boxes, selection chrome, and the one SE-resize gesture. | "how do card children and popup children render/drag/resize?" |
-| 11 | `push.ts` / `codegen.ts` | Publishing: doc → `site.json` + React. | "what actually ships to GitHub?" |
+| 11 | `push.ts` | Publishing: doc → `site.json` manifest + the OSB runtime (no generated JSX). | "what actually ships to GitHub?" |
 | 12 | `canvas.css` | Drag visuals. | "why is that border blue/red?" |
 
 `../../specs/nesting-rules.md` (a sibling of `src/`) is the authority on

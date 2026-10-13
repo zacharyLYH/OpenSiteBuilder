@@ -84,10 +84,15 @@ func fileOps(files []publishFile) []github.FileOp {
 	return ops
 }
 
+// maxPublishFiles caps one publish. Hydration ships the whole builder-owned
+// src/osb/ runtime folder plus site.json, so the ceiling tracks that folder,
+// not the site's page count.
+const maxPublishFiles = 64
+
 // checkFiles enforces count, allowlist, duplicates, and size caps.
 func checkFiles(files []publishFile) error {
-	if len(files) == 0 || len(files) > 20 {
-		return errors.New("files count must be 1..20")
+	if len(files) == 0 || len(files) > maxPublishFiles {
+		return fmt.Errorf("files count must be 1..%d", maxPublishFiles)
 	}
 	seen := map[string]bool{}
 	for _, f := range files {

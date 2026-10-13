@@ -127,7 +127,7 @@ test('dropdown/opens-right', async ({ page }) => {
 test('dropdown/opens-above', async ({ page }) => {
   // "Above" is a preference, not a cage: the trigger needs room on that side
   // for it to stick, so a tall page pushes it down to the bottom edge first.
-  const tall = Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, type: 'text', config: { text: LONG_TEXT } }))
+  const tall = Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, type: 'text' as const, config: { text: LONG_TEXT } }))
   await mountNodes(page, [...tall, menuNode({ direction: 'top' })])
   await page.getByTestId('osb-dropdown-trigger').click()
   const panel = page.locator('[data-slot="dropdown-menu-content"]')

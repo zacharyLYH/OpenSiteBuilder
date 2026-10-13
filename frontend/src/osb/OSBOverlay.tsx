@@ -102,7 +102,7 @@ export function OSBOverlayStaticShell({
 
 /**
  * Absolutely-positioned kids for inside an overlay body — shared by the
- * Test preview, the screenshot mount, and published overlays (via codegen).
+ * Test preview, the screenshot mount, and published overlays (via the engine).
  * Sorts flow order (top-to-bottom, left-to-right); each kid keeps its grid
  * footprint. The overlay itself owns the sized relative body; this returns
  * only the boxes.

@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test'
 import { bbox, closeDrawerIfOpen, dragChildToCell, dropToCell, gridPitch, nodeById, openCanvas, persistedDoc } from './helpers'
-import { generatePage } from '../src/canvas/codegen'
 import { validateDoc } from '../src/canvas/doc'
 import { validateSite } from '../src/site/validate'
 
@@ -229,14 +228,15 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   expect(nodeById(await persistedDoc(page, 'e2e-nesting'), freedId)).toMatchObject({ parentId: null, x: 8, y: 0 })
   await closeDrawerIfOpen(page)
 
-  // (2a) FINAL artifacts: the free-placed doc flags its scattered island
-  // in Validate, while site.json + generated React still agree with it.
+  // (2a) FINAL artifacts: the free-placed doc flags its scattered island in
+  // Validate, while site.json — the manifest the engine renders (codegen v2
+  // emits data, never JSX) — nests the card's children.
   const v = validateDoc(doc)
   expect(v.ok).toBe(false)
   expect(v.errors.join('|')).toContain('scattered')
   const roots = doc.nodes.filter((n) => n.parentId === null)
   expect(roots.map((n) => n.type).sort()).toEqual(['button', 'button', 'card', 'text'])
-  const site = JSON.stringify({
+  const manifest = {
     version: '0.1',
     site: { name: 'e2e-nesting', theme: 'light' },
     pages: [
@@ -254,14 +254,15 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
         })),
       },
     ],
-  })
-  const react = generatePage(doc)
+  }
+  const site = JSON.stringify(manifest)
   const types = doc.nodes.map((n) => n.type).sort()
+  const cardKids = (manifest.pages[0].nodes.find((n) => n.type === 'card')?.children ?? []).map((k) => k.type)
   expect({
-    ok: validateSite(JSON.parse(site)).ok,
+    ok: validateSite(manifest).ok,
     hasCard: types.includes('card'),
-    buttonInCard: /<OSBCard[\s\S]*<OSBButton[\s\S]*<\/OSBCard>/.test(react),
-    textInCard: /<OSBCard[\s\S]*<OSBText[\s\S]*<\/OSBCard>/.test(react),
+    buttonInCard: cardKids.includes('button'),
+    textInCard: cardKids.includes('text'),
     siteNests: site.includes('"children"'),
   }).toEqual({
     ok: true,

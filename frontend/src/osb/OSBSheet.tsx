@@ -23,8 +23,8 @@ import { cn } from '../lib/utils'
  * ADAPT-4 (close): `showCloseButton` (default true) mirrors the dialog
  *   base — OSB drawers hide it via the `showClose` drawer setting.
  *
- * This is the ONE sheet copy the canvas settings panel renders and codegen
- * publishes (see OSB README: single source of truth — the dialog base lives
+ * This is the ONE sheet copy the canvas settings panel renders and publish
+ * ships (see OSB README: single source of truth — the dialog base lives
  * at ./OSBDialog the same way).
  */
 
