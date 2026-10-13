@@ -31,7 +31,7 @@ export function useCanvasDoc(projectName: string | null) {
   }, [doc, key], PERSIST_DEBOUNCE_MS)
   const roots = useMemo(() => doc.nodes.filter((n) => n.parentId === null), [doc])
   // File-level backstop: edit-time gates keep docs connected, but removals can
-  // strand islands. Drives both the bar warning and the checks panel.
+  // strand islands. Drives the on-demand checks panel (Validate button).
   const issues = useMemo(() => validateDoc(doc), [doc])
   // Remount key: a fresh grid after every gesture, so refused drags leave no
   // phantom behind. `resync` is the only way to bump it.

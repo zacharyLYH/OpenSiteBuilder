@@ -182,7 +182,7 @@ describe('overlay validation', () => {
     }
     const v = validateDoc(docWith(tight))
     expect(v.ok).toBe(false)
-    expect(v.errors.join('|')).toContain('undersizes its children')
+    expect(v.errors.join('|')).toContain('too small for its contents')
   })
 
 })

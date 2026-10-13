@@ -106,6 +106,16 @@ describe('CanvasPage', () => {
     expect(await screen.findByTestId('canvas-empty')).toBeTruthy()
   })
 
+  it("insets a card's children by its padding on the canvas", async () => {
+    renderCanvas([
+      { id: 'c1', type: 'card', config: { padding: 'spacious' }, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
+      { id: 'k1', type: 'text', config: { text: 'Hi' }, parentId: 'c1', x: 1, y: 1, cols: 4, rows: 2 },
+    ])
+    const content = await screen.findByTestId('content-box-c1')
+    // The child coordinate box is inset so items sit off the interior edge.
+    expect(String(content.parentElement?.className)).toContain('p-8')
+  })
+
   it('validate button lists touch issues on demand', async () => {
     renderCanvas([
       { id: 'c1', type: 'card', config: {}, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
@@ -128,13 +138,5 @@ describe('CanvasPage', () => {
     fireEvent.click(screen.getByTestId('validate'))
     expect(await screen.findByTestId('validate-ok')).toBeTruthy()
     expect(screen.queryByTestId('validate-issue')).toBeNull()
-  })
-
-  it('warns when pieces are scattered instead of touching', async () => {
-    renderCanvas([
-      { id: 'c1', type: 'card', config: {}, parentId: null, x: 0, y: 0, cols: 12, rows: 10 },
-      { id: 't1', type: 'text', config: { text: 'Far' }, parentId: null, x: 24, y: 0, cols: 8, rows: 2 },
-    ])
-    expect(await screen.findByTestId('doc-warning')).toBeTruthy()
   })
 })

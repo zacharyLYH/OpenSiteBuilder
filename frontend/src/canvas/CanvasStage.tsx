@@ -10,6 +10,7 @@ import { useOSBTheme } from '../osb/OSBTheme'
 import { startChildResize } from './childResize'
 import { containerFloor, type CanvasDoc, type PlacedNode } from './doc'
 import PlacedChildLayer from './PlacedChildLayer'
+import RemoveControl from './RemoveControl'
 import { canvasMetrics, GRID_COLS, GRID_MARGIN_X, GRID_MARGIN_Y, HEADER_PX, minGridWidth } from './grid'
 import type { Feedback } from './gesture'
 import type { PaletteEntry } from './CanvasHeader'
@@ -21,24 +22,6 @@ const noOverlap: GridLayoutProps['compactor'] = {
   allowOverlap: true,
   preventCollision: false,
   compact: (layout) => layout,
-}
-
-/** Selected-node delete control; the caller passes the position classes. */
-function RemoveButton({ id, onRemove, className }: { id: string; onRemove: (id: string) => void; className: string }) {
-  return (
-    <button
-      type="button"
-      data-testid="remove-node"
-      aria-label="Remove element"
-      onClick={(e) => {
-        e.stopPropagation()
-        onRemove(id)
-      }}
-      className={className}
-    >
-      Remove
-    </button>
-  )
 }
 
 /** The RGL callbacks the board forwards; declared by the grid itself so the
@@ -166,6 +149,11 @@ export default function CanvasStage(p: CanvasStageProps) {
   const containerBody = (parent: PlacedNode) => {
     // Bounds on demand: transparent atoms (text) are invisible otherwise.
     const showBounds = parent.id === selectedId
+    // The children render inside an inset box, so items sit off the interior
+    // edge exactly as the published flow layout does. The drop/resize handlers
+    // stay on the OUTER shell, though: the doc grid is the full container box,
+    // so padding is a pure visual inset and never shifts the coordinate space.
+    const inset = OSB_REGISTRY[parent.type].contentPad?.(parent.config) ?? ''
     return (
       <div
         data-testid={`container-${parent.id}`}
@@ -175,8 +163,12 @@ export default function CanvasStage(p: CanvasStageProps) {
         className={`relative h-full w-full${fb.conflicts.includes(parent.id) ? ' drag-conflict' : ''}`}
       >
         {OSB_REGISTRY[parent.type].render(parent.config)}
-        {childLayerFor(parent, showBounds)}
-        {!preview && shellDecor(parent)}
+        <div className={`absolute inset-0 ${inset}`}>
+          <div data-testid={`content-box-${parent.id}`} className="relative h-full w-full">
+            {childLayerFor(parent, showBounds)}
+            {!preview && shellDecor(parent)}
+          </div>
+        </div>
       </div>
     )
   }
@@ -283,10 +275,11 @@ export default function CanvasStage(p: CanvasStageProps) {
                   return kind === 'atom' || kind === 'overlay' ? OSB_REGISTRY[n.type].render(n.config) : containerBody(n)
                 })()}
                 {!preview && n.id === selectedId && (
-                  <RemoveButton
+                  <RemoveControl
+                    testid="remove-node"
                     id={n.id}
                     onRemove={p.onRemove}
-                    className="absolute right-1 top-1 z-10 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-600 shadow-sm hover:bg-slate-100"
+                    className="absolute right-1 top-1 z-10 h-auto rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-normal text-slate-600 shadow-sm hover:bg-slate-100"
                   />
                 )}
               </div>

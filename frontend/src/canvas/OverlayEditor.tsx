@@ -79,11 +79,11 @@ export default function OverlayEditor(p: OverlayEditorProps) {
 
   /** The gated type for the canvas-wide drag, or null when nothing applies. */
   const armedSubject = (): { type: string; moveId: string | null } | null => {
-    const a = p.armed
-    if (!a) return null
-    if (a.drag.kind === 'palette') return { type: a.drag.type, moveId: null }
-    if (a.drag.kind === 'pattern') return { type: 'card', moveId: null }
-    if (p.armedType) return { type: p.armedType, moveId: (a.drag as { id: string }).id }
+    const drag = p.armed?.drag
+    if (!drag) return null
+    if (drag.kind === 'palette') return { type: drag.type, moveId: null }
+    if (drag.kind === 'pattern') return { type: 'card', moveId: null }
+    if (p.armedType) return { type: p.armedType, moveId: drag.id }
     return null
   }
 

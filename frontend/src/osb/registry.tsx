@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from 'react'
 import OSBButton, { OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS, type OSBButtonConfig } from './OSBButton'
-import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, type OSBCardConfig } from './OSBCard'
+import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, cardContentPad, type OSBCardConfig } from './OSBCard'
 import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } from './OSBImage'
 import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, type OSBDrawerConfig } from './OSBDrawer'
 import OSBDropdown, { OSB_DROPDOWN_DEFAULTS, OSB_DROPDOWN_FIELDS, type OSBDropdownConfig } from './OSBDropdown'
@@ -27,6 +27,9 @@ export interface OSBEntry {
   trigger?: boolean
   /** Overlay kinds only: which portal the live shell opens in. */
   chrome?: OSBChrome
+  /** Containers only: the inset class the canvas wraps the child layer in,
+   * so the editor shows the container's own padding. Absent = flush. */
+  contentPad?: (config: unknown) => string
   defaults: Record<string, unknown>
   fields: OSBField[]
   /** Footprint in cells. cols/rows = drop size = rendered size. */
@@ -48,7 +51,7 @@ function defineEntry<C extends Record<string, unknown>>(
   fields: OSBField[],
   grid: OSBGridSize,
   Component: ComponentType<{ config?: Partial<C>; children?: ReactNode; onClick?: () => void }>,
-  opts?: { kind?: OSBKind; emptyHint?: string; trigger?: boolean; chrome?: OSBChrome },
+  opts?: { kind?: OSBKind; emptyHint?: string; trigger?: boolean; chrome?: OSBChrome; contentPad?: (config: unknown) => string },
 ): OSBEntry {
   return {
     name,
@@ -56,6 +59,7 @@ function defineEntry<C extends Record<string, unknown>>(
     emptyHint: opts?.emptyHint,
     trigger: opts?.trigger,
     chrome: opts?.chrome,
+    contentPad: opts?.contentPad,
     defaults,
     fields,
     grid,
@@ -84,7 +88,7 @@ export const OSB_REGISTRY = {
     OSB_CARD_FIELDS,
     { minCols: 4, minRows: 3, maxCols: 32, maxRows: 32, cols: 6, rows: 5 },
     OSBCard,
-    { kind: 'container', emptyHint: 'Drag text, buttons or images here' },
+    { kind: 'container', emptyHint: 'Drag text, buttons or images here', contentPad: cardContentPad },
   ),
   text: defineEntry(
     'Text',

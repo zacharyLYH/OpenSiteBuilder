@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { useOSBTheme } from './OSBTheme'
-import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface, type OSBTheme } from './types'
+import { OSB_PAD_OPTIONS, resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBPad, type OSBSurface, type OSBTheme } from './types'
 
 /**
  * Transplanted from shadcn/ui `card.tsx` (MIT). The decomposition
@@ -26,13 +26,13 @@ import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface, type OS
 export type OSBCardVariant = OSBSurface
 export type OSBCardRadius = 'none' | 'soft' | 'rounded' | 'pill'
 export type OSBCardShadow = 'none' | 'soft' | 'medium' | 'strong'
-export type OSBCardPadding = 'compact' | 'cozy' | 'spacious'
 
 export type OSBCardConfig = {
   variant: OSBCardVariant
   radius: OSBCardRadius
   shadow: OSBCardShadow
-  padding: OSBCardPadding
+  /** Children spacing — the shared padding vocabulary (osb/types). */
+  padding: OSBPad
 }
 
 export const OSB_CARD_DEFAULTS: OSBCardConfig = {
@@ -57,17 +57,11 @@ export const OSB_CARD_SHADOWS: { value: OSBCardShadow; label: string }[] = [
   { value: 'medium', label: 'Medium' },
   { value: 'strong', label: 'Strong' },
 ]
-export const OSB_CARD_PADDINGS: { value: OSBCardPadding; label: string }[] = [
-  { value: 'compact', label: 'Compact' },
-  { value: 'cozy', label: 'Cozy' },
-  { value: 'spacious', label: 'Spacious' },
-]
-
 export const OSB_CARD_FIELDS: OSBField[] = [
   { key: 'variant', label: 'Card style', kind: 'select', options: OSB_CARD_VARIANTS },
   { key: 'radius', label: 'Corners', kind: 'select', options: OSB_CARD_RADII },
   { key: 'shadow', label: 'Depth', kind: 'select', options: OSB_CARD_SHADOWS },
-  { key: 'padding', label: 'Inner spacing', kind: 'select', options: OSB_CARD_PADDINGS },
+  { key: 'padding', label: 'Inner spacing', kind: 'select', options: OSB_PAD_OPTIONS },
 ]
 
 /** Background + border emphasis (ADAPT-1/2). Theme comes from the provider. */
@@ -101,10 +95,28 @@ const CARD_SHADOW: Record<OSBCardShadow, string> = {
 }
 
 /** Inner padding + gap for flow children (shadcn's CardContent rhythm). */
-const CARD_PADDING: Record<OSBCardPadding, string> = {
+const CARD_PADDING: Record<OSBPad, string> = {
+  none: 'gap-0 px-0',
   compact: 'gap-3 px-3',
   cozy: 'gap-6 px-6',
   spacious: 'gap-8 px-8',
+}
+
+/** Canvas-only inset for the same knob (all sides). The editor has no flow
+ * layout, so the container's child layer is inset by the horizontal padding
+ * the published CardContent applies — the space reads identically on both. */
+export const OSB_CARD_INSET: Record<OSBPad, string> = {
+  none: '',
+  compact: 'p-3',
+  cozy: 'p-6',
+  spacious: 'p-8',
+}
+
+/** The inset class the canvas wraps a card's child layer in. */
+export function cardContentPad(config: unknown): string {
+  const c = resolveConfig(OSB_CARD_DEFAULTS, config as Partial<OSBCardConfig> | undefined)
+  // An unrecognized value reads as flush (base styling), never a broken class.
+  return OSB_CARD_INSET[c.padding] ?? ''
 }
 
 /** OSB-only axes layered onto the shadcn slots (ADAPT-2). */
@@ -125,7 +137,6 @@ function Card({
   return (
     <div
       data-slot="card"
-      data-variant={variant}
       className={cn(
         'flex flex-col gap-6 border py-6',
         CARD_SURFACE[variant][theme],
@@ -193,7 +204,6 @@ export default function OSBCard({ config, children }: OSBCardProps) {
       variant={c.variant}
       radius={c.radius}
       shadow={c.shadow}
-      data-padding={c.padding}
       className="h-full w-full overflow-hidden"
     >
       {children && (

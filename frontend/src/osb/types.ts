@@ -117,3 +117,18 @@ export function overlayTargetOf(config: Record<string, unknown> | undefined): st
   const t = (config as { targetId?: unknown } | undefined)?.targetId
   return typeof t === 'string' && t.length > 0 ? t : null
 }
+
+/** One padding vocabulary for containers: `none` is flush, the sizes read
+ * Compact / Cozy / Spacious. Padding belongs to the container (it is the space
+ * between its interior edge and the items inside), never to an atom. Margin is
+ * deliberately NOT a knob — it would push the box off the grid and break the
+ * coordinate system. */
+export type OSBPad = 'none' | 'compact' | 'cozy' | 'spacious'
+
+/** The one option list behind the card's "Inner spacing" field. */
+export const OSB_PAD_OPTIONS: { value: OSBPad; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'compact', label: 'Compact' },
+  { value: 'cozy', label: 'Cozy' },
+  { value: 'spacious', label: 'Spacious' },
+]

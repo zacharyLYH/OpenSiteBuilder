@@ -1,4 +1,3 @@
-import { cn } from '../lib/utils'
 import { resolveConfig, type OSBField } from './types'
 
 export type OSBVideoConfig = {
@@ -59,7 +58,7 @@ export default function OSBVideo({ config }: OSBVideoProps) {
       role="img"
       aria-label="Video placeholder"
       data-testid="osb-video-fallback"
-      className={cn('h-full w-full', 'bg-gradient-to-br from-slate-400 to-slate-500')}
+      className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-500"
     />
   )
 }

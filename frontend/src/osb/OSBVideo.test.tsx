@@ -9,7 +9,6 @@ describe('OSBVideo rendering', () => {
     render(<OSBVideo config={{}} />)
     const fallback = screen.getByTestId('osb-video-fallback')
     expect(fallback.getAttribute('aria-label')).toBe('Video placeholder')
-    expect(screen.queryByTestId('osb-video-fallback')).toBeTruthy()
     expect(document.querySelector('video')).toBeNull()
   })
 

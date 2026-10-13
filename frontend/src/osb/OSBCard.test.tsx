@@ -8,13 +8,13 @@ import OSBCard, {
   CardFooter,
   OSB_CARD_DEFAULTS,
   OSB_CARD_FIELDS,
-  OSB_CARD_PADDINGS,
   OSB_CARD_RADII,
   OSB_CARD_SHADOWS,
   OSB_CARD_VARIANTS,
 } from './OSBCard'
 import OSBText from './OSBText'
 import { OSBThemeProvider } from './OSBTheme'
+import { OSB_PAD_OPTIONS } from './types'
 
 const shell = (container: HTMLElement): HTMLElement => {
   const el = container.querySelector('[data-slot="card"]')
@@ -117,7 +117,8 @@ describe('OSBCard registry shape (single source with the render)', () => {
     expect(options('variant')).toEqual(OSB_CARD_VARIANTS)
     expect(options('radius')).toEqual(OSB_CARD_RADII)
     expect(options('shadow')).toEqual(OSB_CARD_SHADOWS)
-    expect(options('padding')).toEqual(OSB_CARD_PADDINGS)
+    // Padding reuses the ONE shared vocabulary (osb/types), never a 2nd list.
+    expect(options('padding')).toEqual(OSB_PAD_OPTIONS)
   })
 
   it('defaults reproduce shadcn Card', () => {

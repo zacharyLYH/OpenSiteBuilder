@@ -1,4 +1,5 @@
 import React from 'react'
+import { Card } from '../components/ui/card'
 import { ErrorNote } from '../components/Notice'
 import { postExchange, strField, type ExchangePayload } from '../api'
 
@@ -54,7 +55,7 @@ export default function Callback() {
 
   return (
     <main className="mx-auto max-w-xl p-6">
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <Card className="mt-8 p-6">
         <h1 className="text-xl font-bold tracking-tight">Connecting GitHub…</h1>
       <ErrorNote message={error} />
       {installUrl && (
@@ -70,7 +71,7 @@ export default function Callback() {
         </div>
       )}
       {!error && !result && <p className="mt-4 text-sm text-slate-600">Exchanging with backend…</p>}
-      </div>
+      </Card>
     </main>
   )
 }

@@ -14,6 +14,7 @@ import OverlayEditor, { OverlayTestPreview } from './OverlayEditor'
 import { movedRoots, overContainer, planAt, planRoute, type DragPlan } from './gesture'
 import {
   canPlaceOverlayChild,
+  createOverlay as addOverlay,
   eventCell,
   findOverlay,
   insertNode,
@@ -69,12 +70,10 @@ export default function CanvasPage() {
   const [preview, setPreview] = useState(false)
   // On-demand checks panel: touch is checked on click, not at placement.
   const [validation, setValidation] = useState<DocValidation | null>(null)
-  // Overlay editing: which shell is open in the shared overlay editor,
-  // which is under a live Test preview, and whether the header tray
-  // listing every overlay is open. Kind is data, never parallel state.
+  // Overlay editing: which shell is open in the shared overlay editor, and
+  // which is under a live Test preview. Kind is data, never parallel state.
   const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null)
   const [testingOverlayId, setTestingOverlayId] = useState<string | null>(null)
-  const [overlaysOpen, setOverlaysOpen] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushMsg, setPushMsg] = useState('')
   // Rejected gestures fail silently otherwise.
@@ -341,7 +340,7 @@ export default function CanvasPage() {
         rows: k.rows,
       })),
     }
-    setDoc((d) => updateNodeConfig({ ...d, overlays: [...overlaysOf(d), shell] }, buttonId, { targetId: oid }))
+    setDoc((d) => updateNodeConfig(addOverlay(d, shell), buttonId, { targetId: oid }))
     setSelectedId(oid)
     setEditingOverlayId(oid)
   }
@@ -350,6 +349,8 @@ export default function CanvasPage() {
     setDoc((d) => updateNodeConfig(d, buttonId, { targetId: '' }))
   }
 
+  /** Remove an overlay shell entirely (and unlink its trigger). The trigger's
+   * own drawer hosts this — there is no separate overlay list to manage. */
   const removeOverlayFlow = (id: string) => {
     setDoc((d) => removeOverlay(d, id))
     setEditingOverlayId((cur) => (cur === id ? null : cur))
@@ -369,13 +370,13 @@ export default function CanvasPage() {
 
   // The armed drag's gated type for the overlay editor (patterns land as cards).
   const armed = currentDrag()
-  const armedType: string | null = !armed
-    ? null
-    : armed.drag.kind === 'palette'
-      ? armed.drag.type
-      : armed.drag.kind === 'pattern'
-        ? 'card'
-        : (doc.nodes.find((n) => n.id === (armed.drag as { id: string }).id)?.type ?? null)
+  const armedType: string | null = (() => {
+    if (!armed) return null
+    const { drag } = armed
+    if (drag.kind === 'palette') return drag.type
+    if (drag.kind === 'pattern') return 'card'
+    return doc.nodes.find((n) => n.id === drag.id)?.type ?? null
+  })()
 
   /** A canvas atom dragged into the open overlay: lands in the shell, leaves. */
   const moveIntoOverlay = (overlayId: string, id: string, rect: CellRect) => {
@@ -408,12 +409,12 @@ export default function CanvasPage() {
   const drawerActions =
     drawerNode && isTriggerType(drawerNode.type) && !inOverlay ? (
       <OverlayTriggerSection
-        node={drawerNode}
         linked={linkedOverlay}
         onCreate={(kind) => createOverlay(kind, drawerNode.id)}
         onEdit={(id) => setEditingOverlayId(id)}
         onTest={(id) => setTestingOverlayId(id)}
         onUnlink={() => unlinkOverlay(drawerNode.id)}
+        onDelete={(id) => removeOverlayFlow(id)}
       />
     ) : drawerNode && isOverlayType(drawerNode.type) && !editingOverlay ? (
       <div className="flex flex-col gap-1">
@@ -434,7 +435,6 @@ export default function CanvasPage() {
         <CanvasHeader
           project={projectName}
           palettes={palettes}
-          issues={!issues.ok}
           theme={theme}
           preview={preview}
           onTheme={setTheme}
@@ -444,24 +444,6 @@ export default function CanvasPage() {
           pushing={pushing}
           canPush={doc.nodes.length > 0}
           validation={validation}
-          overlayCount={overlaysOf(doc).length}
-          overlays={
-            overlaysOpen
-              ? overlaysOf(doc).map((m) => ({
-                id: m.id,
-                overlayType: m.overlayType,
-                title: (m.config as { title?: unknown } | undefined)?.title,
-              }))
-              : null
-          }
-          onOpenOverlays={() => setOverlaysOpen(true)}
-          onCloseOverlays={() => setOverlaysOpen(false)}
-          onEditOverlay={(id) => {
-            setOverlaysOpen(false)
-            setSelectedId(id)
-            setEditingOverlayId(id)
-          }}
-          onRemoveOverlay={removeOverlayFlow}
           onEndDrag={clearDrag}
           onValidate={() => setValidation(issues)}
           onCloseValidation={() => setValidation(null)}
@@ -550,21 +532,20 @@ export default function CanvasPage() {
  * (new-popup/edit-popup/… + new-drawer/edit-drawer/…) stay so specs keep
  * addressing each kind directly. */
 function OverlayTriggerSection({
-  node,
   linked,
   onCreate,
   onEdit,
   onTest,
   onUnlink,
+  onDelete,
 }: {
-  node: PlacedNode
   linked: OverlayDoc | null
   onCreate(kind: OverlayType): void
   onEdit(id: string): void
   onTest(id: string): void
   onUnlink(): void
+  onDelete(id: string): void
 }) {
-  void node
   if (linked) {
     const noun = overlayNoun(linked.overlayType)
     const Noun = noun[0].toUpperCase() + noun.slice(1)
@@ -586,6 +567,15 @@ function OverlayTriggerSection({
           </Button>
           <Button type="button" data-testid={`unlink-${noun}`} variant="outline" size="sm" onClick={onUnlink}>
             Detach
+          </Button>
+          <Button
+            type="button"
+            data-testid={`delete-${noun}`}
+            variant="outline"
+            size="sm"
+            onClick={() => onDelete(linked.id)}
+          >
+            Delete
           </Button>
         </div>
         <p className="text-xs text-slate-500">A link is ignored while an overlay is attached.</p>

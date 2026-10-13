@@ -588,23 +588,27 @@ export function updateOverlayChildConfig(
   }))
 }
 
-/** Absolute origin of a node in root cells (its parent chain summed).
- * Cycle-safe: null when the chain loops or dangles. */
+/** Absolute top-left of a node in root cells: the node's own cell plus its
+ * ancestor chain (child coords are parent-local, so a root's are already
+ * absolute). Cycle-safe: null when the chain loops or dangles. */
 export function absoluteOrigin(nodes: readonly PlacedNode[], id: string): { x: number; y: number } | null {
   const byId = new Map(nodes.map((n) => [n.id, n]))
+  const start = byId.get(id)
+  if (!start) return null
   const seen = new Set<string>()
-  let cur = byId.get(id)
-  let x = 0
-  let y = 0
-  while (cur && cur.parentId !== null) {
+  let cur = start
+  let x = start.x
+  let y = start.y
+  while (cur.parentId !== null) {
     if (seen.has(cur.parentId)) return null
     seen.add(cur.parentId)
-    cur = byId.get(cur.parentId)
-    if (!cur) return null
-    x += cur.x
-    y += cur.y
+    const parent = byId.get(cur.parentId)
+    if (!parent) return null
+    x += parent.x
+    y += parent.y
+    cur = parent
   }
-  return cur ? { x, y } : null
+  return { x, y }
 }
 
 /** Center-point hit test: the deepest container holding the point.
@@ -722,17 +726,21 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
     return { ok: false, errors: ['document must be a version-1 canvas doc'] }
   }
   const errors: string[] = []
-  const at = (id: string, msg: string) => errors.push(`node ${id}: ${msg}`)
+  // Messages name the component, never its id: a uuid tells a user nothing,
+  // whereas "Card" narrows it down the same way for them. An unknown type has
+  // no name to show, so it gets a plain-language fallback.
+  const nameOf = (type: string): string => (type in OSB_REGISTRY ? OSB_REGISTRY[type as OSBNodeType].name : 'Piece')
+  const at = (type: string, msg: string) => errors.push(`${nameOf(type)}: ${msg}`)
   const byId = new Map(doc.nodes.map((n) => [n.id, n]))
   for (const n of doc.nodes) {
     if (!(n.type in OSB_REGISTRY)) {
-      at(n.id, `unknown type ${JSON.stringify((n as { type: unknown }).type)}`)
+      errors.push(`A piece has an unknown type ${JSON.stringify((n as { type: unknown }).type)}`)
       continue
     }
-    if (n.parentId !== null && !byId.has(n.parentId)) at(n.id, 'missing parent')
-    // Overlaps are reported once per pair below, where both ids read well.
+    if (n.parentId !== null && !byId.has(n.parentId)) at(n.type, 'is missing its parent')
+    // Overlaps are reported once per pair below, where both names read well.
     const reason = canInsertReason(doc.nodes, n.type, n, n.parentId, n.id)
-    if (reason && reason !== 'overlap') at(n.id, reasonText(reason))
+    if (reason && reason !== 'overlap') at(n.type, reasonText(reason))
   }
   // Sibling overlap pairs, contiguity, and container floors per set.
   const sets = new Map<string | null, PlacedNode[]>()
@@ -740,15 +748,13 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
   for (const [parentId, set] of sets) {
     for (let i = 0; i < set.length; i++)
       for (let j = i + 1; j < set.length; j++)
-        if (collides(set[i], set[j])) errors.push(`nodes ${set[i].id} and ${set[j].id} overlap`)
+        if (collides(set[i], set[j])) errors.push(`${nameOf(set[i].type)} and ${nameOf(set[j].type)} overlap`)
     if (!isContiguous(set)) {
-      errors.push(
-        parentId === null ? 'root nodes are scattered (must touch)' : `children of ${parentId} are scattered (must touch)`,
-      )
+      errors.push(parentId === null ? 'Page pieces are scattered (must touch)' : `${nameOf(byId.get(parentId)?.type ?? '')} pieces are scattered (must touch)`)
     }
     const parent = parentId === null ? null : byId.get(parentId)
     if (parent && !containerFitsKids(doc.nodes, parent)) {
-      errors.push(`container ${parentId} undersizes its children`)
+      errors.push(`${nameOf(parent.type)} is too small for its contents`)
     }
   }
   // Overlays: same whole-document backstop as nodes — shell footprint,
@@ -759,34 +765,34 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
   for (const m of overlaysOf(doc)) {
     const label = overlayNoun(m.overlayType)
     if (typeof m.id !== 'string' || m.id.length === 0 || overlayIds.has(m.id)) {
-      errors.push(`${label} ${JSON.stringify((m as { id: unknown } | null)?.id)} has a bad or duplicate id`)
+      errors.push(`${label} has a bad or duplicate id`)
       continue
     }
     if (!(m.overlayType in OSB_REGISTRY)) {
-      errors.push(`${label} ${m.id} has an unknown overlay kind`)
+      errors.push(`${label} has an unknown overlay kind`)
       continue
     }
     overlayIds.add(m.id)
     const g = OSB_REGISTRY[m.overlayType].grid
     if (!Number.isInteger(m.cols + m.rows) || m.cols < g.minCols || m.rows < g.minRows || m.cols > g.maxCols || m.rows > g.maxRows) {
-      errors.push(`${label} ${m.id}: that size isn't allowed`)
+      errors.push(`${label}: that size isn't allowed`)
     }
     const kids = Array.isArray(m.children) ? m.children : []
     for (const k of kids) {
       if (!(k.type in OSB_REGISTRY) || !isAtomType(k.type)) {
-        errors.push(`${label} ${m.id} child ${k.id}: that can't go there`)
+        errors.push(`${label} child: that can't go there`)
         continue
       }
-      if (k.parentId !== m.id) errors.push(`${label} ${m.id} child ${k.id}: missing parent`)
+      if (k.parentId !== m.id) errors.push(`${label} child: missing parent`)
       const reason = canPlaceOverlayChild({ cols: m.cols, rows: m.rows, children: kids }, k.type, k, k.id)
-      if (reason && reason !== 'overlap') errors.push(`${label} ${m.id} child ${k.id}: ${reasonText(reason).toLowerCase()}`)
+      if (reason && reason !== 'overlap') errors.push(`${label} child: ${reasonText(reason).toLowerCase()}`)
     }
     for (let i = 0; i < kids.length; i++)
       for (let j = i + 1; j < kids.length; j++)
-        if (collides(kids[i], kids[j])) errors.push(`${label} ${m.id} children ${kids[i].id} and ${kids[j].id} overlap`)
-    if (!isContiguous(kids)) errors.push(`children of ${label} ${m.id} are scattered (must touch)`)
+        if (collides(kids[i], kids[j])) errors.push(`${label} pieces overlap`)
+    if (!isContiguous(kids)) errors.push(`${label} pieces are scattered (must touch)`)
     if (!containerFitsKids(kids, { id: m.id, cols: m.cols, rows: m.rows })) {
-      errors.push(`${label} ${m.id} undersizes its children`)
+      errors.push(`${label} is too small for its contents`)
     }
   }
   // Trigger integrity: a trigger opens one overlay by id, and a trigger inside
@@ -800,15 +806,15 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
     const target = overlayTargetOf(n.config)
     if (!target) return
     if (inOverlay) {
-      errors.push(`${where} button ${n.id} inside an overlay cannot open another overlay`)
+      errors.push(`${where} inside an overlay cannot open another overlay`)
       return
     }
-    if (!overlayIds.has(target)) errors.push(`${where} button ${n.id} opens a missing ${overlayKindOf(target)}`)
+    if (!overlayIds.has(target)) errors.push(`${where} opens a missing ${overlayKindOf(target)}`)
   }
-  for (const n of doc.nodes) checkTrigger(n, 'node', false)
+  for (const n of doc.nodes) checkTrigger(n, nameOf(n.type), false)
   for (const m of overlaysOf(doc)) {
     const label = overlayNoun(m.overlayType)
-    for (const k of m.children) checkTrigger(k, `${label} ${m.id} child`, true)
+    for (const k of m.children) checkTrigger(k, `${label} content`, true)
   }
   return { ok: errors.length === 0, errors }
 }

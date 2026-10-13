@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  absoluteOrigin,
   canInsertReason,
   collides,
   conflictIds,
@@ -20,9 +21,8 @@ import {
   type CanvasDoc,
   type PlacedNode,
 } from './doc'
-import { canContain } from '../osb/registry'
+import { OSB_NODE_TYPES, OSB_REGISTRY, canContain } from '../osb/registry'
 import { GRID_COLS } from './grid'
-import { OSB_NODE_TYPES, OSB_REGISTRY } from '../osb/registry'
 
 const root = (
   id: string,
@@ -285,6 +285,28 @@ describe('fungible move: reposition / nest / take-out (no screenshots)', () => {
     expect(nestTargetAt(nodes, { x: 25, y: 5 })).toBeNull()
   })
 
+  it('absoluteOrigin = the node own cell plus its ancestor chain', () => {
+    expect(absoluteOrigin([root('c', 'card', 6, 2, 6, 5)], 'c')).toEqual({ x: 6, y: 2 })
+    const nested = [root('c', 'card', 6, 2, 6, 5), kid('b', 'button', 'c', 1, 3, 4, 1)]
+    expect(absoluteOrigin(nested, 'b')).toEqual({ x: 7, y: 5 })
+    expect(absoluteOrigin([], 'ghost')).toBeNull()
+  })
+
+  it('routes a drop into a container that is NOT at the origin (regression)', () => {
+    // The centre-point router used to read a container's origin as (0,0), so
+    // only containers at the canvas origin could receive a moved node.
+    const nodes = [root('c', 'card', 6, 0, 6, 5), root('dd', 'dropdown', 0, 20, 3, 1)]
+    expect(nestTargetAt(nodes, { x: 7, y: 2 })?.id).toBe('c')
+    expect(resolveDrop(nodes, 'dd', { x: 7, y: 2, cols: 3, rows: 1 })).toEqual({
+      parentId: 'c',
+      rect: { x: 2, y: 2, cols: 3, rows: 1 },
+    })
+    expect(resolveDrop(nodes, 'dd', { x: 0, y: 20, cols: 3, rows: 1 })).toEqual({
+      parentId: null,
+      rect: { x: 0, y: 20, cols: 3, rows: 1 },
+    })
+  })
+
   it('the gate validates unknown parents and nesting under nested nodes', () => {
     expect(canInsertReason([], 'button', { x: 0, y: 0, cols: 4, rows: 1 }, 'ghost')).toBe('depth')
     const doc: CanvasDoc = {
@@ -511,5 +533,26 @@ describe('validateDoc: file-level backstop (no screenshots)', () => {
       nodes: [root('c', 'card', 0, 0, 12, 10), root('t', 'text', 6, 0, 8, 2)],
     }
     expect(validateDoc(overlap).errors.join('|')).toContain('overlap')
+  })
+
+  it('names the component, never a meaningless uuid', () => {
+    const scatteredKids: CanvasDoc = {
+      version: 1,
+      nodes: [
+        root('c', 'card', 0, 0, 12, 10),
+        kid('k1', 'button', 'c', 0, 0, 4, 1),
+        kid('k2', 'button', 'c', 8, 8, 4, 1),
+      ],
+    }
+    const v = validateDoc(scatteredKids)
+    expect(v.ok).toBe(false)
+    expect(v.errors.join('|')).toContain('Card pieces are scattered')
+    expect(v.errors.join('|')).not.toContain('k1')
+
+    const overlap: CanvasDoc = {
+      version: 1,
+      nodes: [root('c', 'card', 0, 0, 12, 10), root('t', 'text', 6, 0, 8, 2)],
+    }
+    expect(validateDoc(overlap).errors.join('|')).toContain('Card and Text overlap')
   })
 })

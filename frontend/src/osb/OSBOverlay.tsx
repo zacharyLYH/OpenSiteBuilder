@@ -38,6 +38,20 @@ export function overlayChildStyle(
 
 export type OverlayKid = { id: string; x: number; y: number; cols: number; rows: number }
 
+/** The one editor-exact body box every overlay shell renders, so Test ==
+ * edit: a fixed-height relative layer the absolutely-positioned kids fill. */
+export function OSBOverlayBodyBox({ height, children }: { height: string; children?: ReactNode }): ReactNode {
+  return (
+    <div style={{ height }} className="relative w-full overflow-hidden">
+      {children}
+    </div>
+  )
+}
+
+/** A non-empty config string, else its fallback — overlay titles are never blank. */
+export const overlayTitle = (value: unknown, fallback: string): string =>
+  typeof value === 'string' && value.length > 0 ? value : fallback
+
 /**
  * THE one surface map for every overlay shell. Cards keep their own (they
  * add radius/shadow/padding axes); popups and drawers share this, so the
@@ -88,9 +102,7 @@ export function OSBOverlayStaticShell({
 }): ReactNode {
   return (
     <div role="dialog" aria-label={title} style={{ width }} className={cn('relative max-w-full', className, shellClass)}>
-      <div style={{ height: bodyHeight }} className="relative w-full overflow-hidden">
-        {children}
-      </div>
+      <OSBOverlayBodyBox height={bodyHeight}>{children}</OSBOverlayBodyBox>
       {showClose && (
         <span className="absolute right-4 top-4 rounded-sm opacity-70" aria-hidden="true">
           ✕

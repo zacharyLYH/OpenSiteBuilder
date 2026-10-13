@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Dialog, DialogContent, DialogTitle } from './OSBDialog'
-import { OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
+import { OSBOverlayBodyBox, OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayTitle, overlayWidthPx } from './OSBOverlay'
 import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface } from './types'
 
@@ -58,12 +58,7 @@ export default function OSBModal({ config, cols = 12, rows = 10, open, onOpenCha
   // cols, height from rows) inside that padding, so Test matches edit while
   // the transplanted dialog contract (outside press, Escape, X) stays whole.
   const shell = overlayChromeShell(c.variant, theme, SCROLL)
-  const title = c.title.length === 0 ? 'Popup' : c.title
-  const body = (
-    <div style={{ height: overlayHeightPx(rows) }} className="relative w-full overflow-hidden">
-      {children}
-    </div>
-  )
+  const title = overlayTitle(c.title, 'Popup')
 
   if (open === undefined) {
     return (
@@ -92,7 +87,7 @@ export default function OSBModal({ config, cols = 12, rows = 10, open, onOpenCha
         showCloseButton={c.showClose}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
-        {body}
+        <OSBOverlayBodyBox height={overlayHeightPx(rows)}>{children}</OSBOverlayBodyBox>
       </DialogContent>
     </Dialog>
   )

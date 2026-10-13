@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
+import { Card, CardTitle } from '../components/ui/card'
 import type { OSBTheme } from '../osb/types'
 import type { DocValidation } from './doc'
 import { HEADER_PX } from './grid'
@@ -15,8 +16,6 @@ export interface PaletteEntry {
 export interface CanvasHeaderProps {
   project: string
   palettes: PaletteEntry[]
-  /** The doc is not one connected patch — warn until it is. */
-  issues: boolean
   dropMsg: string | null
   pushMsg: string
   pushing: boolean
@@ -29,14 +28,6 @@ export interface CanvasHeaderProps {
   onTogglePreview(): void
   /** On-demand check results; null while the panel is closed. */
   validation: DocValidation | null
-  /** Overlay count for the tray button. */
-  overlayCount: number
-  /** Open tray rows (id + kind + raw title); null while the tray is closed. */
-  overlays: { id: string; overlayType: string; title: unknown }[] | null
-  onOpenOverlays(): void
-  onCloseOverlays(): void
-  onEditOverlay(id: string): void
-  onRemoveOverlay(id: string): void
   onEndDrag(): void
   onValidate(): void
   onCloseValidation(): void
@@ -44,8 +35,8 @@ export interface CanvasHeaderProps {
   onPush(): void
 }
 
-/** Shared chrome for the on-demand panels (checks, popups): one card, one
- * header row, one close affordance, so they read as a single system. */
+/** Shared chrome for the on-demand checks panel: one card, one header row,
+ * one close affordance. */
 function FloatingPanel(p: {
   testid: string
   title: string
@@ -54,20 +45,63 @@ function FloatingPanel(p: {
   children: ReactNode
 }) {
   return (
-    <div
+    <Card
       data-testid={p.testid}
-      className="fixed right-3 top-16 z-50 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+      className="fixed right-3 top-16 z-50 w-80 rounded-xl p-4 shadow-xl"
     >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">{p.title}</p>
+        <CardTitle className="text-sm font-semibold">{p.title}</CardTitle>
         <Button type="button" aria-label={p.closeLabel} variant="outline" size="sm" onClick={p.onClose}>
           ✕
         </Button>
       </div>
       {p.children}
-    </div>
+    </Card>
   )
 }
+
+/** Lucide-style icons, inlined like the other builder chrome (no icon dep). */
+function SunIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+    </svg>
+  )
+}
+
+function MoonIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  )
+}
+
+const THEME_OPTIONS: { value: OSBTheme; label: string; Icon: (p: { className?: string }) => ReactNode }[] = [
+  { value: 'light', label: 'Light theme', Icon: SunIcon },
+  { value: 'dark', label: 'Dark theme', Icon: MoonIcon },
+]
 
 /** App bar + the on-demand checks panel. Pure presentation: it renders the
  * messages it is handed and reports intents, nothing else. */
@@ -102,23 +136,31 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
               {entry.label}
             </Button>
           ))}
-          {/* Global appearance: the single light/dark switch for the whole site,
-              not a per-component setting. */}
-          <div role="group" aria-label="Site theme" className="flex gap-0.5 rounded-md bg-slate-100 p-0.5">
-            {(['light', 'dark'] as const).map((t) => (
-              <Button
-                key={t}
-                type="button"
-                data-testid={`theme-${t}`}
-                aria-pressed={p.theme === t}
-                variant={p.theme === t ? 'default' : 'secondary'}
-                size="sm"
-                onClick={() => p.onTheme(t)}
-                className="capitalize"
-              >
-                {t}
-              </Button>
-            ))}
+          {/* Global appearance onward is the action cluster: it hugs the right
+              edge, so the palette stays left and the controls stay reachable. */}
+          <div role="group" aria-label="Site theme" className="ml-auto flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5">
+            {THEME_OPTIONS.map(({ value, label, Icon }) => {
+              const active = p.theme === value
+              return (
+                <Button
+                  key={value}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid={`theme-${value}`}
+                  aria-label={label}
+                  aria-pressed={active}
+                  onClick={() => p.onTheme(value)}
+                  // Icon-only, and inside a segmented pill: strip the outline
+                  // button's border/box so only the active half is raised.
+                  className={`h-7 w-7 rounded-full border-0 p-0 text-slate-400 ${
+                    active ? 'bg-white text-slate-900 shadow-sm hover:bg-white' : 'bg-transparent hover:bg-transparent hover:text-slate-600'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </Button>
+              )
+            })}
           </div>
           <Button
             type="button"
@@ -130,11 +172,6 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
           >
             {p.preview ? 'Show grid' : 'Preview site'}
           </Button>
-          {p.issues && (
-            <span data-testid="doc-warning" className="text-xs text-amber-600">
-              Pieces must touch — drag them together
-            </span>
-          )}
           {p.dropMsg && (
             <span data-testid="drop-message" className="text-xs font-medium text-rose-600">
               {p.dropMsg}
@@ -147,9 +184,6 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
           )}
           <Button variant="outline" size="sm" data-testid="validate" onClick={p.onValidate}>
             Validate
-          </Button>
-          <Button variant="outline" size="sm" data-testid="overlays" onClick={p.onOpenOverlays}>
-            Overlays{p.overlayCount > 0 ? ` (${p.overlayCount})` : ''}
           </Button>
           <Button variant="outline" size="sm" onClick={p.onExit}>
             Exit project
@@ -171,32 +205,6 @@ export default function CanvasHeader(p: CanvasHeaderProps) {
               {p.validation.errors.map((e, i) => (
                 <li key={i} data-testid="validate-issue" className="text-xs text-rose-700">
                   {e}
-                </li>
-              ))}
-            </ul>
-          )}
-        </FloatingPanel>
-      )}
-
-      {p.overlays && (
-        <FloatingPanel testid="overlays-panel" title="Overlays" closeLabel="Close overlays" onClose={p.onCloseOverlays}>
-          {p.overlays.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">No overlays yet — select a button to attach one.</p>
-          ) : (
-            <ul className="mt-2 flex flex-col gap-2">
-              {p.overlays.map((m) => (
-                <li key={m.id} data-testid="overlay-row" data-id={m.id} data-kind={m.overlayType} className="flex items-center justify-between gap-2">
-                  <span className="truncate text-xs text-slate-700">
-                    {typeof m.title === 'string' && m.title.length > 0 ? m.title : m.overlayType === 'modal' ? 'Popup' : 'Panel'}
-                  </span>
-                  <span className="flex gap-1">
-                    <Button type="button" data-testid="overlay-edit" variant="outline" size="sm" onClick={() => p.onEditOverlay(m.id)}>
-                      Edit
-                    </Button>
-                    <Button type="button" data-testid="overlay-remove" variant="outline" size="sm" onClick={() => p.onRemoveOverlay(m.id)}>
-                      Remove
-                    </Button>
-                  </span>
                 </li>
               ))}
             </ul>

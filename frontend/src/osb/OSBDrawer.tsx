@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Sheet, SheetContent, SheetTitle } from './OSBSheet'
-import { OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
+import { OSBOverlayBodyBox, OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayTitle, overlayWidthPx } from './OSBOverlay'
 import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface } from './types'
 
@@ -70,12 +70,7 @@ export default function OSBDrawer({ config, cols = 10, rows = 10, open, onOpenCh
   // the transplanted sheet contract (outside press, Escape, X) stays whole.
   // The sheet base docks full-height; the panel width comes from the shell.
   const shell = overlayChromeShell(c.variant, theme, SCROLL)
-  const title = c.title.length === 0 ? 'Panel' : c.title
-  const body = (
-    <div style={{ height: overlayHeightPx(rows) }} className="relative w-full overflow-hidden">
-      {children}
-    </div>
-  )
+  const title = overlayTitle(c.title, 'Panel')
 
   if (open === undefined) {
     return (
@@ -105,7 +100,7 @@ export default function OSBDrawer({ config, cols = 10, rows = 10, open, onOpenCh
         showCloseButton={c.showClose}
       >
         <SheetTitle className="sr-only">{title}</SheetTitle>
-        {body}
+        <OSBOverlayBodyBox height={overlayHeightPx(rows)}>{children}</OSBOverlayBodyBox>
       </SheetContent>
     </Sheet>
   )

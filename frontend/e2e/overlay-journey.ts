@@ -192,10 +192,10 @@ export function defineOverlaySuite(cfg: OverlaySuiteConfig): void {
     await closeDrawerIfOpen(page)
   })
 
-  test(`${titleWord}: tray lists, edits, and removes overlays`, async ({ page }) => {
+  test(`${titleWord}: the trigger drawer edits and removes its overlay`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 })
-    const traySlug = `${slug}-tray`
-    await openCanvas(page, traySlug)
+    const drawerSlug = `${slug}-tray`
+    await openCanvas(page, drawerSlug)
     const gridEl = page.getByTestId('canvas')
 
     await dropToCell(page, page.getByTestId('palette-button'), gridEl, { x: 0, y: 0 }, { cols: 4, rows: 1 })
@@ -206,29 +206,25 @@ export function defineOverlaySuite(cfg: OverlaySuiteConfig): void {
     await expect(page.getByTestId(`${kind}-editor`)).toHaveCount(0)
     await closeDrawerIfOpen(page)
 
-    // The header tray lists the overlay and reopens it for editing.
-    await page.getByTestId('overlays').click()
-    const panel = page.getByTestId('overlays-panel')
-    await expect(panel).toBeVisible()
-    await expect(panel.getByTestId('overlay-row')).toHaveCount(1)
-    await expect(panel).toHaveScreenshot(`${shotPrefix}-tray.png`)
-    await panel.getByTestId('overlay-edit').click()
+    // Select the trigger: its drawer names the attached shell and reopens it.
+    await page.getByTestId('canvas-node').click()
+    await expect(page.getByTestId(`linked-${noun}-name`)).toContainText(titleBase)
+    await page.getByTestId(`edit-${noun}`).click()
     await expect(page.getByTestId(`${kind}-editor`)).toBeVisible()
     await page.getByTestId(`${kind}-done`).click()
+    await closeDrawerIfOpen(page)
 
-    // Remove unlinks the trigger and empties the tray.
-    await page.getByTestId('overlays').click()
-    await panel.getByTestId('overlay-remove').click()
-    await expect(panel.getByTestId('overlay-row')).toHaveCount(0)
-    await expect(panel).toContainText('No overlays yet')
+    // Delete removes the shell and unlinks the trigger (there is no overlay list).
+    await page.getByTestId('canvas-node').click()
+    await page.getByTestId(`delete-${noun}`).click()
     await page.waitForTimeout(900)
-    const doc = await persistedDoc(page, traySlug)
+    const doc = await persistedDoc(page, drawerSlug)
     expect(doc.overlays ?? []).toHaveLength(0)
     expect(doc.nodes.find((n) => n.type === 'button')?.config).toMatchObject({ targetId: '' })
 
     // Reload: the removal persists (nothing prunes, nothing resurrects).
     await page.reload()
-    const after = await persistedDoc(page, traySlug)
+    const after = await persistedDoc(page, drawerSlug)
     expect(after.overlays ?? []).toHaveLength(0)
   })
 }

@@ -1,6 +1,7 @@
 import { overlayChildStyle } from '../osb/OSBOverlay'
 import { OSB_REGISTRY } from '../osb/registry'
 import type { PlacedNode } from './doc'
+import RemoveControl from './RemoveControl'
 
 export interface PlacedChildLayerProps {
   /** Parent footprint for percent positioning; `id` adds data-parent. */
@@ -78,21 +79,15 @@ export default function PlacedChildLayer(p: PlacedChildLayerProps) {
                   onMouseDown={(e) => p.onResize(e, k)}
                   className="absolute bottom-0 right-0 z-10 h-4 w-4 cursor-se-resize rounded-tl-md border-l border-t border-sky-500 bg-white/90"
                 />
-                <button
-                type="button"
-                data-testid={p.ids.remove}
-                aria-label="Remove element"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  p.onRemove(k.id)
-                }}
-                className="absolute right-0 top-0 z-10 rounded-bl-md bg-white px-1.5 py-0.5 text-[10px] text-slate-600 shadow-sm hover:bg-slate-100"
-              >
-                Remove
-              </button>
-            </>
-          )}
-        </div>
+                <RemoveControl
+                  testid={p.ids.remove}
+                  id={k.id}
+                  onRemove={p.onRemove}
+                  className="absolute right-0 top-0 z-10 h-auto rounded-none rounded-bl-md border-0 bg-white px-1.5 py-0.5 text-[10px] font-normal text-slate-600 shadow-sm hover:bg-slate-100"
+                />
+              </>
+            )}
+          </div>
         )
       })}
     </div>

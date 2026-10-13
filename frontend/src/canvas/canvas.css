@@ -1,10 +1,10 @@
-/* Nebulous base: soft color blooms on near-white. */
+/* Nebulous base: soft color blooms on pure white (no grey wash — the light
+   canvas reads the same white as the published page; dark is slate-950). */
 .canvas-backdrop {
   background:
-    radial-gradient(42rem 30rem at 12% 6%, rgba(129, 140, 248, 0.16), transparent 60%),
-    radial-gradient(36rem 28rem at 88% 16%, rgba(56, 189, 248, 0.16), transparent 60%),
-    radial-gradient(50rem 34rem at 50% 112%, rgba(148, 163, 184, 0.2), transparent 60%),
-    #f8fafc;
+    radial-gradient(42rem 30rem at 12% 6%, rgba(129, 140, 248, 0.14), transparent 60%),
+    radial-gradient(36rem 28rem at 88% 16%, rgba(56, 189, 248, 0.14), transparent 60%),
+    #ffffff;
 }
 
 /* Dot guides: real DOM (gradient dots don't paint reliably here). One cell

@@ -22,6 +22,19 @@ Each component declares `XxxConfig` + `XXX_DEFAULTS`, takes
 `config?: Partial<XxxConfig>`, merges via `resolveConfig`. Missing key =>
 default. To add a knob: interface + defaults + render. Nothing else.
 
+### Shared spacing: padding, never margin
+
+`padding` is a **container** concern: it is the space between the container's
+interior edge and the items inside, so only the card offers it — atoms stay
+flush (the box is the component). The options (`none` / `compact` / `cozy` /
+`spacious` — `OSB_PAD_OPTIONS` in `osb/types`) drive two class maps so both
+consumers agree: `CARD_PADDING` for flow children (shadcn's `CardContent`
+rhythm, published) and `OSB_CARD_INSET` for the canvas child layer, exposed to
+the editor through the registry entry's `contentPad`. **Margin is deliberately
+not a knob** — it would push the box off the grid and break the coordinate
+system. The box is the component, so padding only ever shifts content *inside*
+it.
+
 ### Single source of truth (canvas == engine == publish)
 
 There is no generated code. The visual builder renders these components through

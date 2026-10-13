@@ -137,12 +137,11 @@ test('nesting: pattern card, text neighbor, nested button, take-out, invalid', a
   expect((await persistedDoc(page, 'e2e-nesting')).nodes).toHaveLength(before.nodes.length)
   await closeDrawerIfOpen(page)
 
-  // Scattered root drops land like legos now (no touch gate); the canvas
-  // warns and Validate pins the touch issue.
+  // Scattered root drops land like legos now (no touch gate); Validate pins
+  // the touch issue (the header no longer warns inline).
   await dropToCell(page, page.getByTestId('palette-button'), grid, { x: 0, y: 20 }, { cols: 3, rows: 1 })
   await page.waitForTimeout(900)
   expect((await persistedDoc(page, 'e2e-nesting')).nodes).toHaveLength(before.nodes.length + 1)
-  await expect(page.getByTestId('doc-warning')).toBeVisible()
   await closeDrawerIfOpen(page)
   await page.getByTestId('validate').click()
   await expect(page.getByTestId('validate-panel')).toBeVisible()

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { cn } from '../lib/utils'
 import { resolveConfig, type OSBField } from './types'
 
 export type OSBImageConfig = {
@@ -47,7 +46,7 @@ export default function OSBImage({ config }: OSBImageProps) {
       role="img"
       aria-label="Image placeholder"
       data-testid="osb-image-fallback"
-      className={cn('h-full w-full', 'bg-gradient-to-br from-slate-300 to-slate-400')}
+      className="h-full w-full bg-gradient-to-br from-slate-300 to-slate-400"
     />
   )
 }
