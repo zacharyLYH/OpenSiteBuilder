@@ -10,8 +10,7 @@ services:
       - backend
 
   frontend:
-    # Root context: the publish payload ships template/package.json (+ lock) as
-    # raw text, so the image needs both frontend/ and template/.
+    # Root context so Dockerfile COPY paths stay root-relative.
     build:
       context: .
       dockerfile: frontend/Dockerfile

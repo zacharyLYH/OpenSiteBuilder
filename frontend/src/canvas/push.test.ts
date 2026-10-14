@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { pushDoc, siteJson, siteObject } from './push'
+import { publishedPackageJson, publishedPackageLock, pushDoc, siteJson, siteObject } from './push'
 import { validateSite } from '../site/validate'
 import type { CanvasDoc } from './doc'
+import frontendPkg from '../../package.json'
+import frontendLockSrc from '../../package-lock.json?raw'
 
 const DOC: CanvasDoc = {
   version: 1,
@@ -38,6 +40,27 @@ function fileContent(files: { path: string; content: string }[], path: string): 
   if (!found) throw new Error(`missing file ${path}`)
   return found.content
 }
+
+describe('published build environment (single source: frontend/package.json)', () => {
+  it('keeps shell identity with vite-only scripts and frontend deps verbatim', () => {
+    const pkg = JSON.parse(publishedPackageJson()) as {
+      name: string
+      scripts: Record<string, string>
+      dependencies: unknown
+      devDependencies: unknown
+    }
+    expect(pkg.name).toBe('osb-site')
+    // No tsc/vitest/playwright scripts: the shell has no tsconfig or tests.
+    expect(pkg.scripts).toEqual({ dev: 'vite', build: 'vite build', preview: 'vite preview' })
+    expect(pkg.dependencies).toEqual(frontendPkg.dependencies)
+    expect(pkg.devDependencies).toEqual(frontendPkg.devDependencies)
+  })
+
+  it('ships the frontend lockfile verbatim so `npm ci` stays in sync', () => {
+    expect(publishedPackageLock()).toBe(frontendLockSrc)
+    expect(publishedPackageLock()).toContain('lockfileVersion')
+  })
+})
 
 describe('pushDoc (codegen v2: manifest + runtime, no generated JSX)', () => {
   it('posts site.json + the static skeleton + the runtime to the push API', async () => {
@@ -88,8 +111,18 @@ describe('pushDoc (codegen v2: manifest + runtime, no generated JSX)', () => {
 
     // The build environment ships too, so a component that adds a dependency
     // still installs in a repo created earlier (package.json + lock together).
-    expect(fileContent(payload.files, 'package.json')).toContain('osb-template')
-    expect(fileContent(payload.files, 'package-lock.json')).toContain('lockfileVersion')
+    // Both derive from the frontend's own manifest — no manual template sync.
+    const publishedPkg = JSON.parse(fileContent(payload.files, 'package.json')) as {
+      name: string
+      scripts: Record<string, string>
+      dependencies: Record<string, string>
+      devDependencies: Record<string, string>
+    }
+    expect(publishedPkg.name).toBe('osb-site')
+    expect(publishedPkg.scripts).toEqual({ dev: 'vite', build: 'vite build', preview: 'vite preview' })
+    expect(publishedPkg.dependencies).toEqual(frontendPkg.dependencies)
+    expect(publishedPkg.devDependencies).toEqual(frontendPkg.devDependencies)
+    expect(fileContent(payload.files, 'package-lock.json')).toBe(frontendLockSrc)
 
     // Exactly the expected set — no strays, nothing missing.
     const expected = [

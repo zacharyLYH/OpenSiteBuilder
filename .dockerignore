@@ -1,4 +1,4 @@
-# The frontend image builds from the REPO ROOT so it can also read template/.
+# The frontend image builds from the REPO ROOT so COPY paths stay root-relative.
 # Keep the context to just the sources each stage copies.
 **/node_modules
 **/dist

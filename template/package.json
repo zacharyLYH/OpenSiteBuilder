@@ -1,28 +1,23 @@
 {
-  "name": "osb-template",
-  "private": true,
+  "name": "osb-site",
   "version": "0.0.0",
   "type": "module",
+  "private": true,
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "^1.2.0",
-    "@radix-ui/react-dropdown-menu": "^2.1.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.15",
+    "tailwindcss-animate": "^1.0.7",
     "vite": "^6.0.0"
   }
 }

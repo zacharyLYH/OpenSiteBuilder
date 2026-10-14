@@ -6,12 +6,49 @@ import osbTypesSrc from '../osb/types.ts?raw'
 import registrySrc from '../osb/registry.tsx?raw'
 import siteTypesSrc from '../site/types.ts?raw'
 import cnSrc from '../lib/utils.ts?raw'
-// The published shell's build environment. Shipped on every publish so a
-// component that adds a dependency keeps working in a repo created earlier
-// (docs/codegen-v2.md, "Dependency Merging"). `npm ci` needs package.json and
-// its lock together, so the two always travel as a pair.
-import templatePkgSrc from '../../../template/package.json?raw'
-import templateLockSrc from '../../../template/package-lock.json?raw'
+// The published shell's build environment. Derived from the frontend's own
+// package.json at build time — the single source of truth — so a component
+// that adds a dependency keeps working in a repo created earlier
+// (docs/codegen-v2.md, "Dependency Merging") with zero manual sync. Only the
+// identity (name) and the scripts are rewritten for the published repo: the
+// frontend's build script runs `tsc` against a tsconfig the shell doesn't
+// have, so the shell gets plain `vite` scripts. `dependencies` and
+// `devDependencies` ship verbatim — that keeps them in sync with the lock
+// below (`npm ci` requires the two to agree), at the cost of installing
+// builder-only tooling (eslint, vitest, playwright) that never ships to
+// browsers. `npm ci` needs package.json and its lock together, so the two
+// always travel as a pair.
+import frontendPkgSrc from '../../package.json?raw'
+import frontendLockSrc from '../../package-lock.json?raw'
+
+/**
+ * The published repo's package.json: the frontend's own dependency sets with
+ * the shell's identity and vite-only scripts. Deps stay verbatim so the
+ * frontend lock below still matches (`npm ci` rejects drift between the two).
+ */
+export function publishedPackageJson(): string {
+  const pkg = JSON.parse(frontendPkgSrc) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+  return (
+    JSON.stringify(
+      {
+        name: 'osb-site',
+        version: '0.0.0',
+        type: 'module',
+        private: true,
+        scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' },
+        dependencies: pkg.dependencies ?? {},
+        devDependencies: pkg.devDependencies ?? {},
+      },
+      null,
+      2,
+    ) + '\n'
+  )
+}
+
+/** The published repo's lockfile: the frontend's own, matching the deps above. */
+export function publishedPackageLock(): string {
+  return frontendLockSrc
+}
 
 export type PushResult = { ok: true; commit: string; url: string } | { ok: false; error: string }
 
@@ -44,8 +81,8 @@ const RUNTIME_FILES = [
   { path: 'src/site/types.ts', content: siteTypesSrc },
   { path: 'src/lib/utils.ts', content: cnSrc },
   // Build environment (dependencies) — see the import note above.
-  { path: 'package.json', content: templatePkgSrc },
-  { path: 'package-lock.json', content: templateLockSrc },
+  { path: 'package.json', content: publishedPackageJson() },
+  { path: 'package-lock.json', content: publishedPackageLock() },
 ]
 
 /**

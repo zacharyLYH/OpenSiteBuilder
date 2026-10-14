@@ -1,13 +1,9 @@
-# Build context is the REPO ROOT (see docker-compose.yml), so every COPY path
-# is root-relative.
+# Build context is the REPO ROOT (see docker-compose.yml).
 FROM node:26.5-alpine AS build
 WORKDIR /repo/frontend
 COPY frontend/package.json ./
 RUN npm install
 COPY frontend/ ./
-# The publish payload ships template/package.json + lock as raw text; place the
-# template beside frontend/ at the same relative depth the import expects.
-COPY template/ /repo/template/
 RUN npm run build
 
 FROM nginx:alpine

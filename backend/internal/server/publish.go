@@ -74,6 +74,12 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 // not the site's page count.
 const maxPublishFiles = 64
 
+// maxPublishFileBytes caps one published file. Publish ships the builder
+// frontend's own package-lock.json verbatim (single source of truth for user
+// repos — see publishedPackageJson in frontend/src/canvas/push.ts), so the
+// ceiling must fit that lockfile with headroom as frontend deps grow.
+const maxPublishFileBytes = 512 * 1024
+
 // checkFiles enforces count, allowlist, duplicates, and size caps.
 func checkFiles(files []github.FileOp) error {
 	if len(files) == 0 || len(files) > maxPublishFiles {
@@ -88,7 +94,7 @@ func checkFiles(files []github.FileOp) error {
 			return errors.New("duplicate path: " + f.Path)
 		}
 		seen[f.Path] = true
-		if len(f.Content) > 200*1024 {
+		if len(f.Content) > maxPublishFileBytes {
 			return errors.New("file too large: " + f.Path)
 		}
 	}
