@@ -17,6 +17,7 @@ and later files only build on earlier ones.
 | 8 | `CanvasHeader.tsx` | The app bar, the global theme + preview controls, and the checks panel. | "where do the buttons/messages live?" |
 | 9 | `ConfigDrawer.tsx` | Non-spatial props (text, style, link). | "how does the settings panel work?" |
 | 10 | `PlacedChildLayer.tsx` / `childResize.ts` | The shared child surface: percent boxes, selection chrome, and the one SE-resize gesture. | "how do card children and popup children render/drag/resize?" |
+| 10b | (`../osb/slots.ts`) | The slide bands a **slotted** container (the carousel) divides its children into; `CanvasStage` draws one band per slide. | "how do carousel slides render/drop?" |
 | 11 | `push.ts` | Publishing: doc → `site.json` manifest + the OSB runtime (no generated JSX). | "what actually ships to GitHub?" |
 | 12 | `canvas.css` | Drag visuals. | "why is that border blue/red?" |
 
@@ -75,6 +76,13 @@ Three consequences worth remembering:
 child inside a parent": the canvas container body and the popup editor render
 the same markup and share the same resize gesture, differing only in the
 testid vocabulary they pass in.
+
+A **slotted** container (the carousel) renders one `PlacedChildLayer` per
+slide band, each measured against its own band (`{ cols: bandCols, rows }`) — 
+so dropping, dragging and resizing inside a slide are the same code as inside a
+card, just scoped to the band. Which slide a child belongs to is decided by
+where it sits (the `osb/slots.ts` math + `seatRect` in `doc.ts`), so dragging an
+atom sideways carries it into the next slide.
 
 ## Where things are written down
 

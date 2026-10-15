@@ -64,9 +64,11 @@ export function validateSite(doc: unknown): SiteValidation {
     else seen.add(id)
   }
 
-  /** Menu rows (dropdown options, …) nest at most MENU_MAX_DEPTH deep — a
-   * submenu of a submenu is a hand-edited doc, not a builder one. */
-  function checkItems(rows: unknown, path: string, depth = 1): void {
+  /** Collection rows: string keys only, and (menu rows) at most MENU_MAX_DEPTH
+   * deep — a submenu of a submenu is a hand-edited doc, not a builder one.
+   * The keys and the nesting permission come from the field itself, so a new
+   * collection shape (marquee cards, dropdown options) needs no code here. */
+  function checkItems(rows: unknown, path: string, keys: string[], nested: boolean, depth = 1): void {
     if (!Array.isArray(rows)) {
       errors.push(`${path} must be an array`)
       return
@@ -77,17 +79,17 @@ export function validateSite(doc: unknown): SiteValidation {
         continue
       }
       const row = r as Record<string, unknown>
-      for (const key of ['label', 'link'] as const) {
+      for (const key of keys) {
         if (row[key] !== undefined && typeof row[key] !== 'string') {
           errors.push(`${path}[${i}].${key} must be a string when present`)
         }
       }
-      if (row['children'] === undefined) continue
+      if (!nested || row['children'] === undefined) continue
       if (depth >= MENU_MAX_DEPTH) {
         errors.push(`${path}[${i}] nests too deep`)
         continue
       }
-      checkItems(row['children'], `${path}[${i}].children`, depth + 1)
+      checkItems(row['children'], `${path}[${i}].children`, keys, nested, depth + 1)
     }
   }
 
@@ -96,7 +98,12 @@ export function validateSite(doc: unknown): SiteValidation {
   function checkConfigItems(type: string, config: Record<string, unknown>, path: string): void {
     for (const f of OSB_REGISTRY[type as OSBNodeType].fields) {
       if (f.kind === 'items' && config[f.key] !== undefined) {
-        checkItems(config[f.key], `${path}.config.${f.key}`)
+        checkItems(
+          config[f.key],
+          `${path}.config.${f.key}`,
+          f.itemFields.map((k) => k.key),
+          f.subItems === true,
+        )
       }
     }
   }
@@ -118,6 +125,14 @@ export function validateSite(doc: unknown): SiteValidation {
       errors.push(`${path}.config must be an object when present`)
     } else if (typeof config === 'object' && config !== null) {
       checkConfigItems(type, config as Record<string, unknown>, path)
+    }
+    // Cell boxes and slides travel as whole numbers when present: an overlay
+    // shell, a carousel, and the children of either keep their footprint.
+    for (const key of ['x', 'y', 'cols', 'rows', 'slot'] as const) {
+      const v = node[key]
+      if (v !== undefined && !(typeof v === 'number' && Number.isInteger(v) && v >= 0)) {
+        errors.push(`${path}.${key} must be a whole number when present`)
+      }
     }
     const kids = node.children
     if (kids === undefined) {

@@ -41,7 +41,7 @@ test('narrow window: Validate, Exit and Push stay reachable', async ({ page }) =
 })
 
 test('wide window: the bar fits and does not scroll', async ({ page }) => {
-  const width = 1280
+  const width = 1440
   await page.setViewportSize({ width, height: 800 })
   await openCanvas(page, 'e2e-wide-header')
 

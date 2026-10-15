@@ -1,7 +1,33 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import OSBRuntime from './OSBRuntime'
 import type { SiteManifest, SiteNode } from '../site/types'
+
+/** A slotted container's engine path runs through Embla, which jsdom cannot
+ * measure (no matchMedia/ResizeObserver/IntersectionObserver). Shimmed here so
+ * the published carousel mounts exactly as it does in a browser. */
+beforeAll(() => {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+  window.IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof window.IntersectionObserver
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof window.ResizeObserver
+})
 
 /** A manifest with one of everything: a leaf, a container + child, a trigger,
  * and the overlay it opens. */
@@ -44,6 +70,31 @@ describe('OSBRuntime (the engine)', () => {
     expect(screen.getByText('Hello runtime')).toBeTruthy()
     // A container renders its children (recursion is the whole engine).
     expect(screen.getByText('Inside card')).toBeTruthy()
+  })
+
+  it('lays a slotted container out as slides, with each child in its own slide', () => {
+    const m = manifest()
+    m.pages[0].nodes.push({
+      id: 'car',
+      type: 'carousel',
+      config: { items: 2 },
+      cols: 12,
+      rows: 6,
+      children: [
+        { id: 'c1', type: 'text', config: { text: 'Slide one' }, x: 0, y: 1, cols: 3, rows: 1, slot: 0 },
+        { id: 'c2', type: 'text', config: { text: 'Slide two' }, x: 6, y: 1, cols: 3, rows: 1, slot: 1 },
+      ],
+    })
+    render(<OSBRuntime manifest={m} />)
+    const slides = screen.getAllByTestId('osb-carousel-slide')
+    expect(slides).toHaveLength(2)
+    expect(slides[0].textContent).toContain('Slide one')
+    expect(slides[1].textContent).toContain('Slide two')
+    // Both kids start at their own slide's left edge (2 slides over 12 cells =
+    // 6-cell bands), so each slide's layout is slide-local.
+    for (const slide of slides) {
+      expect((slide.firstElementChild as HTMLElement).style.left).toBe('0%')
+    }
   })
 
   it('applies the global site theme, not a per-node one', () => {

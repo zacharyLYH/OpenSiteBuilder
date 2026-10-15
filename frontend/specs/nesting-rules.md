@@ -11,18 +11,28 @@ with older code, comments, or docs, this file wins.
   the canvas.
 - **Container** — an empty canvas with chrome only (background, padding,
   radius, shadow). No intrinsic content. The only containers are the
-  **page root** and **card**. There is no `section` type (see §8).
+  **page root**, **card**, and **carousel**. There is no `section` type (see
+  §8).
+- **Slotted container** — a container whose child space is divided into
+  **slides**: equal column bands, one per slide, declared by the registry entry
+  (`slots`, only the carousel has it today) and computed in `osb/slots.ts`.
+  Several atoms can live in one slide, and a child belongs to the slide its
+  centre falls in (its stored `slot` is that same number written down). This is
+  NOT container-in-container: the slide is a *region of the parent's own
+  coordinate space*, so the depth rule (§1: root > container > atom) is
+  untouched.
 - **Collection-backed** — inspector-edited data with no canvas children
   (marquee items, accordion rows, dropdown options). The component itself is
   an atom; its items live in config, never as nodes. Unchanged.
 - **Pattern** — a palette recommendation, not a node type: a factory that
   inserts a container pre-filled with ordinary atoms (e.g. "Card" = card +
-  title text + body text + button). After insert, everything is regular
-  nodes. The palette holds atoms plus patterns; a bare empty card is never
-  a starting point (it is what remains after children are deleted).
+  title text + body text + button, "Carousel" = carousel + image + text).
+  After insert, everything is regular nodes. The palette holds atoms plus
+  patterns; a bare empty card is never a starting point (it is what remains
+  after children are deleted).
 
 Depth is at most root > container > atom. Containers never go inside
-containers. The root holds cards and loose atoms directly.
+containers. The root holds cards, carousels, and loose atoms directly.
 
 ## 2. Sizing: the box is the component
 
@@ -36,6 +46,13 @@ size. There is no independent "visual size" vs "layout size".
 - A container's floor is its children's bounding box plus padding.
   Shrinking under it is rejected. Growing over a sibling is an overlap
   and is rejected (no absorb).
+- A slotted container's floor is the **widest slide times the slide count**
+  plus padding: every slide gets a whole band of its own, which is what lets
+  the drawer add a slide. Bands are an even split of the container's width
+  (`floor(cols / slides)`), and the leftover columns stay empty at the right
+  edge. Changing the slide count re-seats the children in their slides and
+  grows the shell to its floor; a count its contents cannot live in is refused
+  with words.
 
 ## 3. Placeability: the only reasons a drop is rejected
 
@@ -48,7 +65,10 @@ No per-component branches. A placement is rejected iff any holds:
   (menu items may nest one submenu level as *data*, capped by `MENU_MAX_DEPTH`
   and enforced by `validateSite`).
 - **R2 CONTAINMENT** — the full child rect sits inside the parent inner
-  rect (root: within canvas columns). Sticking out is rejected.
+  rect (root: within canvas columns). Sticking out is rejected. Inside a
+  slotted container, a child must sit inside **one slide's band**: a rect
+  reaching across the gap between two slides is rejected (the canvas seats the
+  drop in the band under the pointer, so this is the backstop, not the UX).
 - **R3 EXCLUSIVITY** — siblings never overlap. Touching edges is fine.
 - **R4 INTEGRITY** — integer coords, ≥ 1x1, within the type's min/max
   footprint. The box is the component: no zero-size or off-grid rects.
@@ -78,6 +98,11 @@ contact does not count. Zero or one node is vacuously valid. Validate
 lists every violation (touch, overlap, overflow, undersize); a clean doc
 reports all checks pass.
 
+Inside a slotted container the sibling set is judged **slide by slide**:
+slides sit side by side and never touch each other, so a carousel with one
+atom per slide is a clean doc, while two atoms in the *same* slide still
+have to touch.
+
 Rationale: real sites are dense contiguous blocks; sparse scattered
 layouts are almost always misdrops. Overlap is rejected at placement by
 §3; drift is reported here.
@@ -106,7 +131,11 @@ layouts are almost always misdrops. Overlap is rejected at placement by
 - **Sidebar** owns non-spatial props only: text content, styling
   (variant, theme, shadow, alignment), links, image sources. It never
   creates, moves, resizes, or deletes nodes, and never does spatial
-  editing.
+  editing. The ONE exception is a slotted container's own shape: changing
+  the slide count re-seats the existing children in their slides and may grow
+  the shell to its floor (the setting defines the child space, so it cannot be
+  applied without touching it). Everything a user can move is still moved on
+  the canvas.
 
 ## 7. Adding a component
 
@@ -116,8 +145,11 @@ layouts are almost always misdrops. Overlap is rejected at placement by
    nodes — no new engine concepts.
 3. Empty-state hint for containers (canvas only).
 4. What the publisher already knows how to render.
-5. New props reuse existing sidebar field types (text, select, theme)
-   — never a custom spatial editor.
+5. New props reuse existing sidebar field types (text, select, boolean,
+   items, number) — never a custom spatial editor.
+6. Needs several atoms per child region (like the carousel)? Declare `slots`
+   in the registry entry and let `osb/slots.ts` own the bands. Never invent a
+   second nesting level: slide regions are part of the parent's own space.
 
 If it cannot be described with this vocabulary, extend the vocabulary
 once for everyone — never branch one component.

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { publishedPackageJson, publishedPackageLock, pushDoc, siteJson, siteObject } from './push'
 import { validateSite } from '../site/validate'
 import type { CanvasDoc } from './doc'
+import type { SiteNode } from '../site/types'
 import frontendPkg from '../../package.json'
 import frontendLockSrc from '../../package-lock.json?raw'
 
@@ -153,6 +154,25 @@ describe('pushDoc (codegen v2: manifest + runtime, no generated JSX)', () => {
     }
     const obj = siteObject(doc, 'flow') as { pages: { nodes: { id: string }[] }[] }
     expect(obj.pages[0].nodes.map((n) => n.id)).toEqual(['left', 'right', 'bottom'])
+  })
+
+  it('publishes a carousel as slides: its footprint and its children’s cells + slide', () => {
+    const doc: CanvasDoc = {
+      version: 1,
+      nodes: [
+        { id: 'car', type: 'carousel', config: { items: 2 }, parentId: null, x: 0, y: 0, cols: 12, rows: 6 },
+        { id: 'c1', type: 'text', config: { text: 'One' }, parentId: 'car', x: 0, y: 1, cols: 3, rows: 1, slot: 0 },
+        { id: 'c2', type: 'text', config: { text: 'Two' }, parentId: 'car', x: 6, y: 1, cols: 3, rows: 1, slot: 1 },
+      ],
+    }
+    const obj = siteObject(doc, 'slides') as { pages: { nodes: SiteNode[] }[] }
+    const shell = obj.pages[0].nodes[0]
+    // The slotted shell travels with its own grid, so the engine can divide it
+    // into the same bands the canvas draws.
+    expect(shell).toMatchObject({ id: 'car', cols: 12, rows: 6 })
+    expect(shell.children?.[1]).toMatchObject({ id: 'c2', x: 6, y: 1, cols: 3, rows: 1, slot: 1 })
+    // ...and the round trip validates: it is a manifest our own validator owns.
+    expect(validateSite(obj).ok).toBe(true)
   })
 
   it('reads site.meta from the document, defaulting the title to the slug', () => {

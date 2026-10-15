@@ -1,6 +1,7 @@
 import { publishFiles, strField } from '../api'
 import { validateSite } from '../site/validate'
 import { SITE_SCHEMA_VERSION, type SiteNode } from '../site/types'
+import { isSlottedType } from '../osb/registry'
 import { childrenOf, overlaysOf, themeOf, type CanvasDoc, type PlacedNode } from './doc'
 import osbTypesSrc from '../osb/types.ts?raw'
 import registrySrc from '../osb/registry.tsx?raw'
@@ -102,8 +103,27 @@ export default function App() {
 /** Cycle breaker for a corrupt doc; the nesting gate already caps real depth. */
 const MAX_NEST_DEPTH = 3
 
-/** A placed node as a manifest node — never coordinates (flow layout). */
-const siteNode = (n: PlacedNode): SiteNode => ({ id: n.id, type: n.type, config: n.config })
+/** A placed node as a manifest node. Positions are dropped (flow layout) —
+ * except for a SLOTTED container (the carousel), whose own footprint travels
+ * with it so the engine can divide its child space into the same slide bands
+ * the canvas draws. */
+const siteNode = (n: PlacedNode): SiteNode => ({
+  id: n.id,
+  type: n.type,
+  config: n.config,
+  ...(isSlottedType(n.type) ? { cols: n.cols, rows: n.rows } : {}),
+})
+
+/** A child of a slotted container keeps its cell box and its slide — a fixed
+ * grid mini canvas, the same way an overlay's children do. */
+const slotKid = (n: PlacedNode): SiteNode => ({
+  ...siteNode(n),
+  x: n.x,
+  y: n.y,
+  cols: n.cols,
+  rows: n.rows,
+  slot: n.slot ?? 0,
+})
 
 /** An overlay child keeps its cell footprint (percent boxes in the shell). */
 const siteModalKid = (k: PlacedNode): SiteNode => ({ ...siteNode(k), x: k.x, y: k.y, cols: k.cols, rows: k.rows })
@@ -120,10 +140,12 @@ const siteModalKid = (k: PlacedNode): SiteNode => ({ ...siteNode(k), x: k.x, y: 
 export function siteObject(doc: CanvasDoc, slug: string): unknown {
   const kidsOf = (id: string, ordered: boolean, depth = 0): SiteNode[] => {
     if (depth > MAX_NEST_DEPTH) return []
+    const parent = doc.nodes.find((n) => n.id === id)
+    const slotted = parent ? isSlottedType(parent.type) : false
     const kids = childrenOf(doc.nodes, id, ordered).filter((k) => k.id !== id)
     return kids.map((n) => {
       const grandkids = kidsOf(n.id, true, depth + 1)
-      return { ...siteNode(n), ...(grandkids.length > 0 ? { children: grandkids } : {}) }
+      return { ...(slotted ? slotKid(n) : siteNode(n)), ...(grandkids.length > 0 ? { children: grandkids } : {}) }
     })
   }
   const overlays: SiteNode[] = overlaysOf(doc).map((m) => ({

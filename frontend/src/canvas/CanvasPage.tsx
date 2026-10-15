@@ -13,6 +13,7 @@ import ConfigDrawer from './ConfigDrawer'
 import OverlayEditor, { OverlayTestPreview } from './OverlayEditor'
 import { movedRoots, overContainer, planAt, planRoute, type DragPlan } from './gesture'
 import {
+  applyNodeConfig,
   canPlaceOverlayChild,
   createOverlay as addOverlay,
   eventCell,
@@ -28,6 +29,7 @@ import {
   removeOverlay,
   removeOverlayChild,
   resizeOverlay,
+  seatSpan,
   updateNodeConfig,
   updateOverlayChildConfig,
   updateOverlayConfig,
@@ -35,6 +37,7 @@ import {
   type DocResult,
   type DocValidation,
   type DragPayload,
+  type SlideWindow,
   type OverlayDoc,
   type OverlayType,
   type PlacedNode,
@@ -75,6 +78,10 @@ export default function CanvasPage() {
   const [editingOverlayId, setEditingOverlayId] = useState<string | null>(null)
   const [testingOverlayId, setTestingOverlayId] = useState<string | null>(null)
   const [push, setPush] = useState<PushStatus | null>(null)
+  // Which slide each slotted container is showing. The editor's own carousel
+  // reports it, and every landing rule reads it — so a drop or a move lands on
+  // a slide the user can see, never on a hidden one.
+  const [slideOf, setSlideOf] = useState<Record<string, number>>({})
   // In flight is a state of the push itself, not a parallel flag.
   const pushing = push?.kind === 'busy'
   // Rejected gestures fail silently otherwise.
@@ -132,6 +139,10 @@ export default function CanvasPage() {
     applyResult(insertNode(d, { id, type: drag.type, config: {}, parentId: plan.parentId, ...plan.rect }), id)
   }
 
+  /** The editor's carousel moved to another slide: the drop zones follow. */
+  const onSlideChange = (id: string, index: number) =>
+    setSlideOf((cur) => (cur[id] === index ? cur : { ...cur, [id]: index }))
+
   /** A gesture ended: persist only what the user actually moved, then resync. */
   const commit = (next: Layout, active?: LayoutItem | null) => {
     clearDrag()
@@ -147,7 +158,7 @@ export default function CanvasPage() {
       if (!cur || cur.parentId !== null) continue
       if (cur.x === l.x && cur.y === l.y && cur.cols === l.w && cur.rows === l.h) continue
       // Fungible move: nest when the centre lands in an accepting container.
-      const plan = planRoute(nodes, { kind: 'move', id: l.i }, { x: l.x, y: l.y, cols: l.w, rows: l.h })
+      const plan = planRoute(nodes, { kind: 'move', id: l.i }, { x: l.x, y: l.y, cols: l.w, rows: l.h }, slideOf)
       if (!plan) continue
       const r = moveNode({ ...d, nodes }, l.i, plan.rect, plan.parentId)
       if (r.ok) nodes = r.doc.nodes
@@ -166,7 +177,7 @@ export default function CanvasPage() {
     if (!moved) return
     const cur = nodes.find((n) => n.id === moved.i)
     if (!cur) return
-    const plan = planRoute(nodes, { kind: 'move', id: cur.id }, { x: moved.x, y: moved.y, cols: moved.w, rows: moved.h })
+    const plan = planRoute(nodes, { kind: 'move', id: cur.id }, { x: moved.x, y: moved.y, cols: moved.w, rows: moved.h }, slideOf)
     patch({ check: { id: cur.id, ok: plan?.ok ?? false }, conflicts: plan?.conflicts ?? [] })
   }
 
@@ -176,7 +187,7 @@ export default function CanvasPage() {
     // child drop would move twice and strand its placeholder.
     if (overContainer(e.target)) return
     const cur = currentDrag()
-    const plan = item && cur ? planRoute(doc.nodes, cur.drag, { x: item.x, y: item.y, ...cur.span }) : null
+    const plan = item && cur ? planRoute(doc.nodes, cur.drag, { x: item.x, y: item.y, ...cur.span }, slideOf) : null
     clearDrag()
     if (cur && plan) land(cur.drag, plan)
   }
@@ -193,40 +204,55 @@ export default function CanvasPage() {
     if (overContainer(e.target)) return false
     const cur = currentDrag()
     if (!cur) return false
-    const plan = planRoute(doc.nodes, cur.drag, centeredCell(e.clientX, e.clientY, box, cur.span, cell))
+    const plan = planRoute(doc.nodes, cur.drag, centeredCell(e.clientX, e.clientY, box, cur.span, cell), slideOf)
     if (!plan) return false
-    // The placeholder always shows the footprint; red = forbidden.
+    // The placeholder always shows the footprint; red = forbidden. The
+    // container path owns feedback from here on, so it also clears this flag.
     patch({ conflicts: plan.conflicts, ghost: null, forbidden: !plan.ok })
     return { w: cur.span.cols, h: cur.span.rows }
   }
 
-  /** The live drag's verdict over a container body — hover and drop share it. */
-  const planOnContainer = (e: React.DragEvent, parent: PlacedNode): DragPlan | null => {
+  /** The live drag's verdict over a container body — hover and drop share it.
+   * `window` is the page of slides on screen, so a carousel drop lands on the
+   * slide the user can see. A palette item is scaled to the space it lands in
+   * (`seatSpan`): inside a carousel, one slide is the drop zone, so an image or
+   * video lands at its own size inside that slide instead of swallowing it.
+   */
+  const planOnContainer = (e: React.DragEvent, parent: PlacedNode, window: SlideWindow): DragPlan | null => {
     const cur = currentDrag()
     if (!cur) return null
     const box = e.currentTarget.getBoundingClientRect()
-    const rect = { ...eventCell(e.clientX, e.clientY, box, parent, cur.span), ...cur.span }
+    const span = cur.drag.kind === 'palette' ? seatSpan(parent, cur.drag.type, cur.span) : cur.span
+    const rect = { ...eventCell(e.clientX, e.clientY, box, parent, span, window), ...span }
     return planAt(doc.nodes, cur.drag, rect, parent.id)
   }
 
   /** Live verdict while a drag hovers a container: ghost + conflicting siblings. */
-  const hoverContainer = (e: React.DragEvent, parent: PlacedNode) => {
+  const hoverContainer = (e: React.DragEvent, parent: PlacedNode, window: SlideWindow) => {
     const cur = currentDrag()
     if (cur) e.preventDefault()
-    const plan = planOnContainer(e, parent)
+    const plan = planOnContainer(e, parent, window)
     if (!cur || !plan) return void patch({ ghost: null })
-    // Shells never nest, so there is no landing to preview: the container
-    // itself turns red instead of drawing a ghost.
-    if (cur.drag.kind === 'pattern') return void patch({ ghost: null, conflicts: plan.conflicts })
-    patch({ conflicts: plan.conflicts, ghost: { parentId: parent.id, ...plan.rect, ok: plan.ok } })
+    // The container owns the feedback now, so the root-area verdict (and its
+    // red placeholder) stands down: one ghost, one red, ever.
+    if (cur.drag.kind === 'pattern') return void patch({ ghost: null, conflicts: plan.conflicts, forbidden: false })
+    patch({ conflicts: plan.conflicts, ghost: { parentId: parent.id, ...plan.rect, ok: plan.ok }, forbidden: false })
+  }
+
+  /** A drag left a container body (to the root, or off the canvas): the hover
+   * verdict belongs to the container, so it goes with it — otherwise the red
+   * outline and the ghost stay lit while the pointer is somewhere else. */
+  const leaveContainer = (e: React.DragEvent) => {
+    if (overContainer(e.relatedTarget)) return
+    patch({ ghost: null, conflicts: [] })
   }
 
   /** Drop (a palette item or an existing node) onto a container. */
-  const containerDrop = (e: React.DragEvent, parent: PlacedNode) => {
+  const containerDrop = (e: React.DragEvent, parent: PlacedNode, window: SlideWindow) => {
     e.preventDefault()
     e.stopPropagation()
     const cur = currentDrag()
-    const plan = planOnContainer(e, parent)
+    const plan = planOnContainer(e, parent, window)
     clearDrag()
     if (!cur) return
     // No verdict at all means the payload names nothing we know.
@@ -363,23 +389,26 @@ export default function CanvasPage() {
     setSelectedId((s) => (s === id ? null : s))
   }
 
-  /** The drawer edits nodes, overlay children, and overlay shells alike. */
+  /** The drawer edits nodes, overlay children, and overlay shells alike. A
+   * container's config can reshape its child space (a carousel's slide count),
+   * so node writes go through the checked op and can bounce with words. */
   const applyConfig = (id: string, config: Record<string, unknown>) => {
     const overlay = findOverlay(docRef.current, editingOverlayId ?? '')
     if (overlay && overlay.id === id) return void setDoc((d) => updateOverlayConfig(d, id, config))
     if (overlay && overlay.children.some((k) => k.id === id)) {
       return void setDoc((d) => updateOverlayChildConfig(d, overlay.id, id, config))
     }
-    setDoc((d) => updateNodeConfig(d, id, config))
+    applyResult(applyNodeConfig(docRef.current, id, config))
   }
 
-  // The armed drag's gated type for the overlay editor (patterns land as cards).
+  // The armed drag's gated type for the overlay editor (patterns land as
+  // their own container shell).
   const armed = currentDrag()
   const armedType: string | null = (() => {
     if (!armed) return null
     const { drag } = armed
     if (drag.kind === 'palette') return drag.type
-    if (drag.kind === 'pattern') return 'card'
+    if (drag.kind === 'pattern') return OSB_PATTERNS[drag.pattern]?.containerType ?? null
     return doc.nodes.find((n) => n.id === drag.id)?.type ?? null
   })()
 
@@ -463,6 +492,9 @@ export default function CanvasPage() {
           fb={fb}
           palettes={palettes}
           preview={preview}
+          slideOf={slideOf}
+          onSlideChange={onSlideChange}
+          onLeaveContainer={leaveContainer}
           epoch={epoch}
           onRootDragOver={onRootDragOver}
           rgl={{

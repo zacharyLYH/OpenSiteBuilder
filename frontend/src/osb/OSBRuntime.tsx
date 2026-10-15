@@ -2,10 +2,11 @@ import { useState, type ReactNode } from 'react'
 import type { SiteManifest, SiteNode } from '../site/types'
 import OSBDrawer, { type OSBDrawerConfig } from './OSBDrawer'
 import OSBModal, { type OSBModalConfig } from './OSBModal'
-import { OSBOverlayBody } from './OSBOverlay'
+import { gridBoxStyle, OSBOverlayBody } from './OSBOverlay'
 import { OSBThemeProvider } from './OSBTheme'
-import { OSB_REGISTRY, isOverlayType, isTriggerType, type OSBNodeType } from './registry'
-import { overlayTargetOf, type OSBTheme } from './types'
+import { OSB_REGISTRY, isOverlayType, isTriggerType, slotCountOf, type OSBNodeType } from './registry'
+import { slotBandCols, slotLeft } from './slots'
+import { overlayTargetOf, type OSBSlot, type OSBTheme } from './types'
 
 /**
  * THE engine (codegen v2). The canvas no longer emits `.jsx`: it emits a
@@ -46,15 +47,11 @@ export interface OSBNodeViewProps {
  */
 export function OSBNodeView({ node, onOpenOverlay, overlayIds, depth = 0 }: OSBNodeViewProps): ReactNode {
   if (!isKnown(node) || depth >= MAX_DEPTH) return null
+  const entry = OSB_REGISTRY[node.type]
   const kids = Array.isArray(node.children) ? node.children.filter(isKnown) : []
-  const children =
-    kids.length > 0
-      ? kids.map((k) => (
-          <div key={k.id}>
-            <OSBNodeView node={k} onOpenOverlay={onOpenOverlay} overlayIds={overlayIds} depth={depth + 1} />
-          </div>
-        ))
-      : undefined
+  const kid = (k: SiteNode) => (
+    <OSBNodeView node={k} onOpenOverlay={onOpenOverlay} overlayIds={overlayIds} depth={depth + 1} />
+  )
   // Only a trigger (button) carries an opener; the target is resolved from the
   // page's overlay ids so a dangling reference stays inert.
   const target = overlayTargetOf(node.config)
@@ -62,7 +59,51 @@ export function OSBNodeView({ node, onOpenOverlay, overlayIds, depth = 0 }: OSBN
     onOpenOverlay && overlayIds && target && overlayIds.has(target) && isTriggerType(node.type)
       ? () => onOpenOverlay(target)
       : undefined
-  return OSB_REGISTRY[node.type].render(node.config, children, onClick)
+  // A slotted container (the carousel) hands its children over as slides, not
+  // as a stack — the same bands the canvas draws. Its own footprint travels
+  // with it, so in a flow page (which has no cells) it renders in the box the
+  // canvas shows: the cell pitch stands in, exactly like an overlay shell.
+  if (entry.slots) {
+    const grid = entry.grid
+    return (
+      <div style={gridBoxStyle(int(node.cols, grid.cols), int(node.rows, grid.rows))}>
+        {entry.render(node.config, undefined, onClick, slidesOf(node, kids, kid))}
+      </div>
+    )
+  }
+  const children = kids.length > 0 ? kids.map((k) => <div key={k.id}>{kid(k)}</div>) : undefined
+  return entry.render(node.config, children, onClick)
+}
+
+/**
+ * A slotted container's children as SLIDES: the configured number of them,
+ * each with the cell grid it positions its children in, and each child with
+ * its slide-local box. The bands come from `osb/slots` — the very arithmetic
+ * the canvas bands use — so a slide lays out identically in the editor and on
+ * the published page. A child whose slide no longer exists falls back to the
+ * last one: content never disappears because a setting changed.
+ */
+function slidesOf(parent: SiteNode, kids: SiteNode[], kid: (k: SiteNode) => ReactNode): OSBSlot[] {
+  const count = slotCountOf(parent.type, parent.config)
+  const grid = OSB_REGISTRY[parent.type].grid
+  const cols = int(parent.cols, grid.cols)
+  const rows = int(parent.rows, grid.rows)
+  const bandCols = slotBandCols(cols, count)
+  const slideOfKid = (k: SiteNode) => Math.max(0, Math.min(count - 1, Math.floor(k.slot ?? 0)))
+  return Array.from({ length: count }, (_, i) => ({
+    cols: bandCols,
+    rows,
+    kids: kids
+      .filter((k) => slideOfKid(k) === i)
+      .map((k) => ({
+        id: k.id,
+        x: int(k.x, 0) - slotLeft(i, bandCols),
+        y: int(k.y, 0),
+        cols: int(k.cols, OSB_REGISTRY[k.type].grid.cols),
+        rows: int(k.rows, OSB_REGISTRY[k.type].grid.rows),
+        content: kid(k),
+      })),
+  }))
 }
 
 /**

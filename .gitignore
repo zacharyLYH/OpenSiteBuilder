@@ -6,3 +6,11 @@ frontend/test-results
 template/node_modules
 template/dist
 .DS_Store
+.agents
+learning-records
+lessons
+reference
+MISSION.md
+NOTES.md
+RESOURCES.md
+skills-lock.json

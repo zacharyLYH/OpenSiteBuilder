@@ -4,12 +4,13 @@ Components end users put on their sites. All prefixed `OSB` to separate them
 from the builder's own UI (`src/components/`). Three kinds: atoms
 (`OSBText`, `OSBButton`, `OSBImage`, `OSBVideo`, `OSBDropdown` — the visible
 leaves; collection-backed components like the dropdown keep their items in
-config, never as canvas nodes), containers (`OSBCard` — empty chrome with no
-intrinsic content), and overlays
+config, never as canvas nodes), containers (`OSBCard`, `OSBCarousel` — empty
+chrome with no intrinsic content; a carousel's child space is divided into
+**slides**, so several atoms can live in one slide), and overlays
 (`OSBModal`, `OSBDrawer` — shells in `overlays[]`, opened from triggers).
 Named compositions
-(card with content, …) are patterns in `patterns.ts`: factories that insert
-ordinary nodes, not new types. There are no ghost internals — if the user can
+(card with content, carousel with slides, …) are patterns in `patterns.ts`:
+factories that insert ordinary nodes, not new types. There are no ghost internals — if the user can
 see it, it is a node. Light + dark are the only themes, and theme is GLOBAL:
 the canvas sets it from the document (header control) and the published page
 sets it from `site.theme`; components read it via `useOSBTheme` (see
@@ -35,6 +36,24 @@ not a knob** — it would push the box off the grid and break the coordinate
 system. The box is the component, so padding only ever shifts content *inside*
 it.
 
+### Slotted containers: the carousel
+
+A **slotted container** declares `slots: (config) => number` in its registry
+entry (only the carousel does). Its child space is divided into that many equal
+column bands — one per slide — and each child is stored with a `slot` and a box
+inside its own band. `osb/slots.ts` is the single arithmetic (`bandCols`,
+`slotLeft`), read by the canvas, the doc gate (`seatRect`, `containerFloor`),
+the drawer's slide count, and the engine's track, so the editor and the site
+cannot disagree about where a slide begins. The canvas renders the SAME
+component — arrows, dots, one page of slides at a time — and hands its slides
+the interactive child boxes (`PlacedChildBox`), so the slide on screen is the
+one you edit and its cells are slide-local; while editing, swipe and autoplay
+are off (embla's own drag would swallow the atom drags). The manifest carries
+the shell's footprint plus each child's `x/y/cols/rows/slot`, and `OSBNodeView`
+hands the component slides (`OSBSlot[]`) instead of a flat child stack. Adding
+slides is a drawer change: `applyNodeConfig` re-seats the children and grows
+the shell to its floor when a slide needs the room.
+
 ### Single source of truth (canvas == engine == publish)
 
 There is no generated code. The visual builder renders these components through
@@ -56,12 +75,15 @@ component for the publish path. Concretely:
 ### Dependencies in shipped components
 
 Anything an `OSB*` component imports is either shipped (`../lib/utils.ts`,
-`osb/types.ts`, other `OSB*` files) or must be a dependency of the publish
-**template** (`template/package.json` + lock), because the published repo
-installs from there. That is why `class-variance-authority` (the shadcn `cva`
-mechanism) is in the template. To keep a dependency a *new* component adds
-working in an older user repo, publish also ships `template/package.json` +
-`template/package-lock.json` (they travel as a pair — `npm ci` needs both).
+`osb/types.ts`, other `OSB*` files) or must be a dependency of the
+**frontend** (`frontend/package.json` + lock), because publish derives the
+user repo's `package.json` from it (`publishedPackageJson` in `push.ts`) and
+ships the frontend's lock alongside — the two travel as a pair (`npm ci`
+needs both). That is why `class-variance-authority` (the shadcn `cva`
+mechanism) is a frontend dependency. A new component dependency needs no
+template edit: it flows to both new and already-created user repos on the
+next publish. `template/package.json` is placeholder-only (it builds the
+pre-publish shell) and is overwritten by the frontend-derived manifest.
 
 ## Shadcn vocabulary
 
@@ -96,15 +118,27 @@ adaptations are always the same: (1) shadcn CSS-var tokens → explicit slate +
   capped at 2x.
 - **Text** — shadcn typography scale for H1–H6, plus bold/italic, font family
   (`font-sans`/`serif`/`mono`) and a `bg-clip-text` gradient tone.
+- **Carousel** — shadcn `carousel.tsx` vendored in `OSBCarouselBase.tsx`
+  (Embla wiring, `Carousel`/`CarouselContent`/`CarouselItem`/`CarouselPrevious`/
+  `CarouselNext`/`useCarousel`, the `role="region"` + `aria-roledescription`
+  contract, arrow keys, the `-ml`/`pl` slide rhythm). `OSBCarousel` maps the OSB
+  settings onto it — slide count, slides in view, scroll direction, alignment,
+  slide spacing, loop, autoplay (+ seconds), swipe, arrows, dots — and renders
+  one `CarouselItem` per slide, with each slide's atoms positioned from the
+  slide's own cell grid. Autoplay and the dots render inside the provider, where
+  they read the api from context instead of a callback.
 
 ## Registry
 
 `registry.tsx` (`OSB_REGISTRY`) is the single record of node types: each type
 name is written once as a key. `OSBNodeType`, `OSB_NODE_TYPES`, defaults, and
 rendering all derive from it — nothing is re-declared elsewhere. It is a pure
-lookup table: types, defaults, fields, grids, kind/trigger/chrome metadata, and
-a `render`. It holds no preview or overlay-rendering logic — that lives in the
-engine.
+lookup table: types, defaults, fields, grids, kind/trigger/chrome/slots
+metadata, and a `render`. The render signature is
+`render(config, children, onClick, slots?)`: `slots` (one `OSBSlot` per slide,
+kids slide-local) is passed only for a slotted container, so the runtime never
+branches on a type name. It holds no preview or overlay-rendering logic — that
+lives in the engine.
 Insert menu / editor / engine all read it — no per-component branches.
 
 ## The engine (`OSBRuntime.tsx`)

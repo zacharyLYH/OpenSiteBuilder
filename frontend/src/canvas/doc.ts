@@ -1,5 +1,18 @@
 import { OSB_PATTERNS } from '../osb/patterns'
-import { OSB_REGISTRY, canContain, isAtomType, isContainerType, isOverlayType, isTriggerType, overlayNoun, type OSBNodeType } from '../osb/registry'
+import { carouselPerView } from '../osb/OSBCarousel'
+import {
+  OSB_REGISTRY,
+  canContain,
+  isAtomType,
+  isContainerType,
+  isOverlayType,
+  isSlottedType,
+  isTriggerType,
+  overlayNoun,
+  slotCountOf,
+  type OSBNodeType,
+} from '../osb/registry'
+import { slotBandCols, slotLeft } from '../osb/slots'
 import { CONTAINER_PAD, overlayTargetOf, type OSBTheme } from '../osb/types'
 import type { SiteMeta } from '../site/types'
 import { GRID_COLS } from './grid'
@@ -15,6 +28,9 @@ export interface PlacedNode {
   y: number
   cols: number
   rows: number
+  /** SLOTTED containers only (the carousel): which slide this child sits in,
+   * 0-based. Absent = 0, which is also how a plain container reads. */
+  slot?: number
 }
 
 export interface CanvasDoc {
@@ -63,6 +79,75 @@ export const themeOf = (doc: CanvasDoc): OSBTheme => (doc.theme === 'dark' ? 'da
 /** A rectangle in grid cells: origin + footprint. */
 export type CellRect = { x: number; y: number; cols: number; rows: number }
 
+/** A slotted container's child space: how many slides, and the cells in one. */
+export type SlotBands = { slots: number; bandCols: number }
+
+/** The page of slides a carousel is showing: which slide sits at the left of
+ * the viewport, and how many fit. The editor reads it from the component
+ * (the arrows and dots move it), so a drop lands on the slide the user is
+ * actually looking at — the published carousel shows one page, never a strip. */
+export type SlideWindow = { index: number; perView: number }
+
+/** The band geometry of a container. A plain container is one band spanning
+ * the whole shell, so every slide rule below is a no-op for cards/overlays. */
+export const slotBandsOf = (parent: { type: string; config: unknown; cols: number }): SlotBands => {
+  const slots = slotCountOf(parent.type, parent.config)
+  return { slots, bandCols: slotBandCols(parent.cols, slots) }
+}
+
+/** Which slides a slotted container is showing: `index` is the leftmost of
+ * `perView` visible slides, both from the container's own config and clamped
+ * into range. THE answer to "which slide can the user see", read by the drop
+ * math, the landing ghost and the editor's own carousel. */
+export function slideWindowOf(
+  parent: { type: string; config: unknown; cols: number },
+  index: number,
+): SlideWindow {
+  const bands = slotBandsOf(parent)
+  const perView = Math.max(1, Math.min(carouselPerView(parent.config), bands.slots))
+  return { index: Math.max(0, Math.min(Math.floor(index) || 0, bands.slots - perView)), perView }
+}
+
+/** The slide a rect lands in: the band its centre falls in. Position is the
+ * truth here — the stored `slot` is only that same number written down, so
+ * every rule reads the geometry, never the echo. */
+export const slotOfRect = (bands: SlotBands, rect: { x: number; cols: number }): number =>
+  Math.max(0, Math.min(bands.slots - 1, Math.floor((rect.x + rect.cols / 2) / bands.bandCols)))
+
+/**
+ * THE one seating rule: a child of a slotted container is put back inside the
+ * slide its centre falls in, whole cells, size kept. Clamping, never refusing —
+ * exactly how a drop is clamped into the shell it lands on; the gate then
+ * judges the seated rect. Plain containers get their rect back untouched with
+ * no slot, so nothing about a card changes.
+ */
+export function seatRect(
+  parent: { type: string; config: unknown; cols: number },
+  rect: CellRect,
+): { rect: CellRect; slot: number | undefined } {
+  const bands = slotBandsOf(parent)
+  if (bands.slots <= 1) return { rect, slot: undefined }
+  const slot = slotOfRect(bands, rect)
+  const left = slotLeft(slot, bands.bandCols)
+  const x = Math.max(left, Math.min(left + bands.bandCols - rect.cols, Math.floor(rect.x)))
+  return { rect: { ...rect, x }, slot }
+}
+
+/**
+ * Re-seat every child of a slotted container in a node list: the slide each
+ * one belongs to, and cells that sit inside that slide's band. Used when the
+ * slide count changes and when a stored doc is loaded, so untrusted storage
+ * can never hand the canvas a child that sits between two slides.
+ */
+function seatKids(nodes: PlacedNode[], parent: PlacedNode): PlacedNode[] {
+  if (!isSlottedType(parent.type)) return nodes
+  return nodes.map((n) => {
+    if (n.parentId !== parent.id) return n
+    const seat = seatRect(parent, n)
+    return { ...n, ...seat.rect, slot: seat.slot }
+  })
+}
+
 export const storageKey = (projectName: string): string => `osb.project.${projectName}`
 
 export function loadDoc(key: string): CanvasDoc {
@@ -98,9 +183,13 @@ export function loadDoc(key: string): CanvasDoc {
         grew = true
       }
     }
+    const nodes = known.filter((n) => kept.has(n.id))
+    // Children of a slotted container are re-seated on the way in: a doc saved
+    // before a slide setting changed (or hand-edited) still lands legally.
+    const seated = nodes.reduce((acc, n) => seatKids(acc, n), nodes)
     return {
       version: 1,
-      nodes: known.filter((n) => kept.has(n.id)),
+      nodes: seated,
       overlays: pruneOverlays(overlaysOf(doc)),
       theme: themeOf(doc),
       // Untrusted storage: keep meta only when it is a plain object.
@@ -189,13 +278,16 @@ const clampInto = (
   y: Math.max(0, Math.min(parent.rows - span.rows, Math.floor(y))),
 })
 
-/** Parent-local cell for a drop whose center lands at `center`. */
+/** Parent-local cell for a drop whose center lands at `center` — seated in the
+ * parent's slide when the parent is a slotted container. */
 export function nestLocal(
-  parent: { x: number; y: number; cols: number; rows: number },
+  parent: { type: string; config: unknown; x: number; y: number; cols: number; rows: number },
   center: { x: number; y: number },
   span: { cols: number; rows: number },
 ): { x: number; y: number } {
-  return clampInto(center.x - parent.x, center.y - parent.y, parent, span)
+  const local = clampInto(center.x - parent.x, center.y - parent.y, parent, span)
+  const seated = seatRect(parent, { ...local, ...span }).rect
+  return { x: seated.x, y: seated.y }
 }
 
 /** Plain-language rejection for drop feedback and the checks panel.
@@ -335,30 +427,57 @@ export function canInsertReason(
     if (isContainerType(type)) return 'depth'
     if (ignoreId && !subtreeFits(nodes, ignoreId, parentId)) return 'depth'
     if (rect.x + rect.cols > parent.cols || rect.y + rect.rows > parent.rows) return 'containment'
+    // Slotted containers: a child lives inside ONE slide. A rect reaching into
+    // the next slide is not a placement (the canvas seats instead of failing).
+    const bands = slotBandsOf(parent)
+    if (bands.slots > 1) {
+      const left = slotLeft(slotOfRect(bands, rect), bands.bandCols)
+      if (rect.x < left || rect.x + rect.cols > left + bands.bandCols) return 'containment'
+    }
   }
   return overlapIds(nodes, rect, parentId, ignoreId).length > 0 ? 'overlap' : null
 }
 
-/** Children bounding box + padding = container floor (no undersize). */
+/**
+ * Children bounding box + padding = container floor (no undersize). A slotted
+ * container needs a WHOLE band per slide, so its floor is the widest slide
+ * times the slide count — which is what lets the drawer add a slide at all.
+ */
 export function containerFloor(
   nodes: PlacedNode[],
   parentId: string,
 ): { cols: number; rows: number } {
   const kids = nodes.filter((n) => n.parentId === parentId)
   if (kids.length === 0) return { cols: 0, rows: 0 }
-  const cols = Math.max(...kids.map((k) => k.x + k.cols)) + CONTAINER_PAD
   const rows = Math.max(...kids.map((k) => k.y + k.rows)) + CONTAINER_PAD
-  return { cols, rows }
+  const parent = nodes.find((n) => n.id === parentId)
+  const bands = parent ? slotBandsOf(parent) : { slots: 1, bandCols: 0 }
+  if (bands.slots > 1) {
+    // Each slide's own extent, measured from its left edge. The slide comes
+    // from where the child SITS (a stored `slot` is an echo of exactly that).
+    const widest = Math.max(1, ...kids.map((k) => k.x + k.cols - slotLeft(slotOfRect(bands, k), bands.bandCols)))
+    return { cols: widest * bands.slots + CONTAINER_PAD, rows }
+  }
+  return { cols: Math.max(...kids.map((k) => k.x + k.cols)) + CONTAINER_PAD, rows }
 }
 
-/** Container still fits its children after a resize/remove. */
+/** Container still fits its children after a resize/remove. A slotted
+ * container is judged per slide: one band each, ignoring the leftover cells.
+ * `parent` may carry the candidate footprint (a resize in flight). */
 export function containerFitsKids(
   nodes: PlacedNode[],
   parent: Pick<PlacedNode, 'id' | 'cols' | 'rows'>,
   ignoreId?: string,
 ): boolean {
   const kids = nodes.filter((n) => n.parentId === parent.id && n.id !== ignoreId)
-  return kids.every((k) => k.x + k.cols <= parent.cols && k.y + k.rows <= parent.rows)
+  const self = nodes.find((n) => n.id === parent.id)
+  const bands = self ? slotBandsOf({ ...self, cols: parent.cols }) : { slots: 1, bandCols: 0 }
+  return kids.every((k) =>
+    bands.slots > 1
+      ? k.x + k.cols - slotLeft(slotOfRect(bands, k), bands.bandCols) <= bands.bandCols &&
+          k.y + k.rows <= parent.rows
+      : k.x + k.cols <= parent.cols && k.y + k.rows <= parent.rows,
+  )
 }
 
 export type DocResult = { ok: true; doc: CanvasDoc } | { ok: false; reason: RejectReason }
@@ -395,9 +514,14 @@ export function dragSpan(
  * reparent, and take-out-to-root differ only in parentId + rect.
  */
 export function insertNode(doc: CanvasDoc, node: PlacedNode): DocResult {
-  const reason = canInsertReason(doc.nodes, node.type, node, node.parentId ?? null)
+  // A landing is seated (slot + cells) before the gate sees it, so a drop into
+  // a carousel slide always lands whole inside that slide.
+  const parent = node.parentId === null ? null : (doc.nodes.find((n) => n.id === node.parentId) ?? null)
+  const seat = parent ? seatRect(parent, node) : { rect: node, slot: undefined }
+  const placed: PlacedNode = { ...node, ...seat.rect, slot: seat.slot }
+  const reason = canInsertReason(doc.nodes, placed.type, placed, placed.parentId ?? null)
   if (reason) return { ok: false, reason }
-  return { ok: true, doc: { ...doc, nodes: [...doc.nodes, node] } }
+  return { ok: true, doc: { ...doc, nodes: [...doc.nodes, placed] } }
 }
 
 /** Shallow-merge one node's config — the one path non-spatial props take. */
@@ -413,20 +537,26 @@ export function moveNode(
 ): DocResult {
   const node = doc.nodes.find((n) => n.id === id)
   if (!node) return { ok: false, reason: 'unknown-type' }
-  const reason = canInsertReason(doc.nodes, node.type, rect, parentId, id)
+  // Seat first (see insertNode): dragging an atom sideways into the next slide
+  // of a carousel changes its `slot`, and never straddles two slides.
+  const parent = parentId === null ? null : (doc.nodes.find((n) => n.id === parentId) ?? null)
+  const seat = parent ? seatRect(parent, rect) : { rect, slot: undefined }
+  const seated = seat.rect
+  const reason = canInsertReason(doc.nodes, node.type, seated, parentId, id)
   if (reason) return { ok: false, reason }
   // Growing/moving a container over siblings is still an overlap (rejected
   // above); shrinking it under its own children is rejected here.
-  if (!isChildless(doc.nodes, id) && !containerFitsKids(doc.nodes, { id, cols: rect.cols, rows: rect.rows })) {
+  if (!isChildless(doc.nodes, id) && !containerFitsKids(doc.nodes, { id, cols: seated.cols, rows: seated.rows })) {
     return { ok: false, reason: 'undersize' }
   }
-  const nodes = doc.nodes.map((n) => (n.id === id ? { ...n, parentId, ...rect } : n))
+  const nodes = doc.nodes.map((n) => (n.id === id ? { ...n, parentId, ...seated, slot: seat.slot } : n))
   return { ok: true, doc: { ...doc, nodes } }
 }
 
 /**
  * Atomic pattern insert: a container at a root rect plus its pre-arranged
- * atoms. Either the whole composition lands or nothing does.
+ * atoms. Either the whole composition lands or nothing does. The container
+ * kind comes from the pattern itself, never a hardcoded type.
  */
 export function insertPattern(
   doc: CanvasDoc,
@@ -439,7 +569,7 @@ export function insertPattern(
   if (!pattern) return { ok: false, reason: 'unknown-type' }
   if (childIds.length !== pattern.children.length) return { ok: false, reason: 'integrity' }
   const containerRect = { ...rect, cols: pattern.containerCols, rows: pattern.containerRows }
-  const reason = canInsertReason(doc.nodes, 'card', containerRect, null)
+  const reason = canInsertReason(doc.nodes, pattern.containerType, containerRect, null)
   if (reason) return { ok: false, reason }
   const kids: PlacedNode[] = pattern.children.map((c, i) => ({
     id: childIds[i],
@@ -453,20 +583,25 @@ export function insertPattern(
   }))
   const container: PlacedNode = {
     id: containerId,
-    type: 'card',
-    config: { ...OSB_REGISTRY.card.defaults, ...pattern.containerConfig },
+    type: pattern.containerType,
+    config: { ...OSB_REGISTRY[pattern.containerType].defaults, ...pattern.containerConfig },
     parentId: null,
     ...containerRect,
   }
   // Children are pattern-authored, but still run through the one gate:
-  // footprint, kind, containment and exclusivity inside the new shell.
+  // footprint, kind, containment and exclusivity inside the new shell. A
+  // slotted shell seats them in its slides first (a carousel pattern places
+  // one atom per slide).
+  const seated = seatKids(kids, container).map((k) => ({ ...k, parentId: containerId }))
   const withShell = [...doc.nodes, container]
-  for (const k of kids) {
+  for (const k of seated) {
     const reason = canInsertReason(withShell, k.type, k, containerId)
     if (reason) return { ok: false, reason }
   }
-  if (!isContiguous(kids)) return { ok: false, reason: 'disconnected' }
-  return { ok: true, doc: { ...doc, nodes: [...doc.nodes, container, ...kids] } }
+  for (const group of contiguityGroups(seated, container)) {
+    if (!isContiguous(group)) return { ok: false, reason: 'disconnected' }
+  }
+  return { ok: true, doc: { ...doc, nodes: [...doc.nodes, container, ...seated] } }
 }
 
 export function removeNode(doc: CanvasDoc, id: string): CanvasDoc {
@@ -641,6 +776,35 @@ export function nestTargetAt(
 }
 
 /**
+ * The footprint a PALETTE item takes when it lands inside `parent`. A slotted
+ * container's child space IS its slides, so the drop zone the user aims at is
+ * ONE slide and the palette default is scaled to it: a slide shows the whole
+ * shell once published, so scaling the width by the slide's share of the shell
+ * lands the leaf at the size it has anywhere else — instead of ballooning into
+ * the whole slide just because a slide is narrow in edit space (which left no
+ * room for anything else). The height is the leaf's own: a slide is as tall as
+ * the shell. Never below the type's own minimum, and never padded up — a band
+ * too narrow for the type is still refused, with words.
+ *
+ * A move keeps the node's own size (resizing is a gesture of its own), so this
+ * is only ever asked about a fresh palette drop.
+ */
+export function seatSpan(
+  parent: { type: string; config: unknown; cols: number; rows: number },
+  type: OSBNodeType,
+  span: { cols: number; rows: number },
+): { cols: number; rows: number } {
+  const bands = slotBandsOf(parent)
+  if (bands.slots <= 1) return span
+  const g = OSB_REGISTRY[type].grid
+  const share = bands.bandCols / Math.max(1, parent.cols)
+  return {
+    cols: Math.max(g.minCols, Math.min(Math.min(g.maxCols, bands.bandCols), Math.round(span.cols * share))),
+    rows: Math.max(g.minRows, Math.min(Math.min(g.maxRows, parent.rows), span.rows)),
+  }
+}
+
+/**
  * Where a dragged rect lands: nested as a child when its center sits in an
  * accepting shell, otherwise at root. Pure routing — the caller still
  * runs the result through insertNode/moveNode (the gate). Nested shells
@@ -651,26 +815,42 @@ function resolveLanding(
   type: OSBNodeType,
   rect: CellRect,
   ignoreId?: string,
+  slideIndex?: Record<string, number>,
 ): { parentId: string | null; rect: CellRect } {
   const span = { cols: rect.cols, rows: rect.rows }
   const center = { x: rect.x + span.cols / 2, y: rect.y + span.rows / 2 }
   const target = nestTargetAt(nodes, center)
   if (target && target.id !== ignoreId && canContain(target.type, type)) {
     const o = absoluteOrigin(nodes, target.id) ?? { x: target.x, y: target.y }
-    const local = nestLocal({ ...target, x: o.x, y: o.y }, center, span)
+    // A slotted shell shows a page of slides, so a landing is always on a
+    // slide the user can see — the SAME rule pointer drops use. Routing by raw
+    // geometry instead put a moved atom on a slide that was not on screen,
+    // where it looked like the drop had done nothing.
+    const local =
+      slotBandsOf(target).slots > 1
+        ? slideCell(
+            (center.x - o.x) / Math.max(1, target.cols),
+            (center.y - o.y) / Math.max(1, target.rows),
+            target,
+            span,
+            slideWindowOf(target, slideIndex?.[target.id] ?? 0),
+          )
+        : nestLocal({ ...target, x: o.x, y: o.y }, center, span)
     return { parentId: target.id, rect: { ...local, ...span } }
   }
   return { parentId: null, rect }
 }
 
-/** Where an existing node's dragged rect lands. */
+/** Where an existing node's dragged rect lands. `slideIndex` is the slide each
+ * slotted container is showing, so the landing is on one the user can see. */
 export function resolveDrop(
   nodes: PlacedNode[],
   id: string,
   rect: CellRect,
+  slideIndex?: Record<string, number>,
 ): { parentId: string | null; rect: CellRect } | null {
   const node = nodes.find((n) => n.id === id)
-  return node ? resolveLanding(nodes, node.type, rect, id) : null
+  return node ? resolveLanding(nodes, node.type, rect, id, slideIndex) : null
 }
 
 /** Where a fresh palette rect lands: same center-point rule as resolveDrop. */
@@ -678,8 +858,9 @@ export function resolveInsert(
   nodes: PlacedNode[],
   type: OSBNodeType,
   rect: CellRect,
+  slideIndex?: Record<string, number>,
 ): { parentId: string | null; rect: CellRect } {
-  return resolveLanding(nodes, type, rect)
+  return resolveLanding(nodes, type, rect, undefined, slideIndex)
 }
 
 /**
@@ -700,23 +881,104 @@ export function conflictIds(
   return canContain(parent.type, type) ? overlapIds(nodes, rect, parentId, selfId) : [parentId]
 }
 
+/**
+ * THE landing cell on one visible page of slides: which slide the fraction
+ * `fx`/`fy` of the shell falls on, and where inside that slide. A slotted
+ * container only ever shows `window` — one slide at a time in the editor — so
+ * a landing must be on a slide the user can SEE, in that slide's own cells.
+ * Both landing paths read this: pointer drops (eventCell) and centre-routed
+ * moves (resolveLanding). What a palette item and a moved atom target can
+ * therefore never disagree. Pure and unit-tested.
+ */
+function slideCell(
+  fx: number,
+  fy: number,
+  parent: { type: string; config: unknown; cols: number; rows: number },
+  span: { cols: number; rows: number },
+  window: SlideWindow,
+): { x: number; y: number } {
+  const bands = slotBandsOf(parent)
+  const page = Math.max(1, Math.floor(window.perView))
+  const anchor = Math.min(page - 1, Math.max(0, Math.floor(fx * page)))
+  const slot = Math.max(0, Math.min(bands.slots - 1, Math.floor(window.index) + anchor))
+  const local = clampInto(
+    (fx * page - anchor) * bands.bandCols,
+    fy * parent.rows,
+    { cols: bands.bandCols, rows: parent.rows },
+    span,
+  )
+  return { x: slotLeft(slot, bands.bandCols) + local.x, y: local.y }
+}
+
 /** Parent-local cell for a pointer position over a container (HTML5 drops
- * and hover ghosts share this math). Pure and unit-tested. */
+ * and hover ghosts share this math), seated in the container's slide when it
+ * is a slotted one — so the ghost previews exactly where the drop lands.
+ * `window` is the page of slides on screen: a slotted container only ever
+ * shows that page, so the pointer lands on a VISIBLE slide, in that slide's
+ * own cells. Pure and unit-tested. */
 export function eventCell(
   clientX: number,
   clientY: number,
   box: { left: number; top: number; width: number; height: number },
-  parent: { cols: number; rows: number },
+  parent: { type: string; config: unknown; cols: number; rows: number },
   span: { cols: number; rows: number },
+  window?: SlideWindow,
 ): { x: number; y: number } {
   const fx = (clientX - box.left) / Math.max(1, box.width)
   const fy = (clientY - box.top) / Math.max(1, box.height)
-  return clampInto(fx * parent.cols, fy * parent.rows, parent, span)
+  if (slotBandsOf(parent).slots > 1 && window) return slideCell(fx, fy, parent, span, window)
+  const local = clampInto(fx * parent.cols, fy * parent.rows, parent, span)
+  const seated = seatRect(parent, { ...local, ...span }).rect
+  return { x: seated.x, y: seated.y }
 }
 
 export interface DocValidation {
   ok: boolean
   errors: string[]
+}
+
+/**
+ * The connected-patch groups of one sibling set: a slotted container is judged
+ * slide by slide, because its slides never touch each other (and must not).
+ */
+function contiguityGroups(set: PlacedNode[], parent: PlacedNode | null): PlacedNode[][] {
+  if (!parent || !isSlottedType(parent.type)) return [set]
+  const bands = slotBandsOf(parent)
+  const groups = new Map<number, PlacedNode[]>()
+  for (const n of set) {
+    const slot = slotOfRect(bands, n)
+    groups.set(slot, [...(groups.get(slot) ?? []), n])
+  }
+  return [...groups.values()]
+}
+
+/**
+ * A config write from the drawer. Config is style for an atom, but a
+ * container's config can reshape its child space — a carousel's slide count.
+ * The children are re-seated in the new slides and the shell grows to the
+ * floor a slide needs; the write is refused, with the gate's own words, when
+ * it cannot (something in the way, or an atom wider than one whole slide).
+ */
+export function applyNodeConfig(doc: CanvasDoc, id: string, patch: Record<string, unknown>): DocResult {
+  const node = doc.nodes.find((n) => n.id === id)
+  if (!node) return { ok: false, reason: 'unknown-type' }
+  const next = updateNodeConfig(doc, id, patch)
+  const parent = next.nodes.find((n) => n.id === id)!
+  if (!isSlottedType(parent.type)) return { ok: true, doc: next }
+  const kids = next.nodes.filter((n) => n.parentId === id)
+  if (kids.length === 0) return { ok: true, doc: next }
+  const seated = seatKids(kids, parent)
+  const nodes = [...next.nodes.filter((n) => n.parentId !== id), ...seated]
+  for (const k of seated) {
+    const reason = canInsertReason(nodes, k.type, k, id, k.id)
+    if (reason) return { ok: false, reason }
+  }
+  const floor = containerFloor(nodes, id)
+  const cols = Math.max(parent.cols, floor.cols)
+  const rows = Math.max(parent.rows, floor.rows)
+  const out: CanvasDoc = { ...next, nodes }
+  if (cols === parent.cols && rows === parent.rows) return { ok: true, doc: out }
+  return moveNode(out, id, { x: parent.x, y: parent.y, cols, rows }, parent.parentId)
 }
 
 /**
@@ -755,10 +1017,12 @@ export function validateDoc(doc: CanvasDoc): DocValidation {
     for (let i = 0; i < set.length; i++)
       for (let j = i + 1; j < set.length; j++)
         if (collides(set[i], set[j])) errors.push(`${nameOf(set[i].type)} and ${nameOf(set[j].type)} overlap`)
-    if (!isContiguous(set)) {
-      errors.push(parentId === null ? 'Page pieces are scattered (must touch)' : `${nameOf(byId.get(parentId)?.type ?? '')} pieces are scattered (must touch)`)
-    }
     const parent = parentId === null ? null : byId.get(parentId)
+    for (const group of contiguityGroups(set, parent ?? null)) {
+      if (!isContiguous(group)) {
+        errors.push(parentId === null ? 'Page pieces are scattered (must touch)' : `${nameOf(parent?.type ?? '')} pieces are scattered (must touch)`)
+      }
+    }
     if (parent && !containerFitsKids(doc.nodes, parent)) {
       errors.push(`${nameOf(parent.type)} is too small for its contents`)
     }

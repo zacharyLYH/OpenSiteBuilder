@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 /** Light + dark are the only themes. A GLOBAL property of the page (the
  * document / `site.theme`), provided once via OSBThemeProvider and read by
  * components with useOSBTheme — never a per-component config. */
@@ -40,6 +42,35 @@ export const ALIGN_OPTIONS: { value: OSBAlign; label: string }[] = [
   { value: 'center', label: 'Center' },
 ]
 
+/**
+ * Where a component sits VERTICALLY in its grid box. Atoms normally fill
+ * their box ("the box is the component"), but a badge is a pill: it stays its
+ * natural height and is anchored instead, so the badge can sit at the
+ * top, middle, or bottom of that box.
+ */
+export type OSBVAlign = 'top' | 'middle' | 'bottom'
+
+/** The one option list behind every "Position" drawer field. */
+export const V_ALIGN_OPTIONS: { value: OSBVAlign; label: string }[] = [
+  { value: 'top', label: 'Top' },
+  { value: 'middle', label: 'Middle' },
+  { value: 'bottom', label: 'Bottom' },
+]
+
+/** The one flex cross-axis map behind `OSBVAlign` (static classes only). */
+export const OSB_V_ALIGN_CLASSES: Record<OSBVAlign, string> = {
+  top: 'items-start',
+  middle: 'items-center',
+  bottom: 'items-end',
+}
+
+/**
+ * One card of a collection-backed multi-card component (marquee cards).
+ * Edited in the inspector as a row, never a canvas node — the
+ * same rule dropdown options follow (PRD §6.2).
+ */
+export type OSBCardItem = { title: string; body: string }
+
 /** Surface emphasis shared by every raised/chrome component (cards, popups).
  * Written once so the two surfaces never drift apart in value or wording. */
 export type OSBSurface = 'elevated' | 'outlined' | 'plain'
@@ -64,6 +95,11 @@ export type OSBGridSize = {
   rows: number
 }
 
+/** One editable key on a collection row: the drawer label, and the input's
+ * placeholder. Declared by the field that owns the collection, so the ONE
+ * items editor renders menu rows and card rows alike. */
+export type OSBFieldItemKey = { key: string; label: string; placeholder: string }
+
 /** One drawer field. kind picks the control; labels are plain-language.
  * `required` marks must-fill fields with a red asterisk. `visibleWhen`
  * hides a field until another field in the same draft has a real value
@@ -87,15 +123,60 @@ export type OSBField =
       options: { value: string; label: string }[]
     }
   | {
-      /** Repeatable rows of label + link, edited in the inspector (PRD §6.2).
-       * Collection-backed components keep their items here, never on the grid. */
+      /** Repeatable rows, edited in the inspector (PRD §6.2).
+       * Collection-backed components keep their items here, never on the grid.
+       * `itemFields` says which keys each row edits — so a menu row (label +
+       * link) and a card row (title + body) share ONE editor and one field
+       * kind. Order is the on-screen control order. */
       key: string
       label: string
       hint?: string
       required?: boolean
       visibleWhen?: { key: string }
       kind: 'items'
+      itemFields: OSBFieldItemKey[]
+      /** Rows may hold one nested list (a menu submenu), capped at
+       * MENU_MAX_DEPTH. Absent = a flat collection. */
+      subItems?: boolean
     }
+  | {
+      /** A whole number the user steps: how many slides a carousel holds, how
+       * many seconds autoplay waits. Clamped to min..max by its owner. */
+      key: string
+      label: string
+      hint?: string
+      required?: boolean
+      visibleWhen?: { key: string }
+      kind: 'number'
+      min: number
+      max: number
+    }
+
+/**
+ * One child of a SLOTTED CONTAINER as the engine hands it to the component:
+ * its rendered content plus its own cell box INSIDE its slide. The child's x/y
+ * are slide-local — the same cells the canvas draws, so edit and publish land
+ * on the same pixel.
+ */
+export interface OSBSlotKid {
+  id: string
+  x: number
+  y: number
+  cols: number
+  rows: number
+  content: ReactNode
+}
+
+/**
+ * One slide of a slotted container: the cell grid its children are positioned
+ * in, plus those children. A slotted container (the carousel) receives these
+ * instead of a flat child list, so it renders a track instead of a stack.
+ */
+export interface OSBSlot {
+  cols: number
+  rows: number
+  kids: OSBSlotKid[]
+}
 
 /** A field shows when its `visibleWhen` dependency holds a real value. */
 export function isFieldVisible(field: OSBField, draft: Record<string, unknown>): boolean {

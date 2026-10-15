@@ -1,4 +1,5 @@
 import type { Layout } from 'react-grid-layout'
+import { OSB_PATTERNS } from '../osb/patterns'
 import type { OSBNodeType } from '../osb/registry'
 import {
   canInsertReason,
@@ -53,8 +54,11 @@ type Subject = { type: OSBNodeType; selfId: string | null }
 
 function subjectOf(nodes: PlacedNode[], drag: DragPayload | null): Subject | null {
   if (!drag) return null
-  // A pattern lands as a card shell — see insertPattern.
-  if (drag.kind === 'pattern') return { type: 'card', selfId: null }
+  // A pattern lands as its own container shell — see insertPattern.
+  if (drag.kind === 'pattern') {
+    const pattern = OSB_PATTERNS[drag.pattern]
+    return pattern ? { type: pattern.containerType, selfId: null } : null
+  }
   if (drag.kind === 'palette') return { type: drag.type, selfId: null }
   const node = nodes.find((n) => n.id === drag.id)
   return node ? { type: node.type, selfId: node.id } : null
@@ -79,8 +83,15 @@ export function planAt(
 }
 
 /** Landing chosen by the centre-point rule — nest when the centre sits in an
- * accepting container, else root. Every root-bound gesture routes here. */
-export function planRoute(nodes: PlacedNode[], drag: DragPayload | null, rect: CellRect): DragPlan | null {
+ * accepting container, else root. Every root-bound gesture routes here.
+ * `slideIndex` is which slide each slotted container is showing, so a landing
+ * on one is a slide the user can actually see (see resolveLanding). */
+export function planRoute(
+  nodes: PlacedNode[],
+  drag: DragPayload | null,
+  rect: CellRect,
+  slideIndex?: Record<string, number>,
+): DragPlan | null {
   if (!drag) return null
   const subject = subjectOf(nodes, drag)
   if (!subject) return null
@@ -88,8 +99,8 @@ export function planRoute(nodes: PlacedNode[], drag: DragPayload | null, rect: C
     drag.kind === 'pattern'
       ? { parentId: null, rect }
       : drag.kind === 'move'
-        ? resolveDrop(nodes, drag.id, rect)
-        : resolveInsert(nodes, drag.type, rect)
+        ? resolveDrop(nodes, drag.id, rect, slideIndex)
+        : resolveInsert(nodes, drag.type, rect, slideIndex)
   return landing ? judge(nodes, subject, landing.parentId, landing.rect) : null
 }
 

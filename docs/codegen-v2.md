@@ -60,7 +60,11 @@ Vite treats the repo as a standard SPA. No magic strings at build time.
 
 ## The Gaps (To be Addressed)
 1.  **Asset Sync:** The "Hydration" step must push local images/fonts to the user's `public/` folder, not just code.
-2.  **Dependency Merging:** Adding a component that needs a new NPM package means the "Hydration" step must also update the user's `package.json`.
+2.  **Dependency Merging:** Closed — publish derives the user repo's
+    `package.json` from the builder frontend's own manifest and ships the
+    frontend's lock with it (`publishedPackageJson` in `push.ts`), so a new
+    component dependency reaches new and already-created repos on the next
+    publish with no manual template sync.
 3.  **The "Managed" Boundary:** Users must be warned that the `src/osb/` folder is owned by the Builder. Manual changes there WILL be overwritten on re-publish.
 6. **SEO & SSG (Option A):** The `template/` will include a pre-rendering script. At build-time (GitHub Actions), `ReactDOMServer.renderToString()` will run the `OSBRuntime` to bake the `site.json` content directly into the `index.html`. 
     *   **Benefit:** Instant load for users + perfect SEO for crawlers.
@@ -90,6 +94,6 @@ Done in this pass:
     `src/**` + `site.json`. The per-request file cap moved to a named
     `maxPublishFiles` (64) so the whole runtime folder fits with headroom.
 
-Still open: asset sync (gap 1), dependency merging (gap 2), the managed-folder
+Still open: asset sync (gap 1), the managed-folder
 notice (gap 3), SSG pre-render (gap 6), and multi-page routes (gap 5).
 

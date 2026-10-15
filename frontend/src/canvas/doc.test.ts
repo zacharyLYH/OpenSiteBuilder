@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   absoluteOrigin,
+  applyNodeConfig,
   canInsertReason,
   collides,
   conflictIds,
@@ -16,6 +17,7 @@ import {
   removeNode,
   resolveDrop,
   resolveInsert,
+  seatSpan,
   touches,
   validateDoc,
   type CanvasDoc,
@@ -322,7 +324,7 @@ describe('fungible move: reposition / nest / take-out (no screenshots)', () => {
 
 describe('nestLocal + reasonText (drop plumbing)', () => {
   it('lands odd-sized atoms on integral cells, clamped into the shell', () => {
-    const shell = { x: 0, y: 14, cols: 12, rows: 10 }
+    const shell = { type: 'card', config: {}, x: 0, y: 14, cols: 12, rows: 10 }
     // 4x1 button centered at (5, 20.5) -> (5, 6) local, not (5, 6.5).
     expect(nestLocal(shell, { x: 5, y: 20.5 }, { cols: 4, rows: 1 })).toEqual({ x: 5, y: 6 })
     // Past the far edge clamps; before origin floors to zero.
@@ -433,7 +435,7 @@ describe('drop resolution: one center-point rule for every gesture', () => {
 
   it('eventCell maps pointer pixels to parent cells with edge clamping', () => {
     const box = { left: 0, top: 0, width: 400, height: 200 }
-    const parent = { cols: 12, rows: 10 }
+    const parent = { type: 'card', config: {}, cols: 12, rows: 10 }
     expect(eventCell(100, 150, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 3, y: 7 })
     expect(eventCell(9999, 9999, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 8, y: 9 })
     expect(eventCell(-50, -50, box, parent, { cols: 4, rows: 1 })).toEqual({ x: 0, y: 0 })
@@ -487,6 +489,33 @@ describe('patterns: atomic compositions (no screenshots)', () => {
     for (const n of r.doc.nodes) {
       if (n.id !== 'c1') expect(n.parentId).toBe('c1')
     }
+  })
+
+  it('inserts a carousel shell + slides from the pattern’s own container type', () => {
+    const r = insertPattern({ version: 1, nodes: [] }, 'carousel-slides', 's1', { x: 0, y: 0, cols: 0, rows: 0 }, [
+      'i1',
+      't1',
+      'b1',
+    ])
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.doc.nodes.find((n) => n.id === 's1')).toMatchObject({ type: 'carousel', cols: 12, rows: 7 })
+    for (const n of r.doc.nodes) {
+      if (n.id !== 's1') expect(n.parentId).toBe('s1')
+    }
+    // The three starter atoms are seated one per slide: 12 columns over 3
+    // slides = 4-cell bands, each child inside its own band and small enough
+    // to leave the REST of that slide free for the next drop.
+    const kids = r.doc.nodes.filter((n) => n.parentId === 's1')
+    expect(kids.map((n) => n.slot)).toEqual([0, 1, 2])
+    for (const [i, n] of kids.entries()) {
+      expect(n.x).toBeGreaterThanOrEqual(i * 4)
+      expect(n.x + n.cols).toBeLessThanOrEqual((i + 1) * 4)
+      // Never the whole band: a starter slide stays droppable.
+      expect(n.cols).toBeLessThan(4)
+    }
+    // Slides are ordinary atoms: the doc validates clean.
+    expect(validateDoc(r.doc)).toEqual({ ok: true, errors: [] })
   })
 
   it('rejects unknown patterns and id-count mismatches without mutating', () => {
@@ -554,5 +583,159 @@ describe('validateDoc: file-level backstop (no screenshots)', () => {
       nodes: [root('c', 'card', 0, 0, 12, 10), root('t', 'text', 6, 0, 8, 2)],
     }
     expect(validateDoc(overlap).errors.join('|')).toContain('Card and Text overlap')
+  })
+})
+
+describe('slotted containers: carousel slides (no screenshots — pure rules)', () => {
+  // 12 columns over 3 slides = 4-cell bands: [0,4) [4,8) [8,12).
+  const shell = (items: number, cols = 12, rows = 8): PlacedNode => ({
+    id: 's1',
+    type: 'carousel',
+    config: { items },
+    parentId: null,
+    x: 0,
+    y: 0,
+    cols,
+    rows,
+  })
+  const doc = (node: PlacedNode, kids: PlacedNode[] = []): CanvasDoc => ({ version: 1, nodes: [node, ...kids] })
+
+  it('a drop lands inside the slide under the pointer, and records it', () => {
+    const d = doc(shell(3))
+    const box = { left: 0, top: 0, width: 1200, height: 800 }
+    // x=400px of 1200 = column 4 — the first cell of the middle slide.
+    const cell = eventCell(400, 100, box, d.nodes[0], { cols: 2, rows: 1 })
+    expect(cell).toEqual({ x: 4, y: 1 })
+    const r = insertNode(d, { id: 'k1', type: 'text', config: {}, parentId: 's1', ...cell, cols: 2, rows: 1 })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.doc.nodes.find((n) => n.id === 'k1')).toMatchObject({ x: 4, slot: 1 })
+  })
+
+  it('dragging an atom sideways moves it to the next slide', () => {
+    const d = doc(shell(3), [kid('k1', 'button', 's1', 0, 0, 2, 1)])
+    const moved = moveNode(d, 'k1', { x: 8, y: 0, cols: 2, rows: 1 }, 's1')
+    expect(moved.ok).toBe(true)
+    if (!moved.ok) return
+    expect(moved.doc.nodes.find((n) => n.id === 'k1')).toMatchObject({ x: 8, slot: 2 })
+  })
+
+  it('a rect may not straddle two slides, and a drop is seated, never split', () => {
+    const d = doc(shell(3))
+    expect(canInsertReason(d.nodes, 'text', { x: 2, y: 0, cols: 6, rows: 1 }, 's1')).toBe('containment')
+    expect(canInsertReason(d.nodes, 'text', { x: 0, y: 0, cols: 4, rows: 1 }, 's1')).toBeNull()
+    // The canvas-given rect is seated inside the band its centre falls in.
+    const r = insertNode(d, { id: 'k1', type: 'text', config: {}, parentId: 's1', x: 4, y: 0, cols: 3, rows: 1 })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.doc.nodes.find((n) => n.id === 'k1')).toMatchObject({ x: 4, slot: 1 })
+  })
+
+  it('slides never fight each other for cells, and the floor scales with them', () => {
+    const node = shell(3)
+    const kids = [
+      kid('a', 'text', 's1', 0, 0, 3, 2),
+      kid('b', 'text', 's1', 4, 0, 2, 1),
+      kid('c', 'text', 's1', 8, 0, 3, 1),
+    ]
+    expect(collides(kids[0], kids[1])).toBe(false)
+    // The widest slide (3 cells) times the slide count, plus the pad.
+    expect(containerFloor([node, ...kids], 's1')).toEqual({ cols: 3 * 3 + 1, rows: 3 })
+    expect(validateDoc(doc(node, kids))).toEqual({ ok: true, errors: [] })
+  })
+
+  it('judges touch slide by slide: a strip of slides is not a scattered doc', () => {
+    const node = shell(3)
+    const oneEach = [
+      kid('a', 'text', 's1', 0, 0, 3, 1),
+      kid('b', 'text', 's1', 4, 0, 3, 1),
+      kid('c', 'text', 's1', 8, 0, 3, 1),
+    ]
+    expect(validateDoc(doc(node, oneEach))).toEqual({ ok: true, errors: [] })
+    // Two atoms in the SAME slide still have to touch.
+    const gap = [kid('a', 'text', 's1', 0, 0, 1, 1), kid('b', 'text', 's1', 3, 0, 1, 1)]
+    expect(validateDoc(doc(node, gap)).errors.join('|')).toContain('scattered')
+  })
+
+  it('adding a slide re-seats the children and grows the shell to its floor', () => {
+    const node = shell(1, 6, 6)
+    const grown = applyNodeConfig(doc(node, [kid('k1', 'text', 's1', 0, 1, 3, 1)]), 's1', { items: 2 })
+    expect(grown.ok).toBe(true)
+    if (!grown.ok) return
+    // 2 slides × 3 cells + pad = 7 columns, and the child keeps its box.
+    expect(grown.doc.nodes.find((n) => n.id === 's1')).toMatchObject({ cols: 7, rows: 6 })
+    expect(grown.doc.nodes.find((n) => n.id === 'k1')).toMatchObject({ x: 0, slot: 0 })
+  })
+
+  it('refuses a slide count its contents cannot live in', () => {
+    const node = shell(1, 6, 6)
+    const r = applyNodeConfig(doc(node, [kid('k1', 'image', 's1', 0, 1, 6, 4)]), 's1', { items: 3 })
+    expect(r.ok).toBe(false)
+  })
+
+  it('a palette item scales to one slide: an image keeps its own size in a slide', () => {
+    const node = shell(3)
+    // A slide takes a third of the shell and shows all of it once published,
+    // so a third of the leaf's width lands it at the size it has anywhere
+    // else — not filling the slide just because the slide is narrow in edit
+    // space (which left no room for anything else in that slide).
+    expect(seatSpan(node, 'image', { cols: 6, rows: 4 })).toEqual({ cols: 2, rows: 4 })
+    const d = doc(node)
+    const span = seatSpan(node, 'image', { cols: 6, rows: 4 })
+    const cell = eventCell(400, 100, { left: 0, top: 0, width: 1200, height: 800 }, node, span)
+    const r = insertNode(d, { id: 'i1', type: 'image', config: {}, parentId: 's1', ...cell, ...span })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.doc.nodes.find((n) => n.id === 'i1')).toMatchObject({ x: 4, cols: 2, rows: 4, slot: 1 })
+    // Un-scaled, the very same drop is refused: six cells do not fit a band.
+    expect(canInsertReason(d.nodes, 'image', { x: 4, y: 1, cols: 6, rows: 4 }, 's1')).toBe('containment')
+  })
+
+  it('a palette item scales with the shell, and a plain container changes nothing', () => {
+    // A small atom follows the same share: two cells in a third of the shell.
+    expect(seatSpan(shell(3), 'badge', { cols: 2, rows: 1 })).toEqual({ cols: 1, rows: 1 })
+    // Rows are the leaf's own, capped by the shell (a shell shorter than it).
+    expect(seatSpan(shell(3, 12, 3), 'image', { cols: 4, rows: 4 })).toEqual({ cols: 2, rows: 3 })
+    // A one-slide shell is no narrower than the page: nothing to scale.
+    expect(seatSpan(shell(1, 32), 'marquee', { cols: 12, rows: 4 })).toEqual({ cols: 12, rows: 4 })
+    // A card is one band: every palette footprint is untouched.
+    const card = { type: 'card', config: {}, cols: 6, rows: 5 }
+    expect(seatSpan(card, 'image', { cols: 6, rows: 4 })).toEqual({ cols: 6, rows: 4 })
+    // A slide too narrow for the type is still refused with words — never
+    // silently shrunk under its own minimum.
+    const narrow = shell(6, 6, 6)
+    expect(seatSpan(narrow, 'marquee', { cols: 12, rows: 4 })).toEqual({ cols: 6, rows: 4 })
+    expect(canInsertReason([narrow], 'marquee', { x: 0, y: 0, cols: 6, rows: 4 }, 's1')).toBe('containment')
+  })
+
+  it('a moved atom lands on the slide on screen, exactly like a pointer drop', () => {
+    // Slide 1 is showing; the shell is 12 cells wide, so raw geometry would put
+    // a drop at its middle in slide 2 — a slide nobody can see. Every landing
+    // reads the same window, so the atom lands where the user aimed.
+    const d = doc(shell(3), [kid('k1', 'text', 's1', 0, 1, 2, 1)])
+    expect(resolveDrop(d.nodes, 'k1', { x: 6, y: 1, cols: 2, rows: 1 }, { s1: 0 })).toEqual({
+      parentId: 's1',
+      rect: { x: 2, y: 1, cols: 2, rows: 1 },
+    })
+    // With two slides in view, that same pointer is past the halfway mark, so
+    // it lands on the second slide ON SCREEN — which is slot 2.
+    const wide = doc({ ...shell(3), config: { items: 3, perView: '2' } })
+    const two = { ...wide, nodes: [...wide.nodes, kid('k1', 'text', 's1', 0, 1, 2, 1)] }
+    expect(resolveDrop(two.nodes, 'k1', { x: 6, y: 1, cols: 2, rows: 1 }, { s1: 0 })).toEqual({
+      parentId: 's1',
+      rect: { x: 4, y: 1, cols: 2, rows: 1 },
+    })
+    // Scrolled on one, the same pointer is slide 3.
+    expect(resolveDrop(two.nodes, 'k1', { x: 6, y: 1, cols: 2, rows: 1 }, { s1: 1 })).toEqual({
+      parentId: 's1',
+      rect: { x: 8, y: 1, cols: 2, rows: 1 },
+    })
+  })
+
+  it('leaves plain containers alone: a card child stores no slot', () => {
+    const r = insertNode({ version: 1, nodes: [root('c', 'card', 0, 0, 12, 10)] }, kid('k1', 'text', 'c', 0, 0, 2, 1))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.doc.nodes.find((n) => n.id === 'k1')?.slot).toBeUndefined()
   })
 })

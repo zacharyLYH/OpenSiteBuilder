@@ -14,11 +14,15 @@ export interface SiteNode {
   config?: Record<string, unknown>
   /** Nested children (containers only, max depth 1). */
   children?: SiteNode[]
-  /** Popup-shell footprint + child footprints in cells (modals only). */
+  /** Cell footprints: an overlay shell's own size, and a slotted container's
+   * (carousel) — whose children keep their boxes too, because a slide is a
+   * fixed-grid mini canvas. Flow-laid children carry none of these. */
   cols?: number
   rows?: number
   x?: number
   y?: number
+  /** Slotted containers only: which slide this child sits in (0-based). */
+  slot?: number
 }
 
 /** One page in the manifest. V2 renders the first page; multi-page routes are

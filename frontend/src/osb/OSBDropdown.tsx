@@ -41,7 +41,20 @@ export const OSB_DROPDOWN_DIRECTIONS: { value: OSBDropdownDirection; label: stri
 
 export const OSB_DROPDOWN_FIELDS: OSBField[] = [
   { key: 'label', label: 'Menu label', kind: 'text', required: true },
-  { key: 'items', label: 'Menu items', hint: 'Add the options visitors can pick.', kind: 'items' },
+  {
+    key: 'items',
+    label: 'Menu items',
+    hint: 'Add the options visitors can pick.',
+    kind: 'items',
+    // The row shape lives with the field, so the ONE items editor renders a
+    // menu row and a card row without a second control.
+    itemFields: [
+      { key: 'label', label: 'Item label', placeholder: 'Label' },
+      { key: 'link', label: 'Item link', placeholder: 'Link' },
+    ],
+    // A menu row may hold one nested list — its submenu (MENU_MAX_DEPTH).
+    subItems: true,
+  },
   {
     key: 'direction',
     label: 'Opens',

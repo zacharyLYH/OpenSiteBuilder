@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { OSB_PATTERNS } from './patterns'
 import { OSB_REGISTRY } from './registry'
+import { clampSlots, slotBandCols } from './slots'
 import { collides, isContiguous } from '../canvas/doc'
 
 // Patterns are authored compositions: guard them so a future edit can't
@@ -21,7 +22,19 @@ describe('patterns (no screenshots — pure rules)', () => {
           expect(collides(p.children[i], p.children[j])).toBe(false)
         }
       }
-      expect(isContiguous(p.children)).toBe(true)
+      // A slotted container (the carousel) is judged slide by slide: its
+      // slides never touch, and every child has to live inside its own band.
+      const slots = clampSlots((p.containerConfig as { items?: unknown }).items)
+      const bandCols = slotBandCols(p.containerCols, slots)
+      const groups = new Map<number, typeof p.children>()
+      for (const c of p.children) {
+        const slot = Math.max(0, Math.min(slots - 1, Math.floor((c.x + c.cols / 2) / bandCols)))
+        expect(c.x).toBeGreaterThanOrEqual(slot * bandCols)
+        expect(c.x + c.cols).toBeLessThanOrEqual(Math.min((slot + 1) * bandCols, p.containerCols))
+        groups.set(slot, [...(groups.get(slot) ?? []), c])
+      }
+      if (slots <= 1) expect(isContiguous(p.children)).toBe(true)
+      else for (const group of groups.values()) expect(isContiguous(group)).toBe(true)
     })
   }
 })

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { OVERLAY_CELL_PX, overlayChildStyle } from '../osb/OSBOverlay'
 import { OSBOverlayShell } from '../osb/OSBRuntime'
+import { OSB_PATTERNS } from '../osb/patterns'
 import { OSB_REGISTRY, overlayNoun, type OSBNodeType } from '../osb/registry'
 import { Button } from '../components/ui/button'
 import { startChildResize } from './childResize'
@@ -82,7 +83,10 @@ export default function OverlayEditor(p: OverlayEditorProps) {
     const drag = p.armed?.drag
     if (!drag) return null
     if (drag.kind === 'palette') return { type: drag.type, moveId: null }
-    if (drag.kind === 'pattern') return { type: 'card', moveId: null }
+    if (drag.kind === 'pattern') {
+      const pattern = OSB_PATTERNS[drag.pattern]
+      return pattern ? { type: pattern.containerType, moveId: null } : null
+    }
     if (p.armedType) return { type: p.armedType, moveId: drag.id }
     return null
   }
@@ -90,7 +94,10 @@ export default function OverlayEditor(p: OverlayEditorProps) {
   const judgeAt = (clientX: number, clientY: number, span: { cols: number; rows: number }) => {
     const box = shellBox()
     if (!box) return null
-    const rect = { ...eventCell(clientX, clientY, box, modal, span), ...span }
+    // The shell as the cell math sees it: an overlay holds flat atom children,
+    // so its kind never divides the space into slides.
+    const space = { type: modal.overlayType, config: modal.config, cols: modal.cols, rows: modal.rows }
+    const rect = { ...eventCell(clientX, clientY, box, space, span), ...span }
     return rect
   }
 

@@ -20,6 +20,16 @@ export function overlayHeightPx(rows: number): string {
   return `${Math.max(1, rows) * OVERLAY_CELL_PX}px`
 }
 
+/**
+ * THE flow box of a fixed-grid node — an overlay shell, a slotted container.
+ * A live canvas measures such a node in cells; a flow page has no cells, so the
+ * cell pitch stands in for one. Same rule for both, so a popup and a carousel
+ * that share a footprint also share a size.
+ */
+export function gridBoxStyle(cols: number, rows: number): CSSProperties {
+  return { width: overlayWidthPx(cols), height: overlayHeightPx(rows) }
+}
+
 /** Percent box for a footprint inside the shell's cell rectangle. Shared by
  * the editor shell, the Test preview, and published overlays — one rule, so
  * buttons keep their grid width everywhere. */

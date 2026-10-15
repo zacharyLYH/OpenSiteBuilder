@@ -118,4 +118,29 @@ test('drag states: kind reject, nest highlight, reposition', async ({ page }) =>
   expect(afterDoc).toEqual({ version: 1, nodes: moved, overlays: [], theme: 'light' })
   await expect(page.getByTestId('drop-message')).toContainText('That spot is taken')
   await closeDrawerIfOpen(page)
+
+  // 5. STALE HOVER: a drag that leaves the shell for the app bar fires no
+  // canvas event at all, so the shell's own leave has to clear the verdict —
+  // otherwise the red child and its ghost stay lit over an abandoned gesture,
+  // and the next attempt reads as "this place refuses me".
+  await page.reload()
+  const card = page.getByTestId('container-card1')
+  const cardBox2 = await bbox(card)
+  const bar = page.getByTestId('palette-pattern-card-content')
+  await bar.hover()
+  await page.mouse.down()
+  // A card pattern over a card is refused (shells never nest): the shell reds.
+  await page.mouse.move(cardBox2.x + cardBox2.width / 2, cardBox2.y + cardBox2.height / 2, { steps: 12 })
+  await expect(card).toHaveClass(/drag-conflict/)
+  // Cruising off to the app bar fires no canvas event at all, so the shell's
+  // own leave has to clear it — otherwise the red stays lit over a gesture the
+  // user already gave up on, and the next attempt reads as "refused here".
+  await page.mouse.move(cardBox2.x + cardBox2.width / 2, 20, { steps: 12 })
+  await expect(card).not.toHaveClass(/drag-conflict/)
+  await expect(page.getByTestId('drop-ghost')).toHaveCount(0)
+  await page.mouse.up()
+  await page.waitForTimeout(900)
+  // Abandoned over the app bar: nothing landed, and nothing is stuck.
+  expect(await persistedDoc(page, SLUG)).toEqual({ version: 1, nodes: moved, overlays: [], theme: 'light' })
+  await expect(page.getByTestId('canvas')).not.toHaveClass(/dragging-on/)
 })

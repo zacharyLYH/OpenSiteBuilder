@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { gridBoxStyle } from '../osb/OSBOverlay'
 import { OSB_REGISTRY } from '../osb/registry'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -6,58 +7,88 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { Textarea } from '../components/ui/textarea'
-import { isFieldVisible, MENU_MAX_DEPTH, type OSBField, type OSBMenuItem } from '../osb/types'
+import { isFieldVisible, MENU_MAX_DEPTH, type OSBField, type OSBFieldItemKey } from '../osb/types'
 import type { PlacedNode } from './doc'
 
-/** Repeatable label + link rows (dropdown options, …). Collection-backed data
- * lives in config, never on the canvas (PRD §6.2). A row may hold one nested
- * list — its submenu — and MENU_MAX_DEPTH stops the nesting there. */
+/** One collection row as the editor handles it: string keys plus an optional
+ * nested list. The field declares which keys exist (`itemFields`). */
+type ItemRow = Record<string, unknown>
+
+/** A blank row for the field's declared keys — never a hardcoded shape. */
+const blankRow = (itemFields: OSBFieldItemKey[]): ItemRow =>
+  Object.fromEntries(itemFields.map((f) => [f.key, '']))
+
+/** Repeatable rows for any collection-backed component: a dropdown's options,
+ * a marquee's cards. The FIELD says which keys a row has,
+ * so one editor serves them all (PRD §6.2: collection data lives in config,
+ * never on the canvas). A row may hold one nested list — a menu's submenu —
+ * and MENU_MAX_DEPTH stops the nesting there. */
 function ItemsEditor({
   items,
+  itemFields,
+  subItems = false,
   onChange,
   depth = 0,
 }: {
-  items: OSBMenuItem[]
-  onChange: (items: OSBMenuItem[]) => void
+  items: ItemRow[]
+  itemFields: OSBFieldItemKey[]
+  subItems?: boolean
+  onChange: (items: ItemRow[]) => void
   depth?: number
 }) {
-  const set = (i: number, patch: Partial<OSBMenuItem>) =>
+  const set = (i: number, patch: ItemRow) =>
     onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)))
   return (
     <div className="flex flex-col gap-2">
-      {items.map((it, i) => (
-        <div key={i} className="flex flex-col gap-2">
-          <div data-testid="osb-item-row" className="flex items-center gap-2">
-            <Input aria-label="Item label" placeholder="Label" value={it.label} onChange={(e) => set(i, { label: e.target.value })} />
-            <Input aria-label="Item link" placeholder="Link" value={it.link} onChange={(e) => set(i, { link: e.target.value })} />
-            {depth + 1 < MENU_MAX_DEPTH && (
-              <Button
-                type="button"
-                aria-label="Add sub-item"
-                variant="outline"
-                size="sm"
-                onClick={() => set(i, { children: [...(it.children ?? []), { label: '', link: '' }] })}
-              >
-                ↳
+      {items.map((it, i) => {
+        const kids = subItems && Array.isArray(it.children) ? (it.children as ItemRow[]) : []
+        return (
+          <div key={i} className="flex flex-col gap-2">
+            <div data-testid="osb-item-row" className="flex items-center gap-2">
+              {itemFields.map((f) => (
+                <Input
+                  key={f.key}
+                  aria-label={f.label}
+                  placeholder={f.placeholder}
+                  value={typeof it[f.key] === 'string' ? (it[f.key] as string) : ''}
+                  onChange={(e) => set(i, { [f.key]: e.target.value })}
+                />
+              ))}
+              {subItems && depth + 1 < MENU_MAX_DEPTH && (
+                <Button
+                  type="button"
+                  aria-label="Add sub-item"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => set(i, { children: [...kids, blankRow(itemFields)] })}
+                >
+                  ↳
+                </Button>
+              )}
+              <Button type="button" aria-label="Remove item" variant="outline" size="sm" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+                ✕
               </Button>
-            )}
-            <Button type="button" aria-label="Remove item" variant="outline" size="sm" onClick={() => onChange(items.filter((_, j) => j !== i))}>
-              ✕
-            </Button>
-          </div>
-          {it.children !== undefined && it.children.length > 0 && (
-            <div data-testid="osb-sub-items" className="ml-3 border-l border-slate-200 pl-3">
-              <ItemsEditor items={it.children} onChange={(next) => set(i, { children: next })} depth={depth + 1} />
             </div>
-          )}
-        </div>
-      ))}
+            {kids.length > 0 && (
+              <div data-testid="osb-sub-items" className="ml-3 border-l border-slate-200 pl-3">
+                <ItemsEditor
+                  items={kids}
+                  itemFields={itemFields}
+                  subItems
+                  onChange={(next) => set(i, { children: next })}
+                  depth={depth + 1}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
       <Button
         type="button"
         data-testid="osb-add-item"
         variant="outline"
         size="sm"
-        onClick={() => onChange([...items, { label: '', link: '' }])}
+        onClick={() => onChange([...items, blankRow(itemFields)])}
       >
         ＋ Add item
       </Button>
@@ -73,14 +104,40 @@ function FieldControl({
 }: {
   field: OSBField
   value: unknown
-  onChange: (v: string | boolean | OSBMenuItem[]) => void
+  onChange: (v: string | boolean | number | ItemRow[]) => void
 }) {
   const id = `osb-field-${field.key}`
   const text = typeof value === 'string' ? value : (value ?? '').toString()
+  // A whole number the user steps (slide counts, timings). Out-of-range or
+  // empty input is left to the owner, which clamps to its own bounds.
+  if (field.kind === 'number') {
+    const n = typeof value === 'number' && Number.isFinite(value) ? value : field.min
+    return (
+      <Input
+        id={id}
+        type="number"
+        min={field.min}
+        max={field.max}
+        step={1}
+        value={n}
+        onChange={(e) => {
+          const parsed = Number.parseInt(e.target.value, 10)
+          onChange(Number.isNaN(parsed) ? field.min : parsed)
+        }}
+      />
+    )
+  }
   if (field.kind === 'longtext')
     return <Textarea id={id} rows={3} value={text} onChange={(e) => onChange(e.target.value)} />
   if (field.kind === 'items')
-    return <ItemsEditor items={Array.isArray(value) ? (value as OSBMenuItem[]) : []} onChange={onChange} />
+    return (
+      <ItemsEditor
+        items={Array.isArray(value) ? (value as ItemRow[]) : []}
+        itemFields={field.itemFields}
+        subItems={field.subItems}
+        onChange={onChange}
+      />
+    )
   if (field.kind === 'select')
     return (
       <Select value={text} onValueChange={onChange}>
@@ -136,7 +193,7 @@ export default function ConfigDrawer({
   const entry = OSB_REGISTRY[node.type]
   const [draft, setDraft] = useState<Record<string, unknown>>({ ...entry.defaults, ...node.config })
   // Selecting a node never rewrites its stored config — only a real edit does.
-  const edit = (key: string, value: string | boolean | OSBMenuItem[]) => {
+  const edit = (key: string, value: string | boolean | number | ItemRow[]) => {
     const next = { ...draft, [key]: value }
     // A field that just hid (e.g. the link was cleared) must not keep a
     // stale value behind: hidden booleans fall back to their defaults.
@@ -179,9 +236,15 @@ export default function ConfigDrawer({
           </SheetClose>
         </SheetHeader>
         {/* The preview is a thumbnail: clicks stay in the drawer. Media is the
-            exception — a video's whole job is to play, so it stays clickable. */}
+            exception — a video's whole job is to play, so it stays clickable.
+            A slotted container (carousel) is a fixed-grid box, so the preview
+            gives it the flow box its slides are laid out in. */}
         <div className="pointer-events-none overflow-hidden rounded-md border border-slate-200 [&_video]:pointer-events-auto">
-          {entry.render(draft)}
+          {entry.slots ? (
+            <div style={gridBoxStyle(node.cols, node.rows)}>{entry.render(draft)}</div>
+          ) : (
+            entry.render(draft)
+          )}
         </div>
         {entry.fields.filter((f) => isFieldVisible(f, draft)).map((f) => (
           <div key={f.key} className="flex flex-col gap-1">
