@@ -45,9 +45,12 @@ export function useListDoc(projectName: string | null) {
   }, [doc, key], PERSIST_MS)
 
   // Apply an op; returns the rejection reason (null = applied) for the UI.
+  // docRef syncs immediately (not just in the effect) so back-to-back calls
+  // in one handler each see the last result — no dropped inserts.
   const apply = (fn: (d: SiteManifest) => { ok: true; doc: SiteManifest } | { ok: false; reason: Reason }): Reason | null => {
     const r = fn(docRef.current)
     if (!r.ok) return r.reason
+    docRef.current = r.doc
     setDoc(r.doc)
     return null
   }

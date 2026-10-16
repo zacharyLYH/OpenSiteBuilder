@@ -142,12 +142,13 @@ export default function ConfigDrawer({
   // Outside click closes (capture on document: portal clicks bubble through
   // the React tree, so a canvas-level handler would murder the drawer).
   // Excepted: the drawer itself, Radix popper menus (selects/dropdowns),
-  // and listboxes — field interaction never dismisses.
+  // listboxes, and the canvas action bar (delete/nest buttons) — acting on
+  // the selection must not deselect first.
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       const t = e.target as HTMLElement | null
       if (!t || typeof t.closest !== 'function') return
-      if (t.closest('[data-testid="config-drawer"], [data-radix-popper-content-wrapper], [role="listbox"], [role="menu"]')) return
+      if (t.closest('[data-testid="config-drawer"], [data-testid="canvas-action-bar"], [data-radix-popper-content-wrapper], [role="listbox"], [role="menu"]')) return
       onClose()
     }
     document.addEventListener('pointerdown', onDown, true)

@@ -70,3 +70,38 @@ test('pinned looks: rejected halo', async ({ page }) => {
   await expect(page.getByTestId('drop-message')).toContainText('cycle')
   await expect(card).toHaveScreenshot('pins-rejected.png')
 })
+
+const COLUMNS_SAMPLE = {
+  version: '0.1',
+  site: { name: 'pins-columns', theme: 'light' },
+  pages: [
+    {
+      id: 'home',
+      path: '/',
+      title: 'Home',
+      nodes: [
+        {
+          id: 'cols1',
+          type: 'columns',
+          config: { split: '50-50' },
+          children: [
+            { id: 'c1', type: 'card', config: {}, children: [{ id: 't1', type: 'text', config: { text: 'Left card', heading: 'h4' } }] },
+            { id: 'c2', type: 'card', config: {}, children: [{ id: 't2', type: 'text', config: { text: 'Right card', heading: 'h4' } }] },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
+test('pinned looks: columns row', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.context().addCookies([{ name: 'obs_curr_project_name', value: 'e2e-pins-columns', domain: 'localhost', path: '/' }])
+  await page.goto('/canvas')
+  await page.evaluate(([key, doc]: [string, unknown]) => localStorage.setItem(key, JSON.stringify(doc)), [KEY('e2e-pins-columns'), COLUMNS_SAMPLE] as [string, unknown])
+  await page.reload()
+  const cols = page.locator('[data-testid="canvas-node"][data-type="columns"]')
+  await expect(cols).toBeVisible()
+  await expect(cols.getByTestId('osb-column-slot')).toHaveCount(2)
+  await expect(cols).toHaveScreenshot('pins-columns.png')
+})

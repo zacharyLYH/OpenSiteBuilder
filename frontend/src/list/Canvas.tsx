@@ -12,6 +12,7 @@ import ConfigDrawer from '../canvas/ConfigDrawer'
 import { useListDoc } from './store'
 import { pushManifest } from './push'
 import { DragCtx, Gap, type Landing } from './dnd'
+import { columnsGrow, SPLIT_COUNT, type OSBColumnsSplit } from '../osb/OSBColumns'
 import { canHold, checkMove, findNode, parentOf } from './ops'
 
 type PushState = { kind: 'busy' | 'ok' | 'error'; text: string } | null
@@ -30,6 +31,56 @@ function NodeView({
   const entry = OSB_REGISTRY[node.type]
   const kids = node.children ?? []
   const { setPayload, setRejected } = useContext(DragCtx)
+  // Columns lays kids side by side: NodeView owns the row directly (slots +
+  // vertical gaps with real widths from config). OSBColumns is the runtime
+  // twin for bare cards — the canvas never calls it, so no dual-path parsing.
+  if (node.type === 'columns') {
+    const grow = columnsGrow(node.config)
+    return (
+      <div
+        data-testid="canvas-node"
+        data-type={node.type}
+        data-id={node.id}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('application/osb-node', node.id)
+          e.dataTransfer.effectAllowed = 'move'
+          setRejected(null)
+          setPayload(node.id)
+        }}
+        onDragEnd={() => setPayload(null)}
+        onClick={(e) => {
+          e.stopPropagation()
+          onSelect(node.id)
+        }}
+        className={node.id === selectedId ? 'canvas-selected outline outline-2 outline-teal-600' : undefined}
+      >
+        <div data-testid="osb-columns" className="flex flex-col gap-4 md:flex-row">
+          {kids.length === 0 ? (
+            <>
+              <Gap to={{ parentId: node.id, index: 0 }} vertical />
+              <p className="text-xs text-slate-400">Drop here</p>
+            </>
+          ) : (
+            <>
+              {kids.map((k, i) => (
+                <div
+                  key={k.id}
+                  data-testid="osb-column-slot"
+                  className="min-w-0 flex-1"
+                  style={{ flexGrow: grow[i] ?? 1, flexBasis: 0 }}
+                >
+                  {i > 0 && <Gap to={{ parentId: node.id, index: i }} vertical />}
+                  <NodeView node={k} depth={depth + 1} selectedId={selectedId} onSelect={onSelect} />
+                </div>
+              ))}
+              <Gap to={{ parentId: node.id, index: kids.length }} vertical />
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
   // Empty containers show one gap + hint: the only way anything lands inside.
   const inner =
     kids.length === 0 && isContainerType(node.type) ? (
@@ -75,7 +126,7 @@ function NodeView({
 
 export default function ListCanvas() {
   const [projectName] = useState(getProjectSlug)
-  const { doc, insert, move, remove, configure } = useListDoc(projectName)
+  const { doc, docRef, insert, move, remove, configure } = useListDoc(projectName)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [targetId, setTargetId] = useState<string | null>(null)
   const [push, setPush] = useState<PushState>(null)
@@ -180,6 +231,23 @@ export default function ListCanvas() {
         >
           Card
         </Button>
+        <Button
+          data-testid="add-columns"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            // Columns enters with two empty cards: user never faces an empty
+            // shell that rejects everything they drag at it.
+            const colsId = crypto.randomUUID()
+            const bad = insert(null, nodes.length, { id: colsId, type: 'columns', config: {} })
+            if (bad) return say(bad)
+            insert(colsId, 0, { id: crypto.randomUUID(), type: 'card', config: {} })
+            insert(colsId, 1, { id: crypto.randomUUID(), type: 'card', config: {} })
+            setSelectedId(colsId)
+          }}
+        >
+          Columns
+        </Button>
         {complaint && (
           <span data-testid="drop-message" role="status" className="text-xs font-medium text-rose-600">
             {complaint}
@@ -231,11 +299,18 @@ export default function ListCanvas() {
             onApply={(_id, patch) => {
               const bad = configure(selected.id, patch)
               if (bad) say(bad)
+              // Picking triple/quad fills empty cards up to the split count.
+              // Never deletes — extra cards keep their content.
+              if (selected.type === 'columns' && typeof patch['split'] === 'string') {
+                const want = SPLIT_COUNT[patch['split'] as OSBColumnsSplit] ?? 2
+                const cur = findNode(docRef.current, selected.id)?.children?.length ?? 0
+                for (let i = cur; i < want; i++) insert(selected.id, i, { id: crypto.randomUUID(), type: 'card', config: {} })
+              }
             }}
           />
         )}
         {selected && (
-          <div className="fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-lg">
+          <div data-testid="canvas-action-bar" className="fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-lg">
             <span className="text-xs text-slate-500">{selected.type}</span>
             {(() => {
               // Only offer moves that can land: nesting needs a sibling

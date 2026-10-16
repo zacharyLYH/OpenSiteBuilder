@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
 import OSBButton, { OSB_BUTTON_DEFAULTS, OSB_BUTTON_FIELDS, type OSBButtonConfig } from './OSBButton'
 import OSBCard, { OSB_CARD_DEFAULTS, OSB_CARD_FIELDS, cardContentPad, type OSBCardConfig } from './OSBCard'
+import OSBColumns, { OSB_COLUMNS_DEFAULTS, OSB_COLUMNS_FIELDS, type OSBColumnsConfig } from './OSBColumns'
 import OSBImage, { OSB_IMAGE_DEFAULTS, OSB_IMAGE_FIELDS, type OSBImageConfig } from './OSBImage'
 import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, type OSBDrawerConfig } from './OSBDrawer'
 import OSBDropdown, { OSB_DROPDOWN_DEFAULTS, OSB_DROPDOWN_FIELDS, type OSBDropdownConfig } from './OSBDropdown'
@@ -90,6 +91,14 @@ export const OSB_REGISTRY = {
     OSBCard,
     { kind: 'container', emptyHint: 'Drag text, buttons or images here', contentPad: cardContentPad },
   ),
+  columns: defineEntry(
+    'Columns',
+    OSB_COLUMNS_DEFAULTS,
+    OSB_COLUMNS_FIELDS,
+    { minCols: 6, minRows: 3, maxCols: 32, maxRows: 32, cols: 12, rows: 5 },
+    OSBColumns,
+    { kind: 'container', emptyHint: 'Drag cards here' },
+  ),
   text: defineEntry(
     'Text',
     OSB_TEXT_DEFAULTS,
@@ -166,12 +175,14 @@ export function isContainerType(t: string): boolean {
 }
 
 /**
- * The one structural membership rule. Containers hold atoms; overlays hold
- * atoms. Collection-backed components (dropdowns, …) are atoms and hold
- * nothing. Nothing else nests anywhere. Default deny: unknown types reject.
+ * The one structural membership rule. Card holds atoms; Columns holds cards;
+ * overlays hold atoms. Collection-backed components (dropdowns, …) are atoms
+ * and hold nothing. Nothing else nests anywhere. Default deny: unknown types
+ * reject.
  */
 export function canContain(parentType: string, childType: string): boolean {
   if (isOverlayType(parentType)) return isAtomType(childType)
+  if (parentType === 'columns') return childType === 'card'
   if (isContainerType(parentType)) return isAtomType(childType)
   return false
 }
@@ -186,5 +197,5 @@ export function isTriggerType(t: string): boolean {
   return t in OSB_REGISTRY && OSB_REGISTRY[t as OSBNodeType].trigger === true
 }
 
-export type { OSBButtonConfig, OSBCardConfig, OSBDrawerConfig, OSBDropdownConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig, OSBVideoConfig }
-export { OSBButton, OSBCard, OSBDrawer, OSBDropdown, OSBImage, OSBModal, OSBText, OSBVideo }
+export type { OSBButtonConfig, OSBCardConfig, OSBColumnsConfig, OSBDrawerConfig, OSBDropdownConfig, OSBImageConfig, OSBModalConfig, OSBTextConfig, OSBVideoConfig }
+export { OSBButton, OSBCard, OSBColumns, OSBDrawer, OSBDropdown, OSBImage, OSBModal, OSBText, OSBVideo }

@@ -62,7 +62,8 @@ export function parentOf(doc: SiteManifest, id: string): string | null {
 }
 
 // Can parent hold child? Root holds anything except overlays. Atoms hold
-// nothing. Anything else asks the registry, never a hardcoded type name.
+// nothing. Columns holds cards only. Anything else asks the registry, never
+// a hardcoded type name.
 export function canHold(nodes: SiteNode[], parentId: string | null, type: OSBNodeType): Reason | null {
   if (isOverlayType(type)) return 'wrong-kind'
   if (parentId === null) return null

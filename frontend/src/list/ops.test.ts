@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SiteManifest } from '../site/types'
 import { canHold, findNode, insertNode, moveNode, parentOf, removeNode, updateConfig } from './ops'
-
 const doc = (): SiteManifest => ({
   version: '0.1',
   site: { name: 'test', theme: 'light' },
@@ -66,5 +65,30 @@ describe('placement rejections (what a bad drop voices)', () => {
     expect(parentOf(d, 'c')).toBeNull()
     expect(parentOf(d, 't')).toBe('c')
     expect(parentOf(d, 'ghost')).toBeNull()
+  })
+})
+
+describe('columns containment', () => {
+  it('columns holds cards, rejects atoms', () => {
+    let d = doc()
+    d = (insertNode(d, null, 0, { id: 'cols', type: 'columns' }) as { ok: true; doc: SiteManifest }).doc
+    expect(insertNode(d, 'cols', 0, { id: 't', type: 'text' })).toMatchObject({ ok: false, reason: 'wrong-kind' })
+    const r = insertNode(d, 'cols', 0, { id: 'c', type: 'card' })
+    expect(r.ok).toBe(true)
+  })
+
+  it('cards reject columns (no nesting containers)', () => {
+    let d = doc()
+    d = (insertNode(d, null, 0, { id: 'c', type: 'card' }) as { ok: true; doc: SiteManifest }).doc
+    expect(insertNode(d, 'c', 0, { id: 'cols', type: 'columns' })).toMatchObject({ ok: false, reason: 'wrong-kind' })
+  })
+
+  it('moves a card into columns', () => {
+    let d = doc()
+    d = (insertNode(d, null, 0, { id: 'cols', type: 'columns' }) as { ok: true; doc: SiteManifest }).doc
+    d = (insertNode(d, null, 1, { id: 'c', type: 'card' }) as { ok: true; doc: SiteManifest }).doc
+    d = (moveNode(d, 'c', 'cols', 0) as { ok: true; doc: SiteManifest }).doc
+    expect(d.pages[0].nodes.map((n) => n.id)).toEqual(['cols'])
+    expect(d.pages[0].nodes[0].children?.map((n) => n.id)).toEqual(['c'])
   })
 })

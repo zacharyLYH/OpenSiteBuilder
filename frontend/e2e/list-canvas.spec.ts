@@ -9,6 +9,26 @@ async function openList(page: import('@playwright/test').Page, slug: string) {
   await page.goto('/canvas')
 }
 
+test('list canvas: columns enters with two cards, rejects atoms', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await openList(page, 'e2e-columns')
+
+  // Click Columns: one container + two empty cards land, selected.
+  await page.getByTestId('add-columns').click()
+  await expect(page.getByTestId('canvas-node')).toHaveCount(3)
+  const cols = page.getByTestId('canvas-node').filter({ hasText: 'Drop here' }).first()
+  await expect(cols).toHaveAttribute('data-type', 'columns')
+  await expect(cols.locator(':scope > [data-testid="osb-columns"] > [data-testid="osb-column-slot"]')).toHaveCount(2)
+  await expect(page.getByTestId('config-drawer')).toContainText('Columns settings')
+
+  // Manifest: columns holds two cards, nothing else.
+  await page.waitForTimeout(700)
+  const raw = await page.evaluate((k: string) => localStorage.getItem(k), KEY('e2e-columns'))
+  const manifest = JSON.parse(raw as string)
+  expect(manifest.pages[0].nodes.map((n: { type: string }) => n.type)).toEqual(['columns'])
+  expect(manifest.pages[0].nodes[0].children.map((n: { type: string }) => n.type)).toEqual(['card', 'card'])
+})
+
 test('list canvas: compose, reject, push, screenshots', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await openList(page, 'e2e-list')

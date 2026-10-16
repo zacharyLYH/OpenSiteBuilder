@@ -59,25 +59,26 @@ function useGapDrop(to: Landing) {
 // resizes under the cursor — hover recolors only — or the target slides out
 // from under the pointer mid-drag and the drop misses. (Refused halos render
 // at rest, after the drop, so their size is harmless.)
-export function Gap({ to }: { to: Landing }) {
+// `vertical` lays the line between side-by-side slots (columns row) instead
+// of stacked rows: same verdict colors, swapped axis.
+export function Gap({ to, vertical }: { to: Landing; vertical?: boolean }) {
   const { payload, hover, rejected, judge } = useContext(DragCtx)
   const drop = useGapDrop(to)
   const key = gapKey(to)
+  // Row gaps are horizontal lines (h-*, full width); column gaps are vertical
+  // lines (w-*, full height) between side-by-side slots.
+  const idle = vertical ? 'w-1 self-stretch' : 'h-1'
+  const haloBad = vertical ? 'w-1.5 self-stretch rounded bg-rose-600 ring-2 ring-rose-300' : 'h-1.5 rounded bg-rose-600 ring-2 ring-rose-300'
+  const armed = vertical ? 'w-2 self-stretch bg-transparent' : 'h-2 bg-transparent'
+  const okCls = vertical ? 'w-2 self-stretch rounded bg-green-600' : 'h-2 rounded bg-green-600'
+  const badCls = vertical ? 'w-2 self-stretch rounded bg-rose-600 ring-2 ring-rose-300' : 'h-2 rounded bg-rose-600 ring-2 ring-rose-300'
   if (!payload) {
     // A refused drop leaves its halo behind until the complaint fades, so
     // the failed state screenshots (and reads) as failed.
-    if (rejected === key)
-      return <div data-testid="canvas-gap" data-rejected="true" className="h-1.5 rounded bg-rose-600 ring-2 ring-rose-300" />
-    return <div data-testid="canvas-gap" className="h-1" />
+    if (rejected === key) return <div data-testid="canvas-gap" data-rejected="true" className={haloBad} />
+    return <div data-testid="canvas-gap" className={idle} />
   }
-  if (hover !== key) return <div data-testid="canvas-gap" className="h-2 bg-transparent" {...drop} />
+  if (hover !== key) return <div data-testid="canvas-gap" className={armed} {...drop} />
   const ok = judge(payload, to)
-  return (
-    <div
-      data-testid="canvas-gap"
-      data-accept={ok}
-      className={ok ? 'h-2 rounded bg-green-600' : 'h-2 rounded bg-rose-600 ring-2 ring-rose-300'}
-      {...drop}
-    />
-  )
+  return <div data-testid="canvas-gap" data-accept={ok} className={ok ? okCls : badCls} {...drop} />
 }

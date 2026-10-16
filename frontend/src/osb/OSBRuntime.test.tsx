@@ -46,6 +46,25 @@ describe('OSBRuntime (the engine)', () => {
     expect(screen.getByText('Inside card')).toBeTruthy()
   })
 
+  it('renders columns with cards side by side', () => {
+    const m = manifest()
+    m.pages[0].nodes = [
+      {
+        id: 'cols',
+        type: 'columns',
+        config: { split: '50-50' },
+        children: [
+          { id: 'c1', type: 'card', config: {}, children: [{ id: 't1', type: 'text', config: { text: 'Left' } }] },
+          { id: 'c2', type: 'card', config: {}, children: [{ id: 't2', type: 'text', config: { text: 'Right' } }] },
+        ],
+      },
+    ]
+    render(<OSBRuntime manifest={m} />)
+    expect(screen.getByText('Left')).toBeTruthy()
+    expect(screen.getByText('Right')).toBeTruthy()
+    expect(screen.getAllByTestId('osb-column-slot')).toHaveLength(2)
+  })
+
   it('applies the global site theme, not a per-node one', () => {
     const light = render(<OSBRuntime manifest={manifest()} />)
     expect(light.container.querySelector('main')?.className).toContain('bg-white')
