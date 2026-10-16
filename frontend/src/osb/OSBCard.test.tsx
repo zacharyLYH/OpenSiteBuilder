@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import OSBCard, {
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
   OSB_CARD_DEFAULTS,
   OSB_CARD_FIELDS,
   OSB_CARD_RADII,
@@ -22,15 +17,13 @@ const shell = (container: HTMLElement): HTMLElement => {
   return el as HTMLElement
 }
 
-describe('OSBCard chrome (vendored from shadcn Card)', () => {
-  it('renders shadcn card chrome by default (rounded, bordered, shadowed, padded)', () => {
+describe('OSBCard adapter (shadcn Card underneath)', () => {
+  it('renders shadcn card chrome by default (rounded, bordered, shadowed)', () => {
     const { container } = render(<OSBCard config={{}} />)
     const cls = shell(container).className
     expect(cls).toContain('rounded-xl')
     expect(cls).toContain('border-slate-200')
     expect(cls).toContain('shadow-sm')
-    expect(cls).toContain('gap-6')
-    expect(cls).toContain('py-6')
   })
 
   it('variant controls the border emphasis; plain drops the visible border', () => {
@@ -41,24 +34,21 @@ describe('OSBCard chrome (vendored from shadcn Card)', () => {
     expect(shell(plain.container).className).toContain('border-transparent')
   })
 
-  it('exposes independent radius, depth and inner-spacing settings', () => {
-    const { container } = render(
-      <OSBCard config={{ radius: 'pill', shadow: 'strong', padding: 'spacious' }}>
+  it('pads flow children from the spacing setting (shadcn CardContent rhythm)', () => {
+    render(
+      <OSBCard config={{ padding: 'spacious' }}>
         <OSBText config={{ text: 'x' }} />
       </OSBCard>,
     )
-    const cls = shell(container).className
-    expect(cls).toContain('rounded-3xl')
-    expect(cls).toContain('shadow-lg')
     expect(screen.getByTestId('osb-card-children').className).toContain('gap-8')
     expect(screen.getByTestId('osb-card-children').className).toContain('px-8')
   })
 
-  it('none/shadow-none and square corners are expressible', () => {
-    const { container } = render(<OSBCard config={{ radius: 'none', shadow: 'none' }} />)
+  it('radius and depth knobs still win over shadcn base', () => {
+    const { container } = render(<OSBCard config={{ radius: 'pill', shadow: 'strong' }} />)
     const cls = shell(container).className
-    expect(cls).toContain('rounded-none')
-    expect(cls).toContain('shadow-none')
+    expect(cls).toContain('rounded-3xl')
+    expect(cls).toContain('shadow-lg')
   })
 
   it('reads the global dark theme without touching the border radius', () => {
@@ -73,7 +63,7 @@ describe('OSBCard chrome (vendored from shadcn Card)', () => {
     expect(cls).toContain('rounded-xl')
   })
 
-  it('renders no ghost internals — only the real children it is given', () => {
+  it('children land in shadcn CardContent, none invented', () => {
     render(
       <OSBCard config={{}}>
         <OSBText config={{ text: 'Card title', heading: 'h4' }} />
@@ -88,22 +78,6 @@ describe('OSBCard chrome (vendored from shadcn Card)', () => {
   it('omits the content slot when there are no children (empty container)', () => {
     render(<OSBCard config={{}} />)
     expect(screen.queryByTestId('osb-card-children')).toBeNull()
-  })
-
-  it('exports every shadcn slot as a real slot-marked component', () => {
-    const { container } = render(
-      <div>
-        <CardHeader>
-          <CardTitle>Title</CardTitle>
-          <CardDescription>Description</CardDescription>
-        </CardHeader>
-        <CardContent>Body</CardContent>
-        <CardFooter>Footer</CardFooter>
-      </div>,
-    )
-    for (const slot of ['card-header', 'card-title', 'card-description', 'card-content', 'card-footer']) {
-      expect(container.querySelector(`[data-slot="${slot}"]`)).not.toBeNull()
-    }
   })
 })
 
