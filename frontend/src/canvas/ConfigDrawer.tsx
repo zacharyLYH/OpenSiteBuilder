@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { OSB_REGISTRY } from '../osb/registry'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -6,10 +6,10 @@ import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { cn } from '../lib/utils'
 import * as SheetPrimitive from '@radix-ui/react-dialog'
-import { Sheet, SheetClose, SheetHeader, SheetTitle, SheetPortal } from '../components/ui/sheet'
+import { Sheet, SheetHeader, SheetTitle, SheetPortal } from '../components/ui/sheet'
 import { Textarea } from '../components/ui/textarea'
 import { isFieldVisible, MENU_MAX_DEPTH, type OSBField, type OSBMenuItem } from '../osb/types'
-import type { PlacedNode } from './doc'
+import type { OSBNodeType } from '../osb/registry'
 
 /** Repeatable label + link rows (dropdown options, …). Collection-backed data
  * lives in config, never on the canvas (PRD §6.2). A row may hold one nested
@@ -129,7 +129,9 @@ export default function ConfigDrawer({
   onApply,
   actions,
 }: {
-  node: PlacedNode
+  // Structural node: grid docs (PlacedNode) and list manifests (SiteNode)
+  // both carry id/type/config — the drawer never touches geometry.
+  node: { id: string; type: OSBNodeType; config?: Record<string, unknown> }
   side: 'left' | 'right'
   onClose: () => void
   onApply: (id: string, config: Record<string, unknown>) => void
@@ -137,6 +139,20 @@ export default function ConfigDrawer({
 }) {
   const entry = OSB_REGISTRY[node.type]
   const [draft, setDraft] = useState<Record<string, unknown>>({ ...entry.defaults, ...node.config })
+  // Outside click closes (capture on document: portal clicks bubble through
+  // the React tree, so a canvas-level handler would murder the drawer).
+  // Excepted: the drawer itself, Radix popper menus (selects/dropdowns),
+  // and listboxes — field interaction never dismisses.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t || typeof t.closest !== 'function') return
+      if (t.closest('[data-testid="config-drawer"], [data-radix-popper-content-wrapper], [role="listbox"], [role="menu"]')) return
+      onClose()
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [onClose])
   // Selecting a node never rewrites its stored config — only a real edit does.
   const edit = (key: string, value: string | boolean | OSBMenuItem[]) => {
     const next = { ...draft, [key]: value }
@@ -166,6 +182,10 @@ export default function ConfigDrawer({
           SheetContent) because a settings panel wants neither overlay nor X —
           it has its own Close button below. Positioning classes mirror
           shadcn's sheet; V2 rewrites this panel outright. */}
+      {/* Outside clicks close: a document capture listener, not a covering
+          scrim (a scrim would eat every canvas click). Drawer content and
+          Radix menus (selects, dropdowns) are excepted, so field clicks can
+          never dismiss. */}
       <SheetPortal>
         <SheetPrimitive.Content
           data-testid="config-drawer"
@@ -173,20 +193,17 @@ export default function ConfigDrawer({
           // A settings panel, not an overlay shell: it keeps a fixed width, or a
           // full-bleed preview (a video's intrinsic width) would swallow the canvas.
           className={cn(
+            // Below the app header (top-14), never over it: Push stays clickable
+            // while settings are open.
             'fixed z-50 gap-4 bg-white p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500 dark:bg-slate-950',
             side === 'left'
-              ? 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm'
-              : 'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
+              ? 'bottom-0 left-0 top-14 h-auto w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm'
+              : 'bottom-0 right-0 top-14 h-auto w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
             'w-full max-w-sm overflow-y-auto',
           )}
         >
         <SheetHeader>
           <SheetTitle>{entry.name} settings</SheetTitle>
-          <SheetClose asChild>
-            <Button type="button" aria-label="Close settings" variant="outline" size="sm">
-              ✕
-            </Button>
-          </SheetClose>
         </SheetHeader>
         {entry.fields.filter((f) => isFieldVisible(f, draft)).map((f) => (
           <div key={f.key} className="flex flex-col gap-1">

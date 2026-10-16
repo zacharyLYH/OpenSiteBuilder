@@ -6,12 +6,12 @@
 import { canContain, isAtomType, isOverlayType, type OSBNodeType } from '../osb/registry'
 import type { SiteManifest, SiteNode } from '../site/types'
 
-export type Reason = 'unknown-parent' | 'holds-nothing' | 'wrong-kind' | 'too-deep' | 'bad-index' | 'missing-node'
+export type Reason = 'unknown-parent' | 'holds-nothing' | 'wrong-kind' | 'too-deep' | 'bad-index' | 'missing-node' | 'cycle'
 
 export type Result = { ok: true; doc: SiteManifest } | { ok: false; reason: Reason }
 
-// Max nesting: page > section > columns > card > atom.
-const MAX_DEPTH = 3
+// Max nesting: section > columns > card > atom (root parents count depth 1).
+const MAX_DEPTH = 4
 
 function depthOf(nodes: SiteNode[], parentId: string | null): number {
   if (parentId === null) return 0
@@ -31,6 +31,32 @@ function find(nodes: SiteNode[], id: string): SiteNode | null {
     if (n.id === id) return n
     const hit = find(n.children ?? [], id)
     if (hit) return hit
+  }
+  return null
+}
+
+/** Find any node in the page tree. Null = missing. */
+export function findNode(doc: SiteManifest, id: string): SiteNode | null {
+  for (const p of doc.pages) {
+    const hit = find(p.nodes, id)
+    if (hit) return hit
+  }
+  return null
+}
+
+/** Parent id of a node. Null = root level (or missing — check siblings). */
+export function parentOf(doc: SiteManifest, id: string): string | null {
+  const walk = (nodes: SiteNode[], parentId: string | null): string | null | undefined => {
+    for (const n of nodes) {
+      if (n.id === id) return parentId
+      const hit = walk(n.children ?? [], n.id)
+      if (hit !== undefined) return hit
+    }
+    return undefined
+  }
+  for (const p of doc.pages) {
+    const hit = walk(p.nodes, null)
+    if (hit !== undefined) return hit
   }
   return null
 }
@@ -94,13 +120,29 @@ export function removeNode(doc: SiteManifest, id: string): Result {
 }
 
 export function moveNode(doc: SiteManifest, id: string, parentId: string | null, index: number): Result {
+  const blocked = checkMove(doc, id, parentId)
+  if (blocked) return { ok: false, reason: blocked }
   const nodes = pageNodes(doc)
   const node = find(nodes, id)
   if (!node) return { ok: false, reason: 'missing-node' }
   const without = replace(nodes, id, () => null)
-  const blocked = canHold(without, parentId, node.type)
-  if (blocked) return { ok: false, reason: blocked }
   return insertNode(withNodes(doc, without), parentId, index, node)
+}
+
+/**
+ * Would the move be accepted? The exact verdict moveNode enforces, without
+ * applying anything — hover feedback reads this so the halo never lies.
+ */
+export function checkMove(doc: SiteManifest, id: string, parentId: string | null): Reason | null {
+  const nodes = pageNodes(doc)
+  const node = find(nodes, id)
+  if (!node) return 'missing-node'
+  // A node can never land on itself or inside its own subtree — that would
+  // orphan itself. Checked on the current tree so the reason names the real
+  // mistake instead of a downstream missing parent.
+  if (parentId === id || (parentId !== null && find(node.children ?? [], parentId))) return 'cycle'
+  const without = replace(nodes, id, () => null)
+  return canHold(without, parentId, node.type)
 }
 
 export function updateConfig(doc: SiteManifest, id: string, patch: Record<string, unknown>): Result {

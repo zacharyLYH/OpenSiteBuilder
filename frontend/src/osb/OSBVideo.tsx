@@ -36,8 +36,8 @@ export interface OSBVideoProps {
 
 export default function OSBVideo({ config }: OSBVideoProps) {
   const c = resolveConfig(OSB_VIDEO_DEFAULTS, config)
-  // Box is the component: the player (or its placeholder) always fills the
-  // grid footprint, so the bounding box never disagrees with the render.
+  // Flow sizing (no grid footprint anymore): the player keeps 16:9 at full
+  // width; placeholders hold the same box so the node stays visible.
   if (c.videoSrc !== '') {
     return (
       <video
@@ -49,7 +49,7 @@ export default function OSBVideo({ config }: OSBVideoProps) {
         loop={c.loop}
         playsInline
         preload="metadata"
-        className="h-full w-full object-cover"
+        className="aspect-video w-full object-cover"
       />
     )
   }
@@ -58,7 +58,7 @@ export default function OSBVideo({ config }: OSBVideoProps) {
       role="img"
       aria-label="Video placeholder"
       data-testid="osb-video-fallback"
-      className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-500"
+      className="aspect-video w-full bg-gradient-to-br from-slate-400 to-slate-500"
     />
   )
 }

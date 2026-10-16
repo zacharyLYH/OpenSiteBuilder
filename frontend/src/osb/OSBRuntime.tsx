@@ -3,7 +3,7 @@ import type { SiteManifest, SiteNode } from '../site/types'
 import OSBDrawer, { type OSBDrawerConfig } from './OSBDrawer'
 import OSBModal, { type OSBModalConfig } from './OSBModal'
 import { OSBOverlayBody } from './OSBOverlay'
-import { OSBThemeProvider } from './OSBTheme'
+import { OSBThemeProvider, useSiteThemeClass } from './OSBTheme'
 import { OSB_REGISTRY, isOverlayType, isTriggerType, type OSBNodeType } from './registry'
 import { overlayTargetOf, type OSBTheme } from './types'
 
@@ -155,8 +155,9 @@ export interface OSBRuntimeProps {
 export default function OSBRuntime({ manifest }: OSBRuntimeProps): ReactNode {
   const [openOverlay, setOpenOverlay] = useState<string | null>(null)
   const page = manifest.pages?.[0]
-  if (!page) return null
   const theme: OSBTheme = manifest.site?.theme === 'dark' ? 'dark' : 'light'
+  useSiteThemeClass(theme)
+  if (!page) return null
   const bg = theme === 'dark' ? 'bg-slate-950 text-slate-50' : 'bg-white text-slate-900'
   const nodes = (page.nodes ?? []).filter(isKnown)
   const overlays = (page.overlays ?? []).filter((o) => isKnown(o) && isOverlayType(o.type))

@@ -29,14 +29,14 @@ export default function OSBImage({ config }: OSBImageProps) {
   // with no effect; the stored src is untouched throughout.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const broken = failedSrc !== null && failedSrc === c.imageSrc
-  // Box is the component: the image (or its placeholder) always fills the
-  // grid footprint, so the bounding box never disagrees with the render.
+  // Flow sizing (no grid footprint anymore): real images keep their own
+  // ratio at full width; placeholders hold a 16:9 box so the node is visible.
   if (c.imageSrc !== '' && !broken) {
     return (
       <img
         src={c.imageSrc}
         alt={c.imageAlt}
-        className="h-full w-full object-cover"
+        className="h-auto w-full object-cover"
         onError={() => setFailedSrc(c.imageSrc)}
       />
     )
@@ -46,7 +46,7 @@ export default function OSBImage({ config }: OSBImageProps) {
       role="img"
       aria-label="Image placeholder"
       data-testid="osb-image-fallback"
-      className="h-full w-full bg-gradient-to-br from-slate-300 to-slate-400"
+      className="aspect-video w-full bg-gradient-to-br from-slate-300 to-slate-400"
     />
   )
 }

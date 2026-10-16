@@ -1,6 +1,6 @@
 import Home from './pages/Home'
 import Callback from './pages/Callback'
-import CanvasPage from './canvas/CanvasPage'
+import CanvasPage from './list/Canvas'
 import Nav from './components/Nav'
 import OsbMount from './osb/mount'
 

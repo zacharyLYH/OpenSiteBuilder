@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, type ReactNode } from 'react'
 import type { OSBTheme } from './types'
 
 /**
@@ -26,4 +26,17 @@ export function OSBThemeProvider({ theme = 'light', children }: OSBThemeProvider
 /** The one way a component reads the global theme. Defaults to light. */
 export function useOSBTheme(): OSBTheme {
   return useContext(OSBThemeContext)
+}
+
+/**
+ * Drive `.dark` on <html> from the site theme. Fresh shadcn `dark:` variants
+ * key off the class; Radix portals render outside any wrapper div, so only
+ * the document root reaches everything. Context (above) still drives
+ * adapters; this drives shadcn. Call wherever a theme is known: the editor
+ * canvas and the published runtime.
+ */
+export function useSiteThemeClass(theme: OSBTheme): void {
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
 }

@@ -17,6 +17,8 @@ export type OSBButtonConfig = {
   variant: OSBButtonVariant
   size: OSBButtonSize
   align: OSBAlign
+  /** Fill the full width of the container. Off = hug the label (align applies). */
+  fill: boolean
   /** Destination URL. Empty = plain button (unless an overlay is attached). */
   href: string
   /** Open the destination in a new tab. Ignored when href is empty. */
@@ -30,6 +32,7 @@ export const OSB_BUTTON_DEFAULTS: OSBButtonConfig = {
   variant: 'default',
   size: 'default',
   align: 'left',
+  fill: false,
   href: '',
   openInNewTab: false,
   targetId: '',
@@ -56,6 +59,7 @@ export const OSB_BUTTON_FIELDS: OSBField[] = [
   { key: 'openInNewTab', label: 'Open in a new tab', kind: 'boolean', visibleWhen: { key: 'href' } },
   { key: 'variant', label: 'Style', kind: 'select', options: OSB_BUTTON_VARIANTS },
   { key: 'size', label: 'Size', kind: 'select', options: OSB_BUTTON_SIZES },
+  { key: 'fill', label: 'Fill container width', kind: 'boolean' },
   { key: 'align', label: 'Alignment', kind: 'select', options: ALIGN_OPTIONS },
 ]
 
@@ -110,13 +114,16 @@ export default function OSBButton({ config, onClick }: OSBButtonProps) {
   const label = c.label.length === 0 ? 'Button' : c.label
   const variant = SHADCN_VARIANT[c.variant as keyof typeof SHADCN_VARIANT] ?? 'default'
   const size = c.size === 'sm' ? 'sm' : 'default'
+  // Hug or fill: the one width decision buttons offer. Fill stretches edge to
+  // edge; hug wraps the label and honors alignment.
   const cls = cn(
-    'h-full w-full max-w-full whitespace-normal break-words',
+    'whitespace-normal break-words',
+    c.fill ? 'h-full w-full' : 'h-auto w-auto',
     EXTRA_VARIANT_CLASSES[c.variant],
     EXTRA_SIZE_CLASSES[c.size],
     theme === 'dark' && DARK_VARIANT_CLASSES[c.variant],
   )
-  const box = cn('flex h-full w-full', ALIGN_JUSTIFY[c.align])
+  const box = cn('flex w-full', c.fill ? 'h-full' : 'h-auto', ALIGN_JUSTIFY[c.align])
   // Links ride inside shadcn via asChild: one element, real anchor (SEO,
   // right-click, keyboard), button look. No nested interactives, ever.
   if (href.length > 0) {
