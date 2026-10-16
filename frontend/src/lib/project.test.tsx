@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import Home from '../pages/Home'
-import CanvasPage from '../canvas/CanvasPage'
+import CanvasPage from '../list/Canvas'
 import { getProjectSlug, setProjectSlug, clearProjectSlug, PROJECT_COOKIE } from './project'
 import { clearCookies, mockLocation } from '../test-utils'
 

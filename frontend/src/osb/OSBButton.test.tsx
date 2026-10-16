@@ -9,7 +9,7 @@ import OSBButton, {
 } from './OSBButton'
 import { OSBThemeProvider } from './OSBTheme'
 import ConfigDrawer from '../canvas/ConfigDrawer'
-import type { PlacedNode } from '../canvas/doc'
+import type { SiteNode } from '../site/types'
 
 describe('sanitizeHref', () => {
   it('returns empty for empty / blank / non-string input', () => {
@@ -167,15 +167,10 @@ describe('OSBButton registry shape', () => {
 })
 
 describe('ConfigDrawer link controls', () => {
-  const buttonNode = (config: Record<string, unknown>): PlacedNode => ({
+  const buttonNode = (config: Record<string, unknown>): SiteNode => ({
     id: 'b1',
     type: 'button',
     config,
-    parentId: null,
-    x: 0,
-    y: 0,
-    cols: 4,
-    rows: 1,
   })
 
   it('marks Button text as required with a red asterisk', () => {

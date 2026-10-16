@@ -6,7 +6,7 @@ import { OSB_PALETTE_TYPES, OSB_REGISTRY, isContainerType, type OSBNodeType } fr
 import { OSBThemeProvider, useSiteThemeClass } from '../osb/OSBTheme'
 import type { OSBTheme } from '../osb/types'
 import type { SiteNode } from '../site/types'
-import { getProjectSlug } from '../lib/project'
+import { clearProjectSlug, getProjectSlug } from '../lib/project'
 import { Button } from '../components/ui/button'
 import ConfigDrawer from '../canvas/ConfigDrawer'
 import { useListDoc } from './store'
@@ -191,6 +191,16 @@ export default function ListCanvas() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              clearProjectSlug()
+              window.location.href = '/'
+            }}
+          >
+            Exit project
+          </Button>
           {/* Never disables mid-click: a button that disables itself on
               mousedown traps assistive tech and test clicks in a retry loop.
               Double-submit is guarded in onPush instead. */}

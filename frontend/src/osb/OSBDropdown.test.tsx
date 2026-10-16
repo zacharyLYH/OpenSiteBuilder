@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { act, render, screen, fireEvent, within } from '@testing-library/react'
 import OSBDropdown, { OSB_DROPDOWN_DEFAULTS, OSB_DROPDOWN_DIRECTIONS, OSB_DROPDOWN_FIELDS } from './OSBDropdown'
 import ConfigDrawer from '../canvas/ConfigDrawer'
-import type { PlacedNode } from '../canvas/doc'
+import type { SiteNode } from '../site/types'
 
 describe('OSBDropdown closed trigger', () => {
   it('renders the label with a chevron and no menu', () => {
@@ -153,7 +153,7 @@ describe('OSBDropdown registry shape', () => {
   })
 
   it('edits through the generic drawer, adding and removing item rows', () => {
-    const node: PlacedNode = { id: 'd1', type: 'dropdown', config: {}, parentId: null, x: 0, y: 0, cols: 6, rows: 4 }
+    const node: SiteNode = { id: 'd1', type: 'dropdown', config: {} }
     render(<ConfigDrawer node={node} side="right" onClose={() => {}} onApply={() => {}} />)
     expect(screen.getByText('Dropdown settings')).toBeTruthy()
     expect(screen.getByText('Menu label')).toBeTruthy()
@@ -167,7 +167,7 @@ describe('OSBDropdown registry shape', () => {
   })
 
   it('edits one submenu level in place, and stops the nesting there', () => {
-    const node: PlacedNode = { id: 'd1', type: 'dropdown', config: {}, parentId: null, x: 0, y: 0, cols: 3, rows: 1 }
+    const node: SiteNode = { id: 'd1', type: 'dropdown', config: {} }
     render(<ConfigDrawer node={node} side="right" onClose={() => {}} onApply={() => {}} />)
     fireEvent.click(screen.getByTestId('osb-add-item'))
     // "↳" gives a row a submenu: its own rows, indented inside the same list…
