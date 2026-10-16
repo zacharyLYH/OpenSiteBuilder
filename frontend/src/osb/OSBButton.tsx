@@ -5,7 +5,7 @@
 // know (link wrap, alignment box, dark theme, lg size, danger/ghost/link
 // looks as complete class strings). If shadcn cannot do it, we do not ship it.
 import { cn } from '../lib/utils'
-import { Button, buttonVariants } from '../components/ui/button'
+import { Button } from '../components/ui/button'
 import { useOSBTheme } from './OSBTheme'
 import { ALIGN_OPTIONS, resolveConfig, type OSBAlign, type OSBField } from './types'
 
@@ -108,34 +108,33 @@ export default function OSBButton({ config, onClick }: OSBButtonProps) {
   const theme = useOSBTheme()
   const href = sanitizeHref(c.href)
   const label = c.label.length === 0 ? 'Button' : c.label
+  const variant = SHADCN_VARIANT[c.variant as keyof typeof SHADCN_VARIANT] ?? 'default'
+  const size = c.size === 'sm' ? 'sm' : 'default'
   const cls = cn(
-    buttonVariants({
-      variant: SHADCN_VARIANT[c.variant as keyof typeof SHADCN_VARIANT] ?? 'default',
-      size: c.size === 'sm' ? 'sm' : 'default',
-    }),
     'h-full w-full max-w-full whitespace-normal break-words',
     EXTRA_VARIANT_CLASSES[c.variant],
     EXTRA_SIZE_CLASSES[c.size],
     theme === 'dark' && DARK_VARIANT_CLASSES[c.variant],
   )
-  // Linked buttons are real anchors (keyboard + right-click + SEO work);
-  // unlinked ones stay <button> so Enter/Space still activate them.
-  // Never nest: one interactive element only.
-  const clickable =
-    href.length > 0 ? (
-      <a
-        href={href}
-        target={c.openInNewTab ? '_blank' : undefined}
-        rel={c.openInNewTab ? 'noopener noreferrer' : undefined}
-        onClick={onClick}
-        className={cls}
-      >
-        {label}
-      </a>
-    ) : (
-      <Button onClick={onClick} className={cls} variant="default" size="default">
+  const box = cn('flex h-full w-full', ALIGN_JUSTIFY[c.align])
+  // Links ride inside shadcn via asChild: one element, real anchor (SEO,
+  // right-click, keyboard), button look. No nested interactives, ever.
+  if (href.length > 0) {
+    return (
+      <div className={box}>
+        <Button asChild variant={variant} size={size} className={cls}>
+          <a href={href} target={c.openInNewTab ? '_blank' : undefined} rel={c.openInNewTab ? 'noopener noreferrer' : undefined} onClick={onClick}>
+            {label}
+          </a>
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <div className={box}>
+      <Button onClick={onClick} variant={variant} size={size} className={cls}>
         {label}
       </Button>
-    )
-  return <div className={cn('flex h-full w-full', ALIGN_JUSTIFY[c.align])}>{clickable}</div>
+    </div>
+  )
 }
