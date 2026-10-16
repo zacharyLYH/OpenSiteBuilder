@@ -15,11 +15,7 @@ export function overlayWidthPx(cols: number): string {
   return `min(92vw, ${Math.max(1, cols) * OVERLAY_CELL_PX}px)`
 }
 
-/** Shell body height from the footprint. Rows resize stays visible. */
-export function overlayHeightPx(rows: number): string {
-  return `${Math.max(1, rows) * OVERLAY_CELL_PX}px`
-}
-
+/** A non-empty config string, else its fallback — overlay titles are never blank. */
 /** Percent box for a footprint inside the shell's cell rectangle. Shared by
  * the editor shell, the Test preview, and published overlays — one rule, so
  * buttons keep their grid width everywhere. */
@@ -37,16 +33,6 @@ export function overlayChildStyle(
 }
 
 export type OverlayKid = { id: string; x: number; y: number; cols: number; rows: number }
-
-/** The one editor-exact body box every overlay shell renders, so Test ==
- * edit: a fixed-height relative layer the absolutely-positioned kids fill. */
-export function OSBOverlayBodyBox({ height, children }: { height: string; children?: ReactNode }): ReactNode {
-  return (
-    <div style={{ height }} className="relative w-full overflow-hidden">
-      {children}
-    </div>
-  )
-}
 
 /** A non-empty config string, else its fallback — overlay titles are never blank. */
 export const overlayTitle = (value: unknown, fallback: string): string =>
@@ -75,41 +61,6 @@ export const OVERLAY_SURFACE_CLASSES: Record<OSBSurface, Record<OSBTheme, string
 /** Scroll wrapper + shared surface: the one live-shell line per chrome. */
 export function overlayChromeShell(variant: OSBSurface, theme: OSBTheme, scroll: string): string {
   return cn(scroll, OVERLAY_SURFACE_CLASSES[variant][theme])
-}
-
-/**
- * Static shell (open undefined): no portal, no focus trap — pure preview
- * chrome that mirrors the live footprint and colors. Structure is shared;
- * the base decoration stays per-kind (it mirrors the differing shadcn
- * bases: dialog rounding vs sheet border/padding).
- */
-export function OSBOverlayStaticShell({
-  title,
-  width,
-  bodyHeight,
-  showClose,
-  className,
-  shellClass,
-  children,
-}: {
-  title: string
-  width: string
-  bodyHeight: string
-  showClose: boolean
-  className?: string
-  shellClass?: string
-  children?: ReactNode
-}): ReactNode {
-  return (
-    <div role="dialog" aria-label={title} style={{ width }} className={cn('relative max-w-full', className, shellClass)}>
-      <OSBOverlayBodyBox height={bodyHeight}>{children}</OSBOverlayBodyBox>
-      {showClose && (
-        <span className="absolute right-4 top-4 rounded-sm opacity-70" aria-hidden="true">
-          ✕
-        </span>
-      )}
-    </div>
-  )
 }
 
 /**

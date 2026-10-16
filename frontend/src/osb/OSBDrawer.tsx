@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
-import { overlayTitle } from './OSBOverlay'
-import OSBOverlayView from './OSBOverlayView'
+import { cn } from '../lib/utils'
+import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet'
+import { overlayChromeShell, overlayTitle, overlayWidthPx } from './OSBOverlay'
+import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface } from './types'
 
 export type OSBDrawerSide = 'left' | 'right'
@@ -55,25 +57,25 @@ export interface OSBDrawerProps {
   children?: ReactNode
 }
 
-/** A drawer = the shared overlay view in an edge-docked sheet. */
-export default function OSBDrawer({ config, cols = 10, rows = 10, open, onOpenChange, children }: OSBDrawerProps) {
+/** A drawer = an edge-docked sheet. No open state = closed portal (nothing
+ * shown). There is no fake preview: the canvas edits overlay children in
+ * the overlay editor, and the live site owns open state. */
+export default function OSBDrawer({ config, cols = 10, open, onOpenChange, children }: OSBDrawerProps) {
   const c = resolveConfig(OSB_DRAWER_DEFAULTS, config)
+  const title = overlayTitle(c.title, 'Panel')
+  const shell = overlayChromeShell(c.variant, useOSBTheme(), 'max-h-full overflow-y-auto')
+  const width = overlayWidthPx(cols)
   return (
-    <OSBOverlayView
-      chrome="sheet"
-      testid="osb-drawer-content"
-      title={overlayTitle(c.title, 'Panel')}
-      variant={c.variant}
-      showClose={c.showClose}
-      side={c.side}
-      scroll="max-h-full overflow-y-auto"
-      staticClassName="border border-slate-200 bg-white p-4 shadow-xl"
-      cols={cols}
-      rows={rows}
-      open={open}
-      onOpenChange={onOpenChange}
-    >
-      {children}
-    </OSBOverlayView>
+    <Sheet open={open ?? false} onOpenChange={onOpenChange}>
+      <SheetContent
+        side={c.side}
+        data-testid="osb-drawer-content"
+        style={{ width }}
+        className={cn(shell, !c.showClose && '[&>button]:hidden')}
+      >
+        <SheetTitle className="sr-only">{title}</SheetTitle>
+        {children}
+      </SheetContent>
+    </Sheet>
   )
 }

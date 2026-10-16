@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
-import { overlayTitle } from './OSBOverlay'
-import OSBOverlayView from './OSBOverlayView'
+import { cn } from '../lib/utils'
+import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
+import { overlayChromeShell, overlayTitle, overlayWidthPx } from './OSBOverlay'
+import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, SURFACE_OPTIONS, type OSBField, type OSBSurface } from './types'
 
 export type OSBModalConfig = {
@@ -44,24 +46,24 @@ export interface OSBModalProps {
   children?: ReactNode
 }
 
-/** A popup = the shared overlay view in a centered dialog. */
-export default function OSBModal({ config, cols = 12, rows = 10, open, onOpenChange, children }: OSBModalProps) {
+/** A popup = a centered dialog. No open state = closed portal (nothing
+ * shown). There is no fake preview: the canvas edits overlay children in
+ * the overlay editor, and the live site owns open state. */
+export default function OSBModal({ config, cols = 12, open, onOpenChange, children }: OSBModalProps) {
   const c = resolveConfig(OSB_MODAL_DEFAULTS, config)
+  const title = overlayTitle(c.title, 'Popup')
+  const shell = overlayChromeShell(c.variant, useOSBTheme(), 'max-h-[85vh] overflow-y-auto')
+  const width = overlayWidthPx(cols)
   return (
-    <OSBOverlayView
-      chrome="dialog"
-      testid="osb-modal-content"
-      title={overlayTitle(c.title, 'Popup')}
-      variant={c.variant}
-      showClose={c.showClose}
-      scroll="max-h-[85vh] overflow-y-auto"
-      staticClassName="rounded-xl"
-      cols={cols}
-      rows={rows}
-      open={open}
-      onOpenChange={onOpenChange}
-    >
-      {children}
-    </OSBOverlayView>
+    <Dialog open={open ?? false} onOpenChange={onOpenChange}>
+      <DialogContent
+        data-testid="osb-modal-content"
+        style={{ width }}
+        className={cn(shell, !c.showClose && '[&>button]:hidden')}
+      >
+        <DialogTitle className="sr-only">{title}</DialogTitle>
+        {children}
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -269,10 +269,11 @@ export default function CanvasStage(p: CanvasStageProps) {
                 className={`relative ${!preview && n.id === selectedId ? 'canvas-selected h-full' : 'h-full'}${fb.check && fb.check.id === n.id && !fb.check.ok ? ' drag-invalid' : ''}${fb.conflicts.includes(n.id) ? ' drag-conflict' : ''}`}
               >
                 {(() => {
-                  // Containers own a child layer; leaves (atoms) and overlays
-                  // render bare. New shell kinds need no branch here.
+                  // Containers own a child layer; leaves render bare.
+                  // Overlays never sit on the grid (the gate refuses them),
+                  // so there is nothing to draw for one here.
                   const kind = OSB_REGISTRY[n.type].kind
-                  return kind === 'atom' || kind === 'overlay' ? OSB_REGISTRY[n.type].render(n.config) : containerBody(n)
+                  return kind === 'atom' ? OSB_REGISTRY[n.type].render(n.config) : kind === 'overlay' ? null : containerBody(n)
                 })()}
                 {!preview && n.id === selectedId && (
                   <RemoveControl

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import OSBDrawer, { OSB_DRAWER_DEFAULTS, OSB_DRAWER_FIELDS, OSB_DRAWER_SIDES } from './OSBDrawer'
-import { OSBOverlayBody, overlayChildStyle, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
+import { OSBOverlayBody, overlayChildStyle, overlayWidthPx } from './OSBOverlay'
 
 const openDrawer = (config: Record<string, unknown> = {}, onOpenChange = () => {}) =>
   render(
@@ -10,32 +10,27 @@ const openDrawer = (config: Record<string, unknown> = {}, onOpenChange = () => {
     </OSBDrawer>,
   )
 
-describe('OSBDrawer static shell (open undefined)', () => {
-  it('renders content with an accessible name and a non-interactive X visual', () => {
+describe('OSBDrawer closed by default (no fake preview)', () => {
+  it('renders nothing without open state', () => {
     const { container } = render(
       <OSBDrawer config={{ title: 'Menu' }}>
         <p>Body</p>
       </OSBDrawer>,
     )
-    const dialog = screen.getByRole('dialog', { name: 'Menu' })
-    expect(dialog.textContent).toContain('Body')
-    // Static preview keeps the X visual so the drawer thumbnail is honest,
-    // but it is not a control — the live sheet owns the real button.
-    expect(screen.queryByRole('button')).toBeNull()
-    expect(container.textContent).toContain('✕')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(container.textContent).not.toContain('Body')
   })
 
-  it('hides the close visual when showClose is false', () => {
-    const { container } = render(<OSBDrawer config={{ showClose: false }} />)
-    expect(screen.queryByRole('button')).toBeNull()
-    expect(container.textContent).not.toContain('✕')
+  it('hides the X control when showClose is false', () => {
+    render(<OSBDrawer config={{ showClose: false }} open onOpenChange={() => {}} />)
+    // jsdom runs no CSS, so assert the hiding rule itself: shadcn's X is a
+    // direct-child button of the content, and this selector removes it.
+    expect(screen.getByTestId('osb-drawer-content').className).toContain('[&>button]:hidden')
   })
 
   it('sizes from the shell footprint (shared overlay pitch)', () => {
-    // One 28px pitch everywhere: editor shell, sheet, and published agree —
-    // the same numbers as the modal.
+    // Shell width comes from the footprint; body height is natural content.
     expect(overlayWidthPx(10)).toBe('min(92vw, 280px)')
-    expect(overlayHeightPx(10)).toBe('280px')
     // A 4-wide button at x=1 in a 10-wide shell keeps its box anywhere.
     expect(overlayChildStyle({ cols: 10, rows: 10 }, { x: 1, y: 6, cols: 4, rows: 1 })).toMatchObject({
       position: 'absolute',
@@ -46,7 +41,7 @@ describe('OSBDrawer static shell (open undefined)', () => {
 
   it('keeps an atom at its grid footprint inside the shared body', () => {
     render(
-      <OSBDrawer config={{ title: 'Menu' }} cols={10} rows={10}>
+      <OSBDrawer config={{ title: 'Menu' }} cols={10} open onOpenChange={() => {}}>
         <OSBOverlayBody
           cols={10}
           rows={10}

@@ -188,11 +188,6 @@ export default function ConfigDrawer({
             </Button>
           </SheetClose>
         </SheetHeader>
-        {/* The preview is a thumbnail: clicks stay in the drawer. Media is the
-            exception — a video's whole job is to play, so it stays clickable. */}
-        <div className="pointer-events-none overflow-hidden rounded-md border border-slate-200 [&_video]:pointer-events-auto">
-          {entry.render(draft)}
-        </div>
         {entry.fields.filter((f) => isFieldVisible(f, draft)).map((f) => (
           <div key={f.key} className="flex flex-col gap-1">
             <Label htmlFor={`osb-field-${f.key}`}>
