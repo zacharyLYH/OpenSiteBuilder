@@ -4,7 +4,9 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
+import { cn } from '../lib/utils'
+import * as SheetPrimitive from '@radix-ui/react-dialog'
+import { Sheet, SheetClose, SheetHeader, SheetTitle, SheetPortal } from '../components/ui/sheet'
 import { Textarea } from '../components/ui/textarea'
 import { isFieldVisible, MENU_MAX_DEPTH, type OSBField, type OSBMenuItem } from '../osb/types'
 import type { PlacedNode } from './doc'
@@ -160,16 +162,24 @@ export default function ConfigDrawer({
       {/* The panel never steals focus. Opening it because a node was selected
           must not move focus into the panel, or the canvas Delete hotkey would
           stop working the moment you select anything. */}
-      <SheetContent
-        side={side}
-        data-testid="config-drawer"
-        showOverlay={false}
-        showCloseButton={false}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        // A settings panel, not an overlay shell: it keeps a fixed width, or a
-        // full-bleed preview (a video's intrinsic width) would swallow the canvas.
-        className="w-full max-w-sm overflow-y-auto"
-      >
+      {/* Non-modal settings panel: composed from Radix primitives (not
+          SheetContent) because a settings panel wants neither overlay nor X —
+          it has its own Close button below. Positioning classes mirror
+          shadcn's sheet; V2 rewrites this panel outright. */}
+      <SheetPortal>
+        <SheetPrimitive.Content
+          data-testid="config-drawer"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          // A settings panel, not an overlay shell: it keeps a fixed width, or a
+          // full-bleed preview (a video's intrinsic width) would swallow the canvas.
+          className={cn(
+            'fixed z-50 gap-4 bg-white p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500 dark:bg-slate-950',
+            side === 'left'
+              ? 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm'
+              : 'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
+            'w-full max-w-sm overflow-y-auto',
+          )}
+        >
         <SheetHeader>
           <SheetTitle>{entry.name} settings</SheetTitle>
           <SheetClose asChild>
@@ -198,7 +208,8 @@ export default function ConfigDrawer({
           </div>
         ))}
         {actions}
-      </SheetContent>
+      </SheetPrimitive.Content>
+      </SheetPortal>
     </Sheet>
   )
 }

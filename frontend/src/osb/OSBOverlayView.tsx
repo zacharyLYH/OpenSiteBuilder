@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Dialog, DialogContent, DialogTitle } from './OSBDialog'
-import { Sheet, SheetContent, SheetTitle } from './OSBSheet'
+import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet'
+import { cn } from '../lib/utils'
 import { OSBOverlayBodyBox, OSBOverlayStaticShell, overlayChromeShell, overlayHeightPx, overlayWidthPx } from './OSBOverlay'
 import { useOSBTheme } from './OSBTheme'
 import type { OSBSurface } from './types'
@@ -58,7 +59,14 @@ export default function OSBOverlayView({
   }
 
   const body = <OSBOverlayBodyBox height={overlayHeightPx(rows)}>{children}</OSBOverlayBodyBox>
-  const content = { 'data-testid': testid, style: { width }, className: shell, showCloseButton: showClose }
+  // Fresh shadcn SheetContent always renders overlay + X (the fork's
+  // showOverlay/showCloseButton props are gone). Overlay always on is correct
+  // for popups; X hides via our own class when the popup hides its close.
+  const content = {
+    'data-testid': testid,
+    style: { width },
+    className: cn(shell, !showClose && '[&>button]:hidden'),
+  }
   if (chrome === 'sheet') {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
