@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { ChevronDown } from 'lucide-react'
 import {
-  ChevronDownIcon,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -8,7 +8,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from './OSBDropdownMenu'
+} from '../components/ui/dropdown-menu'
 import { useOSBTheme } from './OSBTheme'
 import { resolveConfig, type OSBField, type OSBMenuItem } from './types'
 
@@ -134,7 +134,7 @@ export default function OSBDropdown({ config }: OSBDropdownProps) {
           }
         >
           {label}
-          <ChevronDownIcon className="h-4 w-4" />
+          <ChevronDown className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
       {items.length > 0 && (
